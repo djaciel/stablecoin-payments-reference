@@ -1,0 +1,130 @@
+# The whole demo, started with one command: docker compose up
+# The credentials below are local demo values on purpose. Nothing here is a secret,
+# and nothing here is production.
+
+# The project name every container and volume is prefixed with. Fixed here so the demo
+# never shares state with another stack on your machine.
+name: stablecoin-payments-reference
+
+# Services that join later keep these names: signer, ui.
+services:
+  postgres:
+    image: postgres:16.14-alpine
+    environment:
+      POSTGRES_USER: payments
+      POSTGRES_PASSWORD: payments
+      POSTGRES_DB: payments
+    ports:
+      # Bound to 127.0.0.1, not 0.0.0.0: published ports are reachable from your whole
+      # network otherwise, and a database with demo credentials should not be. Set
+      # POSTGRES_PORT (in .env, see .env.example) if you already have something on 5432.
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Runs only when the volume is created. `docker compose down -v` to re-run it.
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # The api waits on this, so it has to mean "accepting queries", not "process started".
+      test: ['CMD-SHELL', 'pg_isready -U payments -d payments']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  temporal:
+    image: temporalio/auto-setup:1.29.7
+    environment:
+      # Temporal keeps its own databases in the same Postgres instance, and connects with
+      # its own role (see docker/postgres-init/01-roles.sql). That role can create its two
+      # databases and cannot connect to `payments` at all: the separation the spec asks for
+      # is enforced by permissions, not by everyone agreeing to stay in their lane.
+      DB: postgres12 # the plugin name for every Postgres from 12 up, including 16
+      DB_PORT: '5432'
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: temporal_user
+      POSTGRES_PWD: temporal
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+    ports:
+      # Localhost only, same reasoning as postgres: anyone who reaches this port can start
+      # and cancel workflows, with no authentication in front of it.
+      - '127.0.0.1:${TEMPORAL_PORT:-7233}:7233'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # The gRPC port opens well before setup finishes creating the namespace, and a
+      # namespace the worker cannot find is a crash. Ask for the namespace itself.
+      test: ['CMD', 'temporal', 'operator', 'namespace', 'describe', '--address', 'temporal:7233', 'default']
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  temporal-ui:
+    image: temporalio/ui:2.34.0
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      # The ui reads the server through its own backend, so this is the one address it
+      # needs. CORS is set for the Vite dev server that arrives with apps/ui: the progress
+      # view links straight into this ui, and a browser that follows the link from
+      # localhost:5173 is refused without it.
+      TEMPORAL_CORS_ORIGINS: http://localhost:5173
+    ports:
+      - '127.0.0.1:${TEMPORAL_UI_PORT:-8080}:8080'
+    depends_on:
+      temporal:
+        condition: service_healthy
+
+  worker:
+    build: .
+    # Node directly, not through pnpm. `pnpm start` puts three processes between PID 1 and
+    # the worker (pnpm -> sh -> tsx -> node), and SIGTERM stops at the first one: the worker
+    # never hears the shutdown and dies mid-step on `docker compose stop`.
+    command: node --import tsx apps/worker/src/index.ts
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TASK_QUEUE: payments
+    # The only service with a restart policy, and it is a feature rather than resilience
+    # theatre: the crash experiment kills this process on purpose and the payment has to
+    # carry on, which only works if something brings the worker back.
+    # It covers a process that dies on its own; a container YOU stopped or killed through
+    # Docker is recorded as stopped by hand and stays down until you start it, which is
+    # what keeps the restart drill honest (docs/dev/restart-survival.md).
+    # The cost is that a worker which cannot start at all looks like a container that keeps
+    # coming back, so its failure log says so out loud (apps/worker/src/index.ts).
+    restart: unless-stopped
+    depends_on:
+      temporal:
+        condition: service_healthy
+
+  api:
+    build: .
+    # Migrations first, then serve. The runner is a no-op when there is nothing new.
+    # `exec` on the second command so the server replaces the shell and becomes PID 1,
+    # which is what lets signals reach it at all.
+    command: sh -c "node --import tsx packages/db/src/migrate.ts && exec node --import tsx apps/api/src/main.ts"
+    environment:
+      DATABASE_URL: postgres://payments:payments@postgres:5432/payments
+      PORT: '3000'
+    ports:
+      # Localhost only. Running this on a shared machine and wanting the API reachable is
+      # a deliberate change, not a default.
+      - '127.0.0.1:3000:3000'
+    volumes:
+      # The schema is read from your working copy, not from the image. Without this, adding
+      # a migration and running `docker compose up` starts a container built before the file
+      # existed: the migration silently does not apply, and a health check that runs
+      # SELECT 1 cannot tell a stale schema from a current one.
+      #
+      # Everything else still lives in the image, so `--build` is required after changing
+      # TypeScript. Only migrations get this treatment, because only migrations fail quietly.
+      - ./migrations:/app/migrations:ro
+    # No `depends_on: temporal` here on purpose: the api does not dispatch a workflow
+    # until Phase 5. Adding it now would only make the api wait for a service it never
+    # talks to. It joins when the dispatch does.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

@@ -1,0 +1,10 @@
+{
+  // Typechecks the whole workspace in one pass, including files that belong to no
+  // package: root-level scripts and config files. Each package keeps its own
+  // tsconfig.json for editors, the linter and, later, its build.
+  "extends": "./tsconfig.base.json",
+  "include": ["apps", "packages", "scripts", "tests", "*.ts"],
+  // `apps/ui` is not here: a browser app needs DOM libs and JSX settings that would
+  // pollute every Node package. It typechecks itself, with its own tsconfig.
+  "exclude": ["**/node_modules", "**/dist", "apps/ui"]
+}

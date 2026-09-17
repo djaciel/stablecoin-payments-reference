@@ -1,0 +1,17 @@
+{
+  "name": "@payments/worker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Temporal worker: the durable workflow that drives the chain-side steps of a payment.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@temporalio/activity": "1.22.0",
+    "@temporalio/worker": "1.22.0",
+    "@temporalio/workflow": "1.22.0"
+  }
+}

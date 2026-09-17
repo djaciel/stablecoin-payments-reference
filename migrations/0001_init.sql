@@ -1,0 +1,14 @@
+-- Baseline migration.
+--
+-- It exists so the first `docker compose up` proves the runner end to end: files apply
+-- in order, get recorded in schema_migrations, and are skipped on the next start. The
+-- real schema (accounts, ledger entries, payments) arrives one file at a time from here.
+--
+-- Convention for every file in this directory:
+--   * name it NNNN_short_name.sql, zero padded, because files run in name order
+--   * one transaction per file, opened and closed by packages/db/src/migrate.ts
+--   * never write BEGIN, COMMIT or ROLLBACK inside a file: your COMMIT would end the
+--     runner's transaction early and a later failure would leave the file half applied,
+--     with nothing recorded. It also means CREATE INDEX CONCURRENTLY cannot be used here
+--   * never edit a file that has already run anywhere: fix it with a new file
+SELECT 1;

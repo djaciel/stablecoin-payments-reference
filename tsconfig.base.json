@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // NestJS is built on the original TypeScript decorators, so they are enabled here once
+    // and every package inherits them. Careful: tsx resolves the tsconfig from the entry
+    // file's own directory, not from the working directory — a file outside the tree, run
+    // with the repo as cwd, fails with "Parameter decorators only work when experimental
+    // decorators are enabled". The consequence is a rule, not a convenience: every package
+    // keeps its own tsconfig.json extending this base, or its service will not start.
+    // `emitDecoratorMetadata` is deliberately absent — see apps/api/src/db/db.module.ts.
+    "experimentalDecorators": true,
+
+    "declaration": false,
+    "sourceMap": true,
+    "skipLibCheck": true
+  }
+}

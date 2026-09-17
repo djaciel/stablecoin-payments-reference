@@ -1,0 +1,17 @@
+{
+  "name": "@payments/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Postgres access: the connection pool and the plain-SQL migration runner.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1"
+  }
+}

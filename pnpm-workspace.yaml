@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm blocks install scripts by default. esbuild (the engine behind tsx) needs its own,
+# and it is the only dependency here that does.
+onlyBuiltDependencies:
+  - esbuild
