@@ -15,8 +15,9 @@ export default tseslint.config(
     // `projectService` picks up every package tsconfig.json automatically, including
     // apps/ui's, which is the one the root tsconfig excludes.
     // `.tsx` is listed everywhere `.ts` is: the UI gets the same rules as the services,
-    // and no React-specific plugin is installed for it.
-    files: ['**/*.ts', '**/*.tsx'],
+    // and no React-specific plugin is installed for it. `.mts` too, for the one ES-module
+    // file in a CommonJS workspace (vitest.db.config.mts).
+    files: ['**/*.ts', '**/*.mts', '**/*.tsx'],
     languageOptions: {
       parserOptions: {
         projectService: true,
@@ -28,7 +29,7 @@ export default tseslint.config(
     // A leading underscore means "this parameter exists because the signature needs it,
     // not because the body uses it" — the shape of an interface declared before its
     // implementation, and of callbacks that ignore an argument.
-    files: ['**/*.ts', '**/*.tsx'],
+    files: ['**/*.ts', '**/*.mts', '**/*.tsx'],
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',

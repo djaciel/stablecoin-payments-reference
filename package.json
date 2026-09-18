@@ -12,12 +12,14 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p apps/ui",
     "lint": "eslint .",
     "test": "pnpm -r test",
-    "test:db": "echo 'No database tests yet: they arrive with the ledger, together with pnpm test:db proper.'",
+    "test:db": "vitest run --config vitest.db.config.mts",
     "db:migrate": "tsx packages/db/src/migrate.ts",
     "demo:workflow": "tsx scripts/demo-workflow.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@payments/db": "workspace:*",
+    "@payments/ledger": "workspace:*",
     "@temporalio/client": "1.22.0",
     "@types/node": "22.20.3",
     "eslint": "10.10.0",

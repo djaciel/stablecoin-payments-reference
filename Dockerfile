@@ -19,6 +19,7 @@ COPY apps/worker/package.json apps/worker/
 COPY packages/chain/package.json packages/chain/
 COPY packages/db/package.json packages/db/
 COPY packages/domain/package.json packages/domain/
+COPY packages/ledger/package.json packages/ledger/
 RUN pnpm install --frozen-lockfile
 
 COPY . .

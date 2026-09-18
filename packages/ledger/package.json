@@ -1,0 +1,14 @@
+{
+  "name": "@payments/ledger",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The double-entry ledger: the posting engine, its locks and the errors it refuses with.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@payments/db": "workspace:*"
+  }
+}
