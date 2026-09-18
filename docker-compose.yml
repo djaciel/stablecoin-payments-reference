@@ -143,6 +143,10 @@ services:
       # only way in: the signer publishes no port, so nothing outside this network can
       # reach it, and the api is how the treasury address becomes visible to a browser.
       SIGNER_URL: http://signer:3001
+      # The chain endpoint, passed through EMPTY unless you set it. The api falls back to
+      # the public Base Sepolia RPC, which is what makes "no environment variable to run"
+      # true; set RPC_URL only to point the demo at a provider endpoint of your own.
+      RPC_URL: ${RPC_URL:-}
     ports:
       # Localhost only. Running this on a shared machine and wanting the API reachable is
       # a deliberate change, not a default.

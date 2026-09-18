@@ -1,5 +1,5 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
-import { AdminHome } from '../admin/AdminHome'
+import { StartScreen } from '../admin/StartScreen'
 import { PartnerHome } from '../partner/PartnerHome'
 
 /**
@@ -28,7 +28,7 @@ export function App() {
 
       <main className="app-main">
         <Routes>
-          <Route path="/admin" element={<AdminHome />} />
+          <Route path="/admin" element={<StartScreen />} />
           <Route path="/partner" element={<PartnerHome />} />
           {/* No landing page: `/` and anything unknown go to the company's side, where the demo starts. */}
           <Route path="*" element={<Navigate to="/admin" replace />} />

@@ -16,9 +16,22 @@ export interface Health {
   readonly database: string
 }
 
-/** What `GET /treasury` answers: the address a human funds from a faucet. */
+/**
+ * What `GET /treasury` answers: everything the Start screen shows, read in one go.
+ *
+ * `onchain` is null when the api could not reach the RPC — a public endpoint having a bad
+ * minute is not a reason to blank the rest of the page, so that one failure arrives as
+ * data rather than as an error.
+ *
+ * Every amount is a decimal string in whole tokens, formatted by the api. The browser
+ * never does arithmetic on money.
+ */
 export interface Treasury {
   readonly address: string
+  readonly explorerUrl: string
+  readonly onchain: { readonly usdc: string; readonly eth: string; readonly blockNumber: string } | null
+  readonly chainError?: string
+  readonly ledger: { readonly available: string; readonly reserved: string; readonly partnerDebt: string }
 }
 
 export function getHealth(): Promise<Health> {

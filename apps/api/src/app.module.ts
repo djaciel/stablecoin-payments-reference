@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { ChainModule } from './chain/chain.module'
 import { DbModule } from './db/db.module'
 import { HealthController } from './health/health.controller'
 import { SignerClientModule } from './signer/signer-client.module'
@@ -15,7 +16,7 @@ import { TreasuryController } from './treasury/treasury.controller'
  * A controller that grows a service gets its module then, not before.
  */
 @Module({
-  imports: [DbModule, SignerClientModule],
+  imports: [ChainModule, DbModule, SignerClientModule],
   controllers: [HealthController, TreasuryController],
 })
 export class AppModule {}

@@ -27,8 +27,9 @@ the web UI. Then open:
 - `http://localhost:5173/admin` — the company's side of the demo.
 - `http://localhost:5173/partner` — what a partner sees.
 
-Today both screens show the same thing: whether the API is up and can reach its database,
-refreshed every few seconds. `/admin` also shows the treasury address you have to fund.
+`/admin` opens on the Start screen: the treasury address to fund, where to get testnet
+USDC and gas (`docs/dev/faucets.md`), what the treasury holds on chain, and what the
+ledger says about it — the two disagree until something posts the funding to the books.
 The screens that do the work — payables, transfers, reconciliation, the failure
 experiments — are added to this shell.
 
@@ -102,8 +103,9 @@ pnpm test        # the pure tests; they need no Docker
   port). It derives addresses today and signs transactions later.
 - `apps/ui` — the two screens, `/admin` and `/partner` (React + Vite). `src/api/` is
   everything it knows about the API; `src/app/` is the shell both screens render inside.
-- `packages/chain` — EVM access. Address derivation from a seed by index today; the RPC
-  clients and the stablecoin contract arrive with the chain phase.
+- `packages/chain` — EVM access: address derivation from a seed by index, the Base Sepolia
+  client, and the stablecoin contract with the rule that decides whether a transfer
+  happened.
 - `packages/db` — the Postgres pool and the plain-SQL migration runner.
 - `packages/domain` — a placeholder today; the types shared by the services (payment
   states, ledger accounts, money) arrive with the ledger.

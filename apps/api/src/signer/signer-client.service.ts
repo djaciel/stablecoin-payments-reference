@@ -8,13 +8,15 @@
  * call. Deposit addresses and signing join this file when the flows that need them do.
  */
 
+import { isAddress, type Address } from 'viem'
+
 /** Long enough for a container starting up, short enough that /treasury still answers. */
 const REQUEST_TIMEOUT_MS = 5000
 
 /** What the signer answers for an address lookup. */
 export interface SignerAddress {
   readonly index: number
-  readonly address: string
+  readonly address: Address
 }
 
 /** The signer is unreachable or answered something unusable. Callers turn this into 503. */
@@ -54,7 +56,15 @@ function isSignerAddress(body: unknown): body is SignerAddress {
     return false
   }
   const candidate = body as { index?: unknown; address?: unknown }
-  return typeof candidate.index === 'number' && typeof candidate.address === 'string'
+  // The shape, not just the type: an address is what the rest of the api passes to viem
+  // and prints as an explorer link, so "some string" is not good enough to call it one.
+  // Non-strict on purpose — this checks `0x` + 40 hex characters, not the checksum, which
+  // is the signer's business and not a reason for the api to reject its own service.
+  return (
+    typeof candidate.index === 'number' &&
+    typeof candidate.address === 'string' &&
+    isAddress(candidate.address, { strict: false })
+  )
 }
 
 function messageOf(error: unknown): string {

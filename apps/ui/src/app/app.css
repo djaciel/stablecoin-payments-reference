@@ -105,3 +105,68 @@ body {
   color: var(--muted);
   font-size: 0.8rem;
 }
+
+/* A full-width block under the cards, for the one thing a first-time reader has to do. */
+.panel {
+  margin-top: 1rem;
+  padding: 1rem 1.15rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.panel-lead {
+  margin: 0;
+}
+
+.panel-links {
+  margin: 0.7rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+}
+
+.panel-links li + li {
+  margin-top: 0.35rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* Label on the left, figure on the right: money lines up and reads as a column. */
+.figures {
+  margin: 0;
+}
+
+.figure {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.2rem 0;
+}
+
+.figure dt {
+  color: var(--muted);
+}
+
+.figure dd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.card-actions {
+  display: flex;
+  gap: 1rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+}
+
+/* A button that behaves like a link, because copying an address is not a form action. */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
