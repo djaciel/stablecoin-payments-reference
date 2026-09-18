@@ -1,0 +1,106 @@
+# Database tests
+
+**Do I need Docker?** For `pnpm test`, no. For `pnpm test:db`, yes.
+
+```
+pnpm test      # every package's own tests. Pure, fast, no database.
+pnpm test:db   # this directory. Needs Postgres running.
+```
+
+The split is a directory, not a naming convention: everything under `tests/db/` needs a
+database, everything outside it does not. Per-package Vitest runs cannot see this directory
+at all, so `pnpm test` stays green on a machine that has never started Docker.
+
+## Running them
+
+```
+docker compose up -d postgres
+pnpm test:db
+```
+
+If port 5432 is taken on your machine, start the stack and run the tests with the same
+override:
+
+```
+POSTGRES_PORT=55432 docker compose up -d postgres
+POSTGRES_PORT=55432 pnpm test:db
+```
+
+## How isolation works
+
+Every run drops and recreates a dedicated `payments_test` database and migrates it with the
+real runner over the real files in `/migrations`. Two consequences worth knowing:
+
+- The suite never writes to `payments`, so the demo's own data survives. It does connect to
+  it, because `CREATE DATABASE` cannot run from inside the database being created — the only
+  statements it issues there are the drop and the create of `payments_test`.
+- The schema under test is the schema that ships. A migration that is broken in production is
+  broken here too, because it is the same file going through the same runner. That is also
+  why there is no separate test for the migration runner: every run of this suite is one.
+
+Connection string resolution, in order: `TEST_DATABASE_URL`, then `DATABASE_URL` with its
+database name swapped, then `localhost` on `POSTGRES_PORT`.
+
+## The five invariants, and where each one is defended
+
+The spec lists five invariants. This is the map from each one to the file that proves it and
+the place that enforces it, so a review is a checklist rather than a reading exercise. Where
+it can, a test violates the rule twice: through the code callers use, and through raw SQL,
+because a guarantee that only holds for well-behaved callers is not a guarantee.
+
+| # | Invariant | Proved by | Enforced at |
+|---|---|---|---|
+| 1 | Every ledger transaction sums to zero, per currency | `guards.db.test.ts` (and `walkthrough.db.test.ts`, which also checks no account's balance has drifted from its own entries) | engine check before the write, plus the deferred constraint trigger `ledger_entries_sum_to_zero` at COMMIT |
+| 2 | Posted entries are immutable; corrections are new entries | `guards.db.test.ts` | `BEFORE UPDATE OR DELETE` triggers on both ledger tables — and `audit_log` has its own, with its own message |
+| 3 | `treasury:available` and every `never negative` account stay at or above zero | `guards.db.test.ts`, `race.db.test.ts` | engine check under `SELECT … FOR UPDATE`, plus `CHECK (allows_negative OR balance_minor >= 0)` on the maintained balance |
+| 4 | Transitions are guarded and change exactly one row | `guarded-transition.db.test.ts` | `applyGuardedTransition` in `packages/db`: `UPDATE … WHERE status = $expected`, then `rowCount === 1` or `TransitionRejected` |
+| 5 | Reserved money is released only with proof the transfer can no longer land | `release.db.test.ts` | `reversal` requires the proof argument; `CHECK (kind <> 'reversal' OR proof IS NOT NULL)`; and the deferred trigger `ledger_entries_release_is_allowed`, which refuses that movement of money under any kind but `reversal` and `cancel` |
+
+Three notes on what a green suite does NOT say:
+
+- **Invariant 5 is proved as far as the books go.** The release cannot be written without its
+  evidence, and evidence and entries commit together. Whether the hash inside a proof really
+  reverted in the block it names is checked by reconciliation in Phase 9, not here.
+- **Invariant 4 is proved against a fixture table the test creates.** There is no `payments`
+  table until Phase 8; the helper is what carries the guarantee forward. The rest of the
+  `cancel` rule — status RESERVED, no stored hash, under the payment row lock — arrives with
+  that table too.
+- **The race proves an outcome, not an instant.** An outside observer cannot see a
+  mid-transaction balance; "Available never goes negative" is carried by the final figure plus
+  the `CHECK` that `guards.db.test.ts` violates on purpose.
+
+## The article's numbers
+
+`walkthrough.db.test.ts` asserts the figures the article prints, step by step: Available
+10,000 and Partner debt 1,000 to start (§5, §7), 9,000 / 1,000 after the reserve (§5), then
+Reserved 0 and Partner debt 0 after settling (§7). `release.db.test.ts` continues into §6:
+Available back at 10,000 after either release door.
+
+The same walk by hand, printed rather than asserted:
+
+```
+pnpm ledger:seed --walkthrough       # opening, after reserving, after settling
+pnpm ledger:seed --release=reversal  # ... and the transfer reverted onchain (§6)
+pnpm ledger:seed --release=cancel    # ... and nothing was ever signed
+```
+
+If one of those figures ever has to change here, the article changed first.
+
+## The canary
+
+`race.db.test.ts` ends with a test that is not about the ledger at all. It checks that this
+harness can genuinely run two things at once, because a race test that cannot produce a race
+passes for the wrong reason forever.
+
+Its proof is the pair of **different `pg_backend_pid()` values** reported while both
+transactions are open — the barrier does not release until the second one arrives, so getting
+past it means they overlapped, and distinct pids mean two server-side sessions rather than one
+connection used twice. If those numbers are ever equal, every concurrency assertion in this
+repository is decoration.
+
+It then performs an unguarded read-modify-write and shows an update being lost. That part is
+the consequence, not the proof — the barrier arranges it — and it is there because it is
+exactly the outcome `SELECT … FOR UPDATE` exists to prevent.
+
+**When this test fails, fix the harness, not the ledger.** If it times out, the pool could not
+hand out two connections at once.
