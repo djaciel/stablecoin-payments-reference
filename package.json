@@ -14,6 +14,7 @@
     "test": "pnpm -r test",
     "test:db": "vitest run --config vitest.db.config.mts",
     "db:migrate": "tsx packages/db/src/migrate.ts",
+    "ledger:seed": "tsx scripts/ledger-seed.ts",
     "demo:workflow": "tsx scripts/demo-workflow.ts"
   },
   "devDependencies": {

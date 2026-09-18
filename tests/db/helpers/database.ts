@@ -65,3 +65,27 @@ export async function balanceOf(pool: Pool, code: AccountCode): Promise<bigint> 
   }
   return BigInt(balance)
 }
+
+/**
+ * A latch that holds callers until `parties` of them have arrived, then releases them all at
+ * once.
+ *
+ * This is what makes "concurrent" mean something. Two connections that merely start at
+ * roughly the same time usually end up serialized by chance, and a race test that never
+ * produces a race passes for the wrong reason forever.
+ */
+export function barrier(parties: number): () => Promise<void> {
+  let arrived = 0
+  let release: (() => void) | undefined
+  const open = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  return async () => {
+    arrived += 1
+    if (arrived >= parties) {
+      release?.()
+    }
+    await open
+  }
+}

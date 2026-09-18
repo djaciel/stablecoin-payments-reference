@@ -22,9 +22,6 @@ export const ACCOUNTS = {
 
 export type AccountCode = (typeof ACCOUNTS)[keyof typeof ACCOUNTS]
 
-/** What an account is, which decides how its balance reads. Mirrors the `kind` CHECK. */
-export type AccountKind = 'asset' | 'liability' | 'equity' | 'expense' | 'revenue'
-
 /**
  * The side a balance grows on. A debit adds to a debit-normal account and subtracts from a
  * credit-normal one, which is why `partner:payable` reads positive when money is owed.
