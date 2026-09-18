@@ -15,4 +15,19 @@ export {
   rpcHost,
   type ChainClient,
 } from './clients'
-export { ERC20_ABI, USDC_ADDRESS, findSettlementLog, readUsdcBalance, type ExpectedTransfer } from './usdc'
+export {
+  readFinalityDepth,
+  readFinalityMode,
+  finalBlockNumber,
+  type FinalityMode,
+} from './finality'
+export {
+  ERC20_ABI,
+  USDC_ADDRESS,
+  findSettlementLog,
+  findTransfersTo,
+  readUsdcBalance,
+  type ExpectedTransfer,
+  type ObservedTransfer,
+  type TransferQuery,
+} from './usdc'

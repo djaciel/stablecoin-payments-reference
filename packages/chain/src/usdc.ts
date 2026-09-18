@@ -1,4 +1,4 @@
-import { type Address, type Log, decodeEventLog, getAddress, parseAbi } from 'viem'
+import { type Address, type Hex, type Log, decodeEventLog, getAbiItem, getAddress, parseAbi } from 'viem'
 import type { ChainClient } from './clients'
 
 /**
@@ -17,10 +17,69 @@ export const ERC20_ABI = parseAbi([
   'event Transfer(address indexed from, address indexed to, uint256 value)',
 ])
 
+/** The event every inbound query filters on, pulled out of the ABI so it is written once. */
+const TRANSFER_EVENT = getAbiItem({ abi: ERC20_ABI, name: 'Transfer' })
+
 export interface ExpectedTransfer {
   readonly from: Address
   readonly to: Address
   readonly amount: bigint
+}
+
+/** A USDC Transfer as the chain recorded it: who, how much, and where to find it again. */
+export interface ObservedTransfer {
+  readonly from: Address
+  readonly to: Address
+  readonly amount: bigint
+  readonly blockNumber: bigint
+  readonly txHash: Hex
+  /** Position inside the transaction. With the hash it is the event's unique name. */
+  readonly logIndex: number
+}
+
+export interface TransferQuery {
+  /** Every address being watched. One request covers all of them, not one request each. */
+  readonly addresses: readonly Address[]
+  readonly fromBlock: bigint
+  readonly toBlock: bigint
+}
+
+/**
+ * Every USDC transfer that arrived at one of these addresses in this block range.
+ *
+ * ONE `eth_getLogs`, whatever the number of addresses: the `to` topic takes a list, and the
+ * node does the filtering. This is the difference between a watcher that costs one request
+ * per tick and one that costs a request per partner — and with a public RPC in front of it,
+ * that difference is the whole design.
+ *
+ * `address` pins the query to the official contract, which is the first of the article's
+ * three settlement checks. The other two (exact destination, exact amount) are the caller's:
+ * here the destination is whatever it asked to watch, and the amount is whatever arrived.
+ *
+ * The range must be bounded by the caller. `https://sepolia.base.org` refuses more than
+ * 10,000 blocks in one request (measured 2026-09-17: `-32614 eth_getLogs is limited to a
+ * 10,000 range`).
+ */
+export async function findTransfersTo(client: ChainClient, query: TransferQuery): Promise<ObservedTransfer[]> {
+  const logs = await client.getLogs({
+    address: USDC_ADDRESS,
+    event: TRANSFER_EVENT,
+    args: { to: [...query.addresses] },
+    fromBlock: query.fromBlock,
+    toBlock: query.toBlock,
+    // Drops anything whose arguments did not decode, so `args` below is complete rather
+    // than "probably there".
+    strict: true,
+  })
+
+  return logs.map((log) => ({
+    from: log.args.from,
+    to: log.args.to,
+    amount: log.args.value,
+    blockNumber: log.blockNumber,
+    txHash: log.transactionHash,
+    logIndex: log.logIndex,
+  }))
 }
 
 /**

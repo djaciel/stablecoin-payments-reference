@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { readEnv } from '@payments/domain'
 import { SignerClient } from './signer-client.service'
 
 /**
@@ -31,7 +32,5 @@ export class SignerClientModule {}
  * machine at a signer started the same way.
  */
 function readSignerUrl(): string {
-  const value = process.env['SIGNER_URL']
-  // An empty variable is a mistake, not a request for the empty string.
-  return value === undefined || value === '' ? DEFAULT_SIGNER_URL : value.replace(/\/+$/, '')
+  return readEnv('SIGNER_URL', DEFAULT_SIGNER_URL).replace(/\/+$/, '')
 }

@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { readEnv } from '@payments/domain'
 import { Client } from 'pg'
 import { readDatabaseUrl } from './pool'
 
@@ -9,7 +10,7 @@ const MIGRATION_LOCK_KEY = 8240115
 
 /** Override with MIGRATIONS_DIR to point the runner at a different set of files. */
 export function migrationsDirectory(): string {
-  return process.env['MIGRATIONS_DIR'] ?? resolve(__dirname, '../../../migrations')
+  return readEnv('MIGRATIONS_DIR', resolve(__dirname, '../../../migrations'))
 }
 
 /**

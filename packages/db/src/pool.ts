@@ -1,3 +1,4 @@
+import { requireEnv } from '@payments/domain'
 import { Pool } from 'pg'
 
 // Give up on a connection instead of hanging forever: /health has to be able to answer
@@ -25,9 +26,5 @@ export function createPool(): Pool {
 }
 
 export function readDatabaseUrl(): string {
-  const url = process.env['DATABASE_URL']
-  if (url === undefined || url === '') {
-    throw new Error('DATABASE_URL is not set. Copy .env.example to .env, or run the service through docker compose.')
-  }
-  return url
+  return requireEnv('DATABASE_URL', 'Copy .env.example to .env, or run the service through docker compose.')
 }

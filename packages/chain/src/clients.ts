@@ -1,3 +1,4 @@
+import { readEnv } from '@payments/domain'
 import { http, createPublicClient } from 'viem'
 import { baseSepolia } from 'viem/chains'
 
@@ -8,9 +9,7 @@ const DEFAULT_RPC_URL = 'https://sepolia.base.org'
 
 /** `RPC_URL` exists for a reader with their own endpoint; the demo needs nothing set. */
 export function readRpcUrl(): string {
-  const url = process.env['RPC_URL']
-  // An empty variable is a mistake, not a request for the empty string.
-  return url === undefined || url === '' ? DEFAULT_RPC_URL : url
+  return readEnv('RPC_URL', DEFAULT_RPC_URL)
 }
 
 /**

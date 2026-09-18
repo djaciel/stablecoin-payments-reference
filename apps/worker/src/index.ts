@@ -1,9 +1,12 @@
 import { NativeConnection, Runtime, Worker } from '@temporalio/worker'
 import * as activities from './activities'
 import { readTemporalConfig } from './config'
+import { closeWorkerPool } from './db'
+import { ensureWatcherSchedule } from './schedules'
 
 async function main(): Promise<void> {
-  const { address, namespace, taskQueue } = readTemporalConfig()
+  const config = readTemporalConfig()
+  const { address, namespace, taskQueue } = config
 
   // The SDK installs signal handlers of its own by default. They are turned off here so
   // that the shutdown path of this service is visible in this file instead of happening
@@ -26,13 +29,22 @@ async function main(): Promise<void> {
 
     stopOnSignal(worker)
 
+    // Before the first poll, so the schedule exists by the time anything could fire it.
+    // It is declared in code and reconciled on every start (see schedules.ts), which is why
+    // there is no "run this once" step anywhere in the README.
+    await ensureWatcherSchedule(config)
+
     console.log(`worker: polling task queue "${taskQueue}" on ${address} (namespace ${namespace})`)
 
     // Resolves once the worker has drained, which is what `stopOnSignal` asks for.
     await worker.run()
     console.log('worker: shut down')
   } finally {
+    // Whoever opens a resource closes it: the Temporal connection and the database pool the
+    // watcher's activity borrows from. Without the pool's close, `docker compose stop worker`
+    // waits for its idle connections to time out before Node has nothing left to do.
     await connection.close()
+    await closeWorkerPool()
   }
 }
 

@@ -1,3 +1,4 @@
+import { readEnv } from '@payments/domain'
 import { Client, Connection } from '@temporalio/client'
 import { readTemporalConfig } from '../apps/worker/src/config'
 import { PaymentWorkflow } from '../apps/worker/src/workflows'
@@ -24,8 +25,7 @@ import { PaymentWorkflow } from '../apps/worker/src/workflows'
  * is not there. Empty means unset, same rule as the Temporal variables in the worker.
  */
 function temporalUiUrl(): string {
-  const port = process.env['TEMPORAL_UI_PORT']
-  return `http://localhost:${port === undefined || port === '' ? '8080' : port}`
+  return `http://localhost:${readEnv('TEMPORAL_UI_PORT', '8080')}`
 }
 
 async function main(): Promise<void> {

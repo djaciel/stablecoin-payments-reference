@@ -9,6 +9,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@payments/domain": "workspace:*",
     "pg": "8.23.0"
   },
   "devDependencies": {

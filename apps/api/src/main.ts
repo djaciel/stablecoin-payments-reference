@@ -1,18 +1,16 @@
 import 'reflect-metadata'
 import { Logger } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
+import { readEnv } from '@payments/domain'
 import { AppModule } from './app.module'
 
-const DEFAULT_PORT = 3000
+const DEFAULT_PORT = '3000'
 
 /**
  * The only place that reads PORT. Everything else receives the number.
  */
 function readPort(): number {
-  const raw = process.env['PORT']
-  if (raw === undefined || raw === '') {
-    return DEFAULT_PORT
-  }
+  const raw = readEnv('PORT', DEFAULT_PORT)
   const port = Number(raw)
   // Without this check a typo becomes NaN and Node quietly binds a random free port.
   if (!Number.isInteger(port) || port <= 0) {

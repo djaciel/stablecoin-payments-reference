@@ -75,14 +75,23 @@ services:
 
   worker:
     build: .
-    # Node directly, not through pnpm. `pnpm start` puts three processes between PID 1 and
-    # the worker (pnpm -> sh -> tsx -> node), and SIGTERM stops at the first one: the worker
-    # never hears the shutdown and dies mid-step on `docker compose stop`.
-    command: node --import tsx apps/worker/src/index.ts
+    # Migrations first, then the worker, exactly like the api: both services migrate, and the
+    # runner's advisory lock means whoever starts first applies the files while the other
+    # waits. Node directly, not through pnpm, and `exec` on the second command — `pnpm start`
+    # would put three processes between PID 1 and the worker (pnpm -> sh -> tsx -> node) and
+    # SIGTERM would stop at the first one: the worker never hears the shutdown and dies
+    # mid-step on `docker compose stop`.
+    command: sh -c "node --import tsx packages/db/src/migrate.ts && exec node --import tsx apps/worker/src/index.ts"
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
       TEMPORAL_TASK_QUEUE: payments
+      # The watcher writes the books and keeps its cursor here. Same database and same
+      # credentials as the api: they are two processes over one ledger, not two ledgers.
+      DATABASE_URL: postgres://payments:payments@postgres:5432/payments
+      # The chain endpoint, passed through EMPTY unless you set it, exactly as for the api:
+      # the default is the public Base Sepolia RPC, so the demo needs no variable at all.
+      RPC_URL: ${RPC_URL:-}
     # The only service with a restart policy, and it is a feature rather than resilience
     # theatre: the crash experiment kills this process on purpose and the payment has to
     # carry on, which only works if something brings the worker back.
@@ -92,7 +101,14 @@ services:
     # The cost is that a worker which cannot start at all looks like a container that keeps
     # coming back, so its failure log says so out loud (apps/worker/src/index.ts).
     restart: unless-stopped
+    volumes:
+      # The same read-only mount the api gets, and for the same reason: the schema is read
+      # from your working copy, so adding a migration and running `docker compose up` applies
+      # it instead of silently doing nothing with an image built before the file existed.
+      - ./migrations:/app/migrations:ro
     depends_on:
+      postgres:
+        condition: service_healthy
       temporal:
         condition: service_healthy
 

@@ -19,10 +19,13 @@ export { writeTransaction, withLedgerTransaction } from './engine'
 export { InsufficientFunds, LedgerRejected, NotZeroSum, toLedgerError } from './errors'
 export {
   cancel,
+  funding,
+  fundingReference,
   reserve,
   reversal,
   settle,
   type CancelInput,
+  type FundingInput,
   type ReversalInput,
   type TransferInput,
 } from './movements'

@@ -9,6 +9,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@payments/domain": "workspace:*",
     "viem": "2.56.7"
   }
 }

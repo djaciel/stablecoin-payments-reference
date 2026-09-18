@@ -14,6 +14,9 @@ importers:
       '@payments/db':
         specifier: workspace:*
         version: link:packages/db
+      '@payments/domain':
+        specifier: workspace:*
+        version: link:packages/domain
       '@payments/ledger':
         specifier: workspace:*
         version: link:packages/ledger
@@ -56,6 +59,9 @@ importers:
       '@payments/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@payments/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@payments/ledger':
         specifier: workspace:*
         version: link:../../packages/ledger
@@ -83,6 +89,9 @@ importers:
       '@payments/chain':
         specifier: workspace:*
         version: link:../../packages/chain
+      '@payments/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -120,7 +129,22 @@ importers:
 
   apps/worker:
     dependencies:
+      '@payments/chain':
+        specifier: workspace:*
+        version: link:../../packages/chain
+      '@payments/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@payments/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@payments/ledger':
+        specifier: workspace:*
+        version: link:../../packages/ledger
       '@temporalio/activity':
+        specifier: 1.22.0
+        version: 1.22.0
+      '@temporalio/client':
         specifier: 1.22.0
         version: 1.22.0
       '@temporalio/worker':
@@ -129,15 +153,24 @@ importers:
       '@temporalio/workflow':
         specifier: 1.22.0
         version: 1.22.0
+      viem:
+        specifier: 2.56.7
+        version: 2.56.7(typescript@6.0.3)
 
   packages/chain:
     dependencies:
+      '@payments/domain':
+        specifier: workspace:*
+        version: link:../domain
       viem:
         specifier: 2.56.7
         version: 2.56.7(typescript@6.0.3)
 
   packages/db:
     dependencies:
+      '@payments/domain':
+        specifier: workspace:*
+        version: link:../domain
       pg:
         specifier: 8.23.0
         version: 8.23.0

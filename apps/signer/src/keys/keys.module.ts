@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { readEnv } from '@payments/domain'
 import { KeysService } from './keys.service'
 
 /**
@@ -34,7 +35,5 @@ export class KeysModule {}
  * the variable to run the signer straight on your machine.
  */
 function readKeysDir(): string {
-  const value = process.env['KEYS_DIR']
-  // An empty variable is a mistake, not a request for the empty string.
-  return value === undefined || value === '' ? DEFAULT_KEYS_DIR : value
+  return readEnv('KEYS_DIR', DEFAULT_KEYS_DIR)
 }

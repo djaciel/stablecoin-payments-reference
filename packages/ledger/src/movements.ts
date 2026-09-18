@@ -33,6 +33,75 @@ export interface CancelInput extends TransferInput {
   readonly reason: string
 }
 
+export interface FundingInput {
+  readonly txHash: string
+  /** Position of the Transfer event inside that transaction. */
+  readonly logIndex: number
+  readonly blockNumber: bigint
+  /** What actually arrived, read off the event. Never a number somebody typed. */
+  readonly amount: MinorUnits
+  readonly currency: string
+}
+
+/**
+ * What makes a funding unique: one Transfer event, named by the transaction that carried it
+ * and its position inside it.
+ *
+ * The `(kind, reference)` unique index turns that name into the guarantee. Re-scanning a
+ * range of blocks — after a crash, after a cursor rewind, after anything — cannot post the
+ * same money twice, and the reason it cannot is a database constraint rather than a careful
+ * caller.
+ */
+export function fundingReference(txHash: string, logIndex: number): string {
+  return `tx:${txHash}:${logIndex}`
+}
+
+/**
+ * Money arriving at the treasury, seen onchain. Dr `treasury:available` / Cr
+ * `equity:opening`.
+ *
+ * This is the posting that makes the books chain-true: every figure the demo shows
+ * afterwards descends from a transfer that really happened, at the amount the event carried,
+ * rather than from a seeded round number. A faucet, a colleague, an exchange withdrawal —
+ * the watcher does not care where it came from, only that the official contract says it
+ * arrived and that the block it arrived in can no longer be reorganised away.
+ *
+ * It never touches `treasury:reserved`, so the release trigger has nothing to say about it
+ * and no new guard is needed.
+ */
+export async function funding(client: PoolClient, input: FundingInput): Promise<LedgerTransactionId> {
+  const reference = fundingReference(input.txHash, input.logIndex)
+
+  const id = await writeTransaction(client, {
+    kind: 'funding',
+    reference,
+    currency: input.currency,
+    entries: [
+      { account: ACCOUNTS.treasuryAvailable, direction: 'debit', amount: input.amount },
+      { account: ACCOUNTS.equityOpening, direction: 'credit', amount: input.amount },
+    ],
+  })
+
+  // Same database transaction as the entries, like every other audit row here: the books say
+  // the balance went up, this says which transaction on which chain put it there.
+  await recordAudit(client, {
+    actor: 'watcher',
+    subjectType: 'treasury',
+    subjectId: reference,
+    event: 'funded',
+    context: {
+      txHash: input.txHash,
+      logIndex: input.logIndex,
+      blockNumber: input.blockNumber,
+      amountMinor: input.amount,
+      currency: input.currency,
+      ledgerTransactionId: id,
+    },
+  })
+
+  return id
+}
+
 /**
  * CREATED → RESERVED. Dr `treasury:reserved` / Cr `treasury:available`: the money stops being
  * spendable before anything is signed or broadcast. Rejects with `InsufficientFunds` when

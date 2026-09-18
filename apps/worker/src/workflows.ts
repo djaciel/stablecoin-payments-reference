@@ -2,6 +2,15 @@ import { log, proxyActivities } from '@temporalio/workflow'
 // Type-only: activity code must never be bundled into the workflow sandbox.
 import type * as activities from './activities'
 
+const { watchChain } = proxyActivities<typeof activities>({
+  // One tick, and one attempt at it. A tick that fails does not need a retry policy: the
+  // schedule starts a new run ten seconds later, from a cursor that did not move, so the
+  // range is simply scanned again. Retrying inside the workflow would only put two attempts
+  // where the schedule already puts one.
+  startToCloseTimeout: '30 seconds',
+  retry: { maximumAttempts: 1 },
+})
+
 const { sign, execute, watch, settle } = proxyActivities<typeof activities>({
   // Generous on purpose: the heartbeat timeout, not this one, is what detects a dead
   // worker. Retries use the SDK defaults, which means unlimited attempts — acceptable
@@ -33,4 +42,19 @@ export async function PaymentWorkflow(reference: string): Promise<string[]> {
 
   log.info(`${reference}: ${timeline.join(' → ')}`)
   return timeline
+}
+
+/**
+ * What the `watcher` schedule starts, every 10 seconds (see schedules.ts).
+ *
+ * It is this thin because a Schedule can only start a workflow, and everything the tick does
+ * — reading the cursor, asking the chain, writing the books — belongs in an activity, where
+ * it may talk to the network and the database. The workflow is the handle Temporal holds:
+ * one run per tick, each one visible in the UI with the line the tick logged as its result.
+ */
+export async function WatcherWorkflow(): Promise<string> {
+  // Returned, not logged: the activity already wrote the line, and a workflow that repeats
+  // it would double every tick in `docker compose logs worker`. The return value is what the
+  // Temporal UI shows next to the run.
+  return watchChain()
 }

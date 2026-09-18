@@ -4,13 +4,17 @@ import { usePolling } from '../api/usePolling'
 import { HealthCard } from '../app/HealthCard'
 
 /**
- * Where the demo starts: the one address a human has to fund, what the chain says it holds, and
- * what the books say about it.
+ * Where the demo starts: the one address a human has to fund, what the chain says it
+ * holds, and what the books say about it.
  *
- * The two halves disagree on purpose while the ledger is empty, and the screen says so rather
- * than hiding it: money on chain is not money in the books until something posts it.
+ * The two halves can disagree, and the screen says so rather than hiding it: money on chain
+ * is not money in the books until something posts it. That something is the watcher, which
+ * scans for transfers to this address every few seconds and posts what it finds — so the gap
+ * closing, with a transaction named underneath it, is the first thing this demo teaches.
  *
- * One poll for the whole screen, so the three figures are read at the same moment.
+ * One poll for the whole screen: `/treasury` answers the address, the chain and the
+ * ledger together. A card per request would multiply the traffic by the number of cards
+ * and show figures read at three different moments.
  */
 
 const USDC_FAUCET_URL = 'https://faucet.circle.com'
@@ -130,12 +134,27 @@ function BooksCard({ treasury, error }: CardProps) {
           ['Partner debt', treasury.ledger.partnerDebt],
         ]}
       />
-      <p className="card-note">
-        The ledger, in USDC. It does not follow the chain on its own: only a posting changes these figures, which is
-        why they can sit still while the balance above changes.
-      </p>
+      {treasury.lastFunding === null ? (
+        <p className="card-note">
+          The ledger, in USDC. Fund the address above and the watcher posts what arrives, so these figures follow the
+          chain — one entry per transfer, at the amount the chain actually carried.
+        </p>
+      ) : (
+        <p className="card-note">
+          Last {treasury.lastFunding.amount} posted by the watcher from{' '}
+          <a href={treasury.lastFunding.explorerUrl} target="_blank" rel="noreferrer">
+            transaction {shortHash(treasury.lastFunding.txHash)} ↗
+          </a>{' '}
+          at block {treasury.lastFunding.blockNumber}.
+        </p>
+      )}
     </Card>
   )
+}
+
+/** A hash is 66 characters; what a human checks against the explorer is both ends. */
+function shortHash(hash: string): string {
+  return `${hash.slice(0, 10)}…${hash.slice(-6)}`
 }
 
 function Card({ title, children }: { readonly title: string; readonly children: React.ReactNode }) {

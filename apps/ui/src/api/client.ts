@@ -23,6 +23,9 @@ export interface Health {
  * minute is not a reason to blank the rest of the page, so that one failure arrives as
  * data rather than as an error.
  *
+ * `lastFunding` is null until the watcher has posted something: the transaction that made
+ * the books what they are, with the link a human clicks to check it.
+ *
  * Every amount is a decimal string in whole tokens, formatted by the api. The browser
  * never does arithmetic on money.
  */
@@ -32,6 +35,13 @@ export interface Treasury {
   readonly onchain: { readonly usdc: string; readonly eth: string; readonly blockNumber: string } | null
   readonly chainError?: string
   readonly ledger: { readonly available: string; readonly reserved: string; readonly partnerDebt: string }
+  readonly lastFunding: {
+    readonly amount: string
+    readonly txHash: string
+    readonly blockNumber: string
+    readonly explorerUrl: string
+    readonly at: string
+  } | null
 }
 
 export function getHealth(): Promise<Health> {

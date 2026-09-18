@@ -1,6 +1,13 @@
 import { activityInfo, heartbeat, log, sleep } from '@temporalio/activity'
 
 /**
+ * Everything the worker can be asked to do, in one file, because that is the map: here are
+ * the activities. The watcher's tick is the only one with a real body so far, and it lives
+ * in its own file — it is the longest thing this worker does.
+ */
+export { watchChain } from './watcher'
+
+/**
  * The four chain-side steps of a payment, in the order the spec fixes them:
  * sign → execute (store the hash BEFORE broadcasting) → watch (finality + the Transfer
  * event) → settle (move the money in the ledger).

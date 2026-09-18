@@ -1,3 +1,5 @@
+import { readEnv } from '@payments/domain'
+
 /**
  * One place decides how this repo talks to Temporal. The worker and the demo script both
  * read from here, so "which queue is this?" has a single answer.
@@ -24,10 +26,4 @@ export function readTemporalConfig(): TemporalConfig {
     namespace: readEnv('TEMPORAL_NAMESPACE', DEFAULT_NAMESPACE),
     taskQueue: readEnv('TEMPORAL_TASK_QUEUE', DEFAULT_TASK_QUEUE),
   }
-}
-
-/** An empty variable is a mistake, not a request for the empty string. */
-function readEnv(name: string, fallback: string): string {
-  const value = process.env[name]
-  return value === undefined || value === '' ? fallback : value
 }

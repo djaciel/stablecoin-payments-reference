@@ -1,11 +1,18 @@
+import { optionalEnv } from '@payments/domain'
+
 /**
- * Where the database tests connect, decided in one place because two processes need the same
- * answer: the global setup that creates the test database, and every test worker that then
- * talks to it.
+ * Where the database tests connect, decided in one place because two processes need the
+ * same answer: the global setup that creates the test database, and every test worker that
+ * then talks to it.
  *
- * Resolution order: TEST_DATABASE_URL, then DATABASE_URL with its database name swapped, then
- * localhost on POSTGRES_PORT. Nothing hardcodes 5432 but the last fallback — a machine that
- * already has something there runs the stack with POSTGRES_PORT set, and the tests follow it.
+ * Resolution order:
+ *   1. TEST_DATABASE_URL — an explicit override wins.
+ *   2. DATABASE_URL with its database name swapped for the test one.
+ *   3. localhost on POSTGRES_PORT, matching docker-compose's published port.
+ *
+ * Note the absence of a hardcoded 5432 anywhere but the last fallback: a machine that
+ * already has something on 5432 runs the stack with POSTGRES_PORT set, and the tests have
+ * to follow it there.
  */
 
 /** A database of its own, dropped and recreated on every run, so isolation is total. */
@@ -23,12 +30,12 @@ export function maintenanceDatabaseUrl(): string {
 }
 
 function databaseUrlFor(database: string): string {
-  const explicit = readEnv('TEST_DATABASE_URL') ?? readEnv('DATABASE_URL')
+  const explicit = optionalEnv('TEST_DATABASE_URL') ?? optionalEnv('DATABASE_URL')
   if (explicit !== undefined) {
     return withDatabase(explicit, database)
   }
 
-  const port = readEnv('POSTGRES_PORT') ?? '5432'
+  const port = optionalEnv('POSTGRES_PORT') ?? '5432'
   return `postgres://payments:payments@localhost:${port}/${database}`
 }
 
@@ -36,12 +43,6 @@ function withDatabase(url: string, database: string): string {
   const parsed = new URL(url)
   parsed.pathname = `/${database}`
   return parsed.toString()
-}
-
-// An env var set to the empty string means "not set" everywhere in this repo.
-function readEnv(name: string): string | undefined {
-  const value = process.env[name]
-  return value === undefined || value === '' ? undefined : value
 }
 
 /** Shown whenever the harness cannot reach Postgres, because "ECONNREFUSED" helps nobody. */
