@@ -1,0 +1,19 @@
+{
+  // The one package the root tsconfig excludes: a browser app needs DOM libs and JSX,
+  // and both would leak into every Node package if they lived in the base config.
+  // `pnpm typecheck` runs tsc a second time with this file so nothing goes unchecked.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
+    // Vite, not Node, resolves these imports: extensionless relative paths and the
+    // "exports" field of every dependency, which is what `bundler` describes.
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    // `vite/client` is what makes `import './app.css'` a known module rather than an
+    // error; `node` stays because vite.config.ts is a Node file.
+    "types": ["node", "vite/client"],
+    "noEmit": true
+  },
+  "include": ["src", "vite.config.ts"]
+}

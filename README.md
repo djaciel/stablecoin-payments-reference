@@ -21,7 +21,20 @@ pnpm install
 docker compose up
 ```
 
-That starts Postgres 16, Temporal (server and web UI), the API, the worker and the signer.
+That starts Postgres 16, Temporal (server and web UI), the API, the worker, the signer and
+the web UI. Then open:
+
+- `http://localhost:5173/admin` — the company's side of the demo.
+- `http://localhost:5173/partner` — what a partner sees.
+
+Today both screens show the same thing: whether the API is up and can reach its database,
+refreshed every few seconds. `/admin` also shows the treasury address you have to fund.
+The screens that do the work — payables, transfers, reconciliation, the failure
+experiments — are added to this shell.
+
+The browser only ever talks to `localhost:5173`. Everything under `/api` is forwarded to
+the API container by the dev server, which is why none of this needs a CORS setting, an
+API URL or an environment variable.
 
 The API applies the SQL migrations and then serves:
 
@@ -35,7 +48,7 @@ curl -s http://localhost:3000/health
 polls the `payments` task queue, and the Temporal web UI is at
 `http://localhost:8080`. No environment variable has to be set for any of this. If one of
 the ports is already taken on your machine, copy `.env.example` to `.env` and change
-`POSTGRES_PORT`, `TEMPORAL_PORT` or `TEMPORAL_UI_PORT`.
+`POSTGRES_PORT`, `TEMPORAL_PORT`, `TEMPORAL_UI_PORT` or `UI_PORT`.
 
 ## The signer and the company seed
 
@@ -87,6 +100,8 @@ pnpm test        # the pure tests; they need no Docker
 - `apps/worker` — the Temporal worker: the payment workflow and its steps.
 - `apps/signer` — the only process that touches the company seed (NestJS, no published
   port). It derives addresses today and signs transactions later.
+- `apps/ui` — the two screens, `/admin` and `/partner` (React + Vite). `src/api/` is
+  everything it knows about the API; `src/app/` is the shell both screens render inside.
 - `packages/chain` — EVM access. Address derivation from a seed by index today; the RPC
   clients and the stablecoin contract arrive with the chain phase.
 - `packages/db` — the Postgres pool and the plain-SQL migration runner.

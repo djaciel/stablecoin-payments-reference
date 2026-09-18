@@ -14,6 +14,7 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/
 COPY apps/signer/package.json apps/signer/
+COPY apps/ui/package.json apps/ui/
 COPY apps/worker/package.json apps/worker/
 COPY packages/chain/package.json packages/chain/
 COPY packages/db/package.json packages/db/

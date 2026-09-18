@@ -12,8 +12,11 @@ export default tseslint.config(
   tseslint.configs.recommendedTypeChecked,
   {
     // Type-aware rules need the type information of the package each file belongs to.
-    // `projectService` picks up every package tsconfig.json automatically.
-    files: ['**/*.ts'],
+    // `projectService` picks up every package tsconfig.json automatically, including
+    // apps/ui's, which is the one the root tsconfig excludes.
+    // `.tsx` is listed everywhere `.ts` is: the UI gets the same rules as the services,
+    // and no React-specific plugin is installed for it.
+    files: ['**/*.ts', '**/*.tsx'],
     languageOptions: {
       parserOptions: {
         projectService: true,
@@ -25,7 +28,7 @@ export default tseslint.config(
     // A leading underscore means "this parameter exists because the signature needs it,
     // not because the body uses it" — the shape of an interface declared before its
     // implementation, and of callbacks that ignore an argument.
-    files: ['**/*.ts'],
+    files: ['**/*.ts', '**/*.tsx'],
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',

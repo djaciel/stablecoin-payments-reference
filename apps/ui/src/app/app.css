@@ -1,0 +1,107 @@
+/* The whole stylesheet. An operations console reads better dark and dense, and a demo
+   whose point is the ledger should not spend its weight on CSS. */
+
+:root {
+  --bg: #11151c;
+  --panel: #1a212b;
+  --line: #2b3542;
+  --text: #e6edf3;
+  --muted: #8b98a8;
+  --accent: #5ac8a8;
+  --bad: #e5776b;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  padding: 0.9rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.app-title {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.app-nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.app-nav-link {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.app-nav-link.is-active {
+  color: var(--accent);
+}
+
+.app-banner {
+  margin: 0;
+  padding: 0.5rem 1.5rem;
+  background: #2a2417;
+  border-bottom: 1px solid var(--line);
+  color: #e8cf8f;
+  font-size: 0.85rem;
+}
+
+.app-main {
+  padding: 1.5rem;
+}
+
+.cards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+}
+
+.card {
+  padding: 1rem 1.15rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.card-title {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card-value {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.card-value.is-address {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.card-value.is-bad {
+  color: var(--bad);
+}
+
+.card-note {
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}

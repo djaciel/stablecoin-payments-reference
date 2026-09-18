@@ -9,7 +9,7 @@
     "node": ">=22 <23"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p apps/ui",
     "lint": "eslint .",
     "test": "pnpm -r test",
     "test:db": "echo 'No database tests yet: they arrive with the ledger, together with pnpm test:db proper.'",

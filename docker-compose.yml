@@ -6,7 +6,6 @@
 # never shares state with another stack on your machine.
 name: stablecoin-payments-reference
 
-# Services that join later keep these names: ui.
 services:
   postgres:
     image: postgres:16.14-alpine
@@ -169,6 +168,40 @@ services:
       # also means a signer that refuses to start keeps the api down, where you will
       # notice it.
       signer:
+        condition: service_healthy
+    healthcheck:
+      # Same `node -e` + fetch as the signer, for the same reason: the image has neither
+      # curl nor wget. "Healthy" here means migrations are done and the database answers,
+      # because that is what /health asks (apps/api/src/health/health.controller.ts).
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  ui:
+    build: .
+    # The Vite dev server, run from the UI package so it finds its own vite.config.ts.
+    # `node <bin>` and not `pnpm start`: the same PID-1 rule as the worker and the api —
+    # pnpm would sit between Docker and the process, and SIGTERM would stop at pnpm.
+    # The source is baked into the image like every other service (only migrations are
+    # bind-mounted, see the api). Editing apps/ui therefore needs
+    # `docker compose up -d --build ui`; there is no hot reload from the host on purpose.
+    working_dir: /app/apps/ui
+    command: node node_modules/vite/bin/vite.js --host 0.0.0.0 --port 5173
+    ports:
+      - '127.0.0.1:${UI_PORT:-5173}:5173'
+    # Waits for the api to answer /health, not merely to exist. Both screens read the api
+    # on their first render, and an api that is still running migrations would greet the
+    # first visitor with two error cards that fix themselves a few seconds later. This is
+    # the service that needed the api to have a healthcheck at all.
+    depends_on:
+      api:
         condition: service_healthy
 
 volumes:
