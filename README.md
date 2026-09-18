@@ -21,7 +21,7 @@ pnpm install
 docker compose up
 ```
 
-That starts Postgres 16, Temporal (server and web UI), the API and the worker.
+That starts Postgres 16, Temporal (server and web UI), the API, the worker and the signer.
 
 The API applies the SQL migrations and then serves:
 
@@ -36,6 +36,31 @@ polls the `payments` task queue, and the Temporal web UI is at
 `http://localhost:8080`. No environment variable has to be set for any of this. If one of
 the ports is already taken on your machine, copy `.env.example` to `.env` and change
 `POSTGRES_PORT`, `TEMPORAL_PORT` or `TEMPORAL_UI_PORT`.
+
+## The signer and the company seed
+
+One process holds the company's key material, and it is the only one: `apps/signer`. On
+its first start it generates a BIP-39 seed phrase into `./.keys/company/company.seed` —
+your machine, mode `0600`, gitignored, testnet only — and logs the treasury address it
+derives from it. Every address the company uses comes from that one seed by index on the
+standard Ethereum path `m/44'/60'/0'/0/n`: index 0 is the treasury, index *n* is the
+deposit address of partner *n*. The mnemonic never leaves the service: it is not logged,
+not returned by any endpoint, and not readable through the API. The signer publishes no
+port either, so only the other containers can reach it. A real treasury key would live in
+custody infrastructure rather than in a file next to the code; this is a demo on a public
+testnet, and it says so on every start.
+
+The address the demo is built around is one call away:
+
+```sh
+curl -s http://localhost:3000/treasury
+# {"address":"0x…"}
+```
+
+The seed sits on your machine rather than in a Docker volume on purpose. You fund that
+treasury address by hand from a faucet, so `docker compose down -v` has to be safe: delete
+the stack, keep the money. Delete `.keys/` and you start over with a new, unfunded
+treasury.
 
 The workflow is the part worth watching:
 
@@ -60,6 +85,10 @@ pnpm test        # the pure tests; they need no Docker
 
 - `apps/api` — the HTTP API (NestJS). Thin modules: business logic lives in `packages/`.
 - `apps/worker` — the Temporal worker: the payment workflow and its steps.
+- `apps/signer` — the only process that touches the company seed (NestJS, no published
+  port). It derives addresses today and signs transactions later.
+- `packages/chain` — EVM access. Address derivation from a seed by index today; the RPC
+  clients and the stablecoin contract arrive with the chain phase.
 - `packages/db` — the Postgres pool and the plain-SQL migration runner.
 - `packages/domain` — a placeholder today; the types shared by the services (payment
   states, ledger accounts, money) arrive with the ledger.

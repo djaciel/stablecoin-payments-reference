@@ -13,7 +13,9 @@ RUN corepack enable
 # build with ERR_PNPM_OUTDATED_LOCKFILE.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/
+COPY apps/signer/package.json apps/signer/
 COPY apps/worker/package.json apps/worker/
+COPY packages/chain/package.json packages/chain/
 COPY packages/db/package.json packages/db/
 COPY packages/domain/package.json packages/domain/
 RUN pnpm install --frozen-lockfile

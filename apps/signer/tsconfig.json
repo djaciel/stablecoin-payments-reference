@@ -1,0 +1,10 @@
+{
+  // Every package keeps one of these: tsx resolves the tsconfig from the entry file's
+  // own directory, so a package without it does not get the settings in the base.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

@@ -6,7 +6,7 @@
 # never shares state with another stack on your machine.
 name: stablecoin-payments-reference
 
-# Services that join later keep these names: signer, ui.
+# Services that join later keep these names: ui.
 services:
   postgres:
     image: postgres:16.14-alpine
@@ -97,6 +97,40 @@ services:
       temporal:
         condition: service_healthy
 
+  signer:
+    build: .
+    command: node --import tsx apps/signer/src/main.ts
+    environment:
+      PORT: '3001'
+      # The directory the seed lives in, inside the container. The bind mount below is
+      # what makes it the host's ./.keys/company.
+      KEYS_DIR: /keys
+    # No `ports:` here, and that is the point of this service. The signer holds the
+    # company seed; the only things that should be able to ask it anything are the other
+    # containers on this network. Publishing it "just for testing" would put a key holder
+    # on your machine's network.
+    volumes:
+      # The seed is generated on first start and has to survive everything: `docker
+      # compose down -v` wipes named volumes, and the treasury is funded by hand from a
+      # faucet, so a lost seed means a lost treasury. A bind mount to a gitignored host
+      # directory is the only storage that outlives the stack. Docker creates ./.keys/company
+      # on your machine the first time this runs.
+      - ./.keys/company:/keys
+    healthcheck:
+      # `node -e` rather than curl: neither curl nor wget is guaranteed in this image, and
+      # the process this asks about is a Node one anyway. "Healthy" here means the seed is
+      # loaded and addresses can be derived from it.
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   api:
     build: .
     # Migrations first, then serve. The runner is a no-op when there is nothing new.
@@ -106,6 +140,10 @@ services:
     environment:
       DATABASE_URL: postgres://payments:payments@postgres:5432/payments
       PORT: '3000'
+      # `signer` is the service name above, resolved by compose's own DNS. This is the
+      # only way in: the signer publishes no port, so nothing outside this network can
+      # reach it, and the api is how the treasury address becomes visible to a browser.
+      SIGNER_URL: http://signer:3001
     ports:
       # Localhost only. Running this on a shared machine and wanting the API reachable is
       # a deliberate change, not a default.
@@ -124,6 +162,13 @@ services:
     # talks to. It joins when the dispatch does.
     depends_on:
       postgres:
+        condition: service_healthy
+      # Waits for the seed to be loaded, not merely for the container to exist: the first
+      # thing the demo shows is the treasury address, and a `GET /treasury` that answers
+      # 503 for the first second of the stack's life is an avoidable bad impression. It
+      # also means a signer that refuses to start keeps the api down, where you will
+      # notice it.
+      signer:
         condition: service_healthy
 
 volumes:

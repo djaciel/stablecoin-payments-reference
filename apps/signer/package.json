@@ -1,0 +1,21 @@
+{
+  "name": "@payments/signer",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The only process that touches the company seed: it derives addresses and, later, signs.",
+  "main": "src/main.ts",
+  "types": "src/main.ts",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.0.3",
+    "@nestjs/core": "12.0.3",
+    "@nestjs/platform-express": "12.0.3",
+    "@payments/chain": "workspace:*",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "viem": "2.56.7"
+  }
+}

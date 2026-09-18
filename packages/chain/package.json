@@ -1,0 +1,14 @@
+{
+  "name": "@payments/chain",
+  "version": "0.0.0",
+  "private": true,
+  "description": "EVM access: address derivation today; clients and the stablecoin contract arrive with the chain phase.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "viem": "2.56.7"
+  }
+}
