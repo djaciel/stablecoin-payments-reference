@@ -8,16 +8,9 @@ import {
 } from './connection'
 
 /**
- * Runs once, before any database test.
- *
- * Drops and recreates the test database, then migrates it with the REAL runner over the
- * REAL migration files. That is the point: the schema under test is the schema that ships,
- * a migration that is broken in production is broken here too, and a rerun of the suite
- * starts from exactly the same place as the first run.
- *
- * Connections go through `createPool()` like everywhere else in this repo, which is why the
- * connection string is passed by pointing DATABASE_URL at it rather than by building a
- * client here.
+ * Runs once, before any database test: drops and recreates the test database, then migrates it
+ * with the REAL runner over the REAL migration files. The schema under test is the schema that
+ * ships, and every rerun starts from exactly the same place.
  */
 export async function setup(): Promise<void> {
   const maintenanceUrl = maintenanceDatabaseUrl()
@@ -36,8 +29,8 @@ export async function setup(): Promise<void> {
     await maintenance.end().catch(() => undefined)
   }
 
-  // The runner reads DATABASE_URL too. The workers resolve the same URL independently
-  // through connection.ts, so nothing has to be handed across process boundaries.
+  // The runner reads DATABASE_URL too. The workers resolve the same URL independently through
+  // connection.ts, so nothing has to be handed across process boundaries.
   process.env['DATABASE_URL'] = testDatabaseUrl()
   await migrate()
 

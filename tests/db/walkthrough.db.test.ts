@@ -14,14 +14,9 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { resetDatabase, testPool, withClient } from './helpers/database'
 
 /**
- * The article's numbers, asserted step by step.
- *
- * Every figure below is quoted from the published text: Available 10,000 and Partner debt
- * 1,000 to start (§5, §7), a payment of 1,000, Available 9,000 and Reserved 1,000 after the
- * reserve (§5), Reserved 0 and Partner debt 0 after settling (§7). If one of them ever has to
- * change here, the article changed first.
- *
- * This is the same walk `pnpm ledger:seed --walkthrough` prints, checked by a machine.
+ * The article's numbers, asserted step by step — the same walk `pnpm ledger:seed --walkthrough`
+ * prints, checked by a machine. Every figure below is quoted from the published text: if one of
+ * them ever has to change here, the article changed first.
  */
 
 const USDC = 'USDC'
@@ -48,8 +43,7 @@ describe('the walkthrough the article follows', () => {
     })
 
     // Not written as balances: two `seed` transactions of two entries each, through the same
-    // engine as everything else. A ledger that can be bootstrapped by an UPDATE is a ledger
-    // whose balances are a suggestion.
+    // engine as everything else.
     expect(await count(`SELECT count(*) AS count FROM ledger_transactions WHERE kind = 'seed'`)).toBe(2)
     expect(await count('SELECT count(*) AS count FROM ledger_entries')).toBe(4)
   })
@@ -59,8 +53,8 @@ describe('the walkthrough the article follows', () => {
       reserve(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC }),
     )
 
-    // §5: the money is no longer available before anything has been signed. The total did not
-    // move, which is the point the article makes with this table.
+    // §5: the money is no longer available before anything has been signed, and the total did
+    // not move.
     expect(await position()).toEqual({
       available: toMinor(9_000),
       reserved: PAYMENT,
@@ -79,9 +73,8 @@ describe('the walkthrough the article follows', () => {
       partnerDebt: 0n,
     })
 
-    // And the balances the CHECK constraint guards still say what the entries say. This is the
-    // one that catches a trigger that stopped applying entries, or an entry posted to the
-    // wrong side: every account, not only the three the article prints.
+    // And the balances the CHECK constraint guards still say what the entries say — every
+    // account, not only the three the article prints.
     expect(await accountsThatDriftedFromTheirEntries()).toEqual([])
   })
 })
@@ -97,10 +90,7 @@ async function position(): Promise<Record<string, MinorUnits>> {
   }
 }
 
-/**
- * The maintained `balance_minor` versus the signed sum of that account's entries, computed in
- * the database. Anything listed here is an account whose balance and whose history disagree.
- */
+/** Accounts whose maintained `balance_minor` disagrees with the signed sum of their entries. */
 async function accountsThatDriftedFromTheirEntries(): Promise<string[]> {
   const result = await pool.query<{ code: string }>(
     `SELECT a.code

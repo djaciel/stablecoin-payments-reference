@@ -1,9 +1,6 @@
 /**
- * The ledger's public surface.
- *
- * One way to write money: open a transaction, call a named posting (or `writeTransaction`
- * directly, which is what they all do). The postings for the kinds that are still missing
- * arrive with the phases that need them and go through this same door.
+ * The ledger's public surface: one way to write money — open a transaction, call a named
+ * posting (or `writeTransaction` directly, which is what they all do).
  */
 export {
   ACCOUNTS,

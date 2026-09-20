@@ -24,11 +24,9 @@ import {
  *   pnpm ledger:seed --release=reversal  reserve, then the transfer reverts onchain (§6): Available back to 10,000
  *   pnpm ledger:seed --release=cancel    reserve, then cancel before signing: the same figures, no chain proof
  *
- * THIS COMMAND DESTROYS WHAT IS IN THE LEDGER. It is a fixture for a demo database, so every
- * run empties `ledger_transactions`, `ledger_entries` and `audit_log` first and puts the
- * balances back to zero — otherwise a second run would double the figures, since seeds carry
- * no reference and nothing stops them from being posted twice. It is also why it refuses to
- * run against any database but the demo ones.
+ * THIS COMMAND DESTROYS WHAT IS IN THE LEDGER: every run empties the ledger and the audit log
+ * first, because seeds carry no reference and a second run would otherwise double the figures.
+ * Which is also why it refuses to run against any database but the demo ones.
  */
 
 /** Databases this script is allowed to empty. Anything else is somebody's real data. */
@@ -40,19 +38,15 @@ const DISPLAYED = [
   [ACCOUNTS.treasuryReserved, 'Reserved'],
   [ACCOUNTS.partnerPayable, 'Partner debt'],
 ] as const
-// `equity:opening` is deliberately absent: it is the internal counterpart that lets a seed
-// balance, and it appears nowhere in the published text.
+// `equity:opening` is absent on purpose: the internal counterpart that lets a seed balance,
+// and it appears nowhere in the published text.
 
 /** The payment the article follows, and the amount it follows it with. */
 const REFERENCE = 'PAY-4821'
 const PAYMENT = ARTICLE_PARTNER_DEBT
 const USDC = 'USDC'
 
-/**
- * Proof that the transfer reverted, for the `--release=reversal` run. A FIXTURE: this hash
- * exists in no block anywhere. The real thing comes from the receipt the worker read, and
- * whether the hash really reverted where it says is checked by reconciliation (Phase 9).
- */
+/** Proof for the `--release=reversal` run. A FIXTURE: this hash exists in no block anywhere. */
 const REVERTED = {
   txHash: '0x4e8f1c07a4b2b6f9d3e5a1c8b0d7f26a93c45e18b7d2a0f6c1e93b5d8a47f0c62',
   blockNumber: 45_155_022,
@@ -129,12 +123,9 @@ function readMode(args: readonly string[]): Mode {
 }
 
 /**
- * The two release doors, from the article's opening position: reserve 1,000, then send it
- * back to available — with proof that the transfer reverted, or because nothing was ever
- * signed. Both end where §6 ends: Available 10,000, Reserved 0.
- *
- * What the reader is meant to notice is that the entries are identical. Only the kind and the
- * justification differ, and the database refuses that same movement under any other kind.
+ * The two release doors, from the article's opening position. What the reader is meant to
+ * notice is that the entries are identical: only the kind and the justification differ, and
+ * the database refuses that same movement under any other kind.
  */
 async function release(pool: Pool, door: 'reversal' | 'cancel'): Promise<void> {
   header(`the ${door} door: ${REFERENCE} for ${formatMinor(PAYMENT)} ${USDC}`)
@@ -181,11 +172,9 @@ async function printReleaseReason(pool: Pool): Promise<void> {
 }
 
 /**
- * Refuses to run anywhere but the demo databases, before a single statement is sent.
- *
- * The reset below removes EVERY ledger transaction in the database it is pointed at, not only
- * the ones this script wrote, and CASCADE empties whatever references them. A DATABASE_URL
- * left over from something real must not be one habit away from that.
+ * Refuses to run anywhere but the demo databases, before a single statement is sent: the reset
+ * below removes EVERY ledger transaction in the database it is pointed at, not only the ones
+ * this script wrote. A DATABASE_URL left over from something real must not be one habit away.
  */
 function assertDemoDatabase(): void {
   const database = new URL(readDatabaseUrl()).pathname.replace(/^\//, '')
@@ -202,20 +191,10 @@ function assertDemoDatabase(): void {
 /**
  * Empties the ledger, so the figures below are this run's and nobody else's.
  *
- * TRUNCATE rather than reversal entries: this is a fixture command for a demo database, and
- * pretending a fixture reset is an accounting event would teach the wrong lesson. It also does
- * not fire the append-only triggers, which is the only reason the ledger can be emptied at
- * all. `ledger_accounts` keeps its rows — the chart of accounts comes from the migration —
- * and only its balances go back to zero.
- *
- * `audit_log` is named explicitly because it has no foreign key to the ledger (and should not
- * have one: most of what it records is not a money movement). CASCADE therefore never reaches
- * it, and leaving it behind would give this demo a log narrating releases whose transactions
- * no longer exist — exactly the wart version 1 carried.
- *
- * These statements are the test harness's `resetDatabase` minus the part that truncates every
- * other table: sharing that one would mean a script importing from `tests/`, and would mean
- * this command wiping the payments and partners of the very demo it is seeding.
+ * TRUNCATE does not fire the append-only triggers, which is the only reason the ledger can be
+ * emptied at all. `ledger_accounts` keeps its rows — the chart of accounts comes from the
+ * migration — and only its balances go back to zero. `audit_log` is named explicitly because
+ * it has no foreign key to the ledger, so CASCADE never reaches it.
  */
 async function resetLedger(pool: Pool): Promise<void> {
   await pool.query('TRUNCATE ledger_entries, ledger_transactions, audit_log RESTART IDENTITY CASCADE')

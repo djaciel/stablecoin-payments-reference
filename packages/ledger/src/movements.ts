@@ -4,19 +4,13 @@ import { writeTransaction } from './engine'
 import { ACCOUNTS, type LedgerTransactionId, type MinorUnits, type ReversalProof } from './types'
 
 /**
- * The movements of the article's payment, one function per row of the spec's posting table
- * and nothing else. They add no SQL of their own: the lock, the zero-sum check and the typed
- * rejections all live in the engine, so there is exactly one place where money is written.
+ * One function per row of the spec's posting table. They add no SQL of their own: the lock,
+ * the zero-sum check and the typed rejections all live in the engine, and each takes a client
+ * because the caller owns the transaction.
  *
- * Each takes a client because the caller owns the transaction. Phase 4 commits the reserve
- * together with the payment's CREATED → RESERVED status change, which is the whole reason the
- * money and the state cannot disagree.
- *
- * `reversal` and `cancel` are the two — and the only two — doors that send reserved money
- * back to available. They write the SAME entry pair and differ only in what justifies it, so
+ * `reversal` and `cancel` write the SAME entry pair and differ only in what justifies it, so
  * nothing here is what keeps a third door shut: the deferred trigger in
- * `migrations/0002_ledger.sql` refuses that movement under any other kind, whatever the
- * function it came from was called.
+ * `migrations/0002_ledger.sql` refuses that movement under any other kind.
  */
 
 export interface TransferInput {
@@ -28,10 +22,8 @@ export interface TransferInput {
 
 export interface ReversalInput extends TransferInput {
   /**
-   * Why the hold may be released: the broadcast transaction reverted onchain, and this says
-   * which one. Required rather than optional, so the rule cannot be broken by forgetting an
-   * argument — a timeout produces no proof, and a payment with no proof goes to REVIEW with
-   * the money still held.
+   * Why the hold may be released: the broadcast transaction reverted onchain. Required rather
+   * than optional, so the rule cannot be broken by forgetting an argument.
    */
   readonly proof: ReversalProof
 }
@@ -42,12 +34,9 @@ export interface CancelInput extends TransferInput {
 }
 
 /**
- * CREATED → RESERVED. Dr `treasury:reserved` / Cr `treasury:available`.
- *
- * The money stops being spendable before anything is signed or broadcast. §5: two entries
- * that make a second payment for the same funds impossible, written before the chain is
- * involved at all. Rejects with `InsufficientFunds` when available is short — which is the
- * article's §9 race, from the loser's side.
+ * CREATED → RESERVED. Dr `treasury:reserved` / Cr `treasury:available`: the money stops being
+ * spendable before anything is signed or broadcast. Rejects with `InsufficientFunds` when
+ * available is short.
  */
 export function reserve(client: PoolClient, input: TransferInput): Promise<LedgerTransactionId> {
   return writeTransaction(client, {
@@ -62,10 +51,8 @@ export function reserve(client: PoolClient, input: TransferInput): Promise<Ledge
 }
 
 /**
- * SENT → SETTLED. Dr `partner:payable` / Cr `treasury:reserved`.
- *
- * §7: the debt is extinguished and the held money leaves the books, both at once. Available
- * does not move here — it was already reduced at reserve time.
+ * SENT → SETTLED. Dr `partner:payable` / Cr `treasury:reserved`. Available does not move here
+ * — it was already reduced at reserve time.
  */
 export function settle(client: PoolClient, input: TransferInput): Promise<LedgerTransactionId> {
   return writeTransaction(client, {
@@ -83,13 +70,10 @@ export function settle(client: PoolClient, input: TransferInput): Promise<Ledger
  * First release door. SENT → FAILED, with proof. Dr `treasury:available` / Cr
  * `treasury:reserved`.
  *
- * §6: the transfer reverted onchain, so the hold is released and the money becomes spendable
- * again. This is the posting that must never happen on a timeout — a transaction that has not
- * landed yet can still land, and releasing the hold there is how a system pays twice. The
- * required `proof` argument is what keeps that mistake from being one forgotten branch away.
- *
- * Nobody checks here that the hash in the proof really reverted in the block it names; that
- * is reconciliation's job in Phase 9.
+ * This is the posting that must never happen on a timeout — a transaction that has not landed
+ * yet can still land, and releasing the hold there is how a system pays twice. The required
+ * `proof` argument is what keeps that mistake from being one forgotten branch away. Whether
+ * the hash really reverted in the block it names is reconciliation's job, not this one's.
  */
 export async function reversal(client: PoolClient, input: ReversalInput): Promise<LedgerTransactionId> {
   const id = await writeTransaction(client, {
@@ -103,8 +87,8 @@ export async function reversal(client: PoolClient, input: ReversalInput): Promis
     ],
   })
 
-  // The evidence lands in the audit log in the same database transaction as the entries it
-  // justifies. Either the release and its reason are both in the books, or neither is.
+  // Same database transaction as the entries it justifies: either the release and its reason
+  // are both in the books, or neither is.
   await recordAudit(client, {
     actor: 'worker',
     subjectType: 'payment',
@@ -122,19 +106,14 @@ export async function reversal(client: PoolClient, input: ReversalInput): Promis
 }
 
 /**
- * Second release door. RESERVED → FAILED, before anything was signed. The same entry pair as
- * a reversal, recorded as `cancel` and with no chain proof.
+ * Second release door. RESERVED → FAILED, before anything was signed: the same entry pair as a
+ * reversal, recorded as `cancel` and with no chain proof. No signed bytes exist, so no node
+ * can ever include them, and that absence IS the proof.
  *
- * The absence IS the proof: no signed bytes exist, so no node can ever include them, and the
- * transfer can no longer land. That is the one release the article allows without a reverted
- * transaction to point at.
- *
- * The ledger does NOT check the payment's status or its hash — it cannot, and it should not
- * pretend to. Those conditions (status RESERVED, `tx_hash IS NULL`, `signed_tx IS NULL`) are
- * enforced by the payment service inside one transaction holding
- * `SELECT … FROM payments WHERE reference = $1 FOR UPDATE`, which is what makes cancel and
- * sign unable to interleave. There is no payments table yet: T-25 (Phase 8) owns it, and it
- * also tightens the trigger to refuse a cancel whose payment already has a stored hash.
+ * The ledger does NOT check the payment's status or its hash — it cannot. Those conditions
+ * (status RESERVED, `tx_hash IS NULL`, `signed_tx IS NULL`) belong to the payment service,
+ * inside one transaction holding `SELECT … FROM payments WHERE reference = $1 FOR UPDATE`,
+ * which is what makes cancel and sign unable to interleave.
  */
 export async function cancel(client: PoolClient, input: CancelInput): Promise<LedgerTransactionId> {
   const id = await writeTransaction(client, {
@@ -147,9 +126,8 @@ export async function cancel(client: PoolClient, input: CancelInput): Promise<Le
     ],
   })
 
-  // Same `released` event as a reversal, because the same thing happened to the money, and
-  // the timeline in Phase 8 reads one line per release. What distinguishes the two doors is
-  // `proof`: a reverted transaction there, or the sentence below.
+  // The same `released` event as a reversal, because the same thing happened to the money.
+  // What distinguishes the two doors is `proof`.
   await recordAudit(client, {
     actor: 'admin',
     subjectType: 'payment',

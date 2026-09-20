@@ -15,21 +15,16 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { balanceOf, resetDatabase, testPool } from './helpers/database'
 
 /**
- * Invariant 5, the whole rule: reserved money goes back to available through exactly two
- * doors, and the database refuses every other way whatever it is labelled.
+ * Invariant 5, the whole rule: reserved money goes back to available through exactly two doors,
+ * and the database refuses every other way whatever it is labelled.
  *
  *   reversal — the broadcast transaction reverted onchain, and the proof says which one (§6).
  *   cancel   — nothing was ever signed, so no node can include anything. That absence IS the
  *              proof, and it is the one release the article allows without a chain proof.
  *
- * This is the invariant that costs real money when it is wrong: releasing a hold on a
- * transfer that has not landed yet is how a system pays the same partner twice. Version 1 of
- * this repo shipped a schema that constrained the `kind` column and not the movement, so a
- * `settle` could write the reversal's exact entry pair and release a hold with no evidence at
- * all — the third test below is that hole, kept open on purpose.
- *
- * What a green file here does NOT say: that the hash inside a proof really reverted in the
- * block it names. Nobody checks that until reconciliation, in Phase 9.
+ * This is the invariant that costs real money when it is wrong: releasing a hold on a transfer
+ * that has not landed yet is how a system pays the same partner twice. The third test is the
+ * hole a schema gets when it constrains the `kind` column instead of the movement.
  */
 
 const USDC = 'USDC'
@@ -54,9 +49,8 @@ beforeEach(async () => {
 
 describe('releasing a hold', () => {
   it('through a reversal: the entries, the proof and the audit row land together or not at all', async () => {
-    // First the failure, while the hold is still there to be lost. "In the same transaction"
-    // has to mean something: a caller that dies after releasing must leave the money held AND
-    // a log that does not claim it was released.
+    // First the failure, while the hold is still there to be lost: a caller that dies after
+    // releasing must leave the money held AND a log that does not claim it was released.
     await expect(
       withLedgerTransaction(pool, async (client) => {
         await reversal(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC, proof: PROOF })
@@ -77,8 +71,7 @@ describe('releasing a hold', () => {
     expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(0n)
     expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(ARTICLE_TREASURY)
 
-    // The proof is stored next to the entries it justifies, and once more in the audit log,
-    // which is where a human looks when deciding what to do about the payment.
+    // The proof is stored next to the entries it justifies, and once more in the audit log.
     expect(await proofOnTransaction('reversal')).toEqual(PROOF)
 
     const audit = await auditRowsFor(REFERENCE)
@@ -92,8 +85,7 @@ describe('releasing a hold', () => {
 
   it('is refused by the database when a reversal carries no proof, even posted through the engine', async () => {
     // Straight through `writeTransaction`, bypassing the `reversal` function whose required
-    // argument makes this unwritable: the guarantee has to hold for the engine underneath too,
-    // because that engine is public and psql is public.
+    // argument makes this unwritable: the guarantee has to hold for the engine underneath too.
     const refusal = await withLedgerTransaction(pool, (client) =>
       writeTransaction(client, {
         kind: 'reversal',
@@ -116,9 +108,8 @@ describe('releasing a hold', () => {
   })
 
   it('is refused when the reversal entry pair is recorded as a settle, while the article settle passes', async () => {
-    // The exact movement of a reversal — Dr treasury:available / Cr treasury:reserved — under
-    // a label the schema likes. The rule is about what the money did, so the trigger names
-    // what it was recorded as and refuses it at COMMIT.
+    // The exact movement of a reversal, under a label the schema likes. The rule is about what
+    // the money did, so the trigger refuses it at COMMIT and names what it was recorded as.
     const refusal = await withLedgerTransaction(pool, (client) =>
       writeTransaction(client, {
         kind: 'settle',
@@ -134,9 +125,8 @@ describe('releasing a hold', () => {
     expect((refusal as Error).message).toMatch(/releases a hold .* but is recorded as settle/)
     expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(PAYMENT)
 
-    // And the settle the article actually describes still posts: Dr partner:payable /
-    // Cr treasury:reserved consumes the hold to pay a debt and never touches available. That
-    // is a settlement, not a release.
+    // And the settle the article describes still posts: it consumes the hold to pay a debt and
+    // never touches available. That is a settlement, not a release.
     await withLedgerTransaction(pool, (client) =>
       settle(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC }),
     )

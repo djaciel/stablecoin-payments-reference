@@ -1,16 +1,11 @@
 /**
- * Where the database tests connect, decided in one place because two processes need the
- * same answer: the global setup that creates the test database, and every test worker that
- * then talks to it.
+ * Where the database tests connect, decided in one place because two processes need the same
+ * answer: the global setup that creates the test database, and every test worker that then
+ * talks to it.
  *
- * Resolution order:
- *   1. TEST_DATABASE_URL — an explicit override wins.
- *   2. DATABASE_URL with its database name swapped for the test one.
- *   3. localhost on POSTGRES_PORT, matching docker-compose's published port.
- *
- * Note the absence of a hardcoded 5432 anywhere but the last fallback: a machine that
- * already has something on 5432 runs the stack with POSTGRES_PORT set, and the tests have
- * to follow it there.
+ * Resolution order: TEST_DATABASE_URL, then DATABASE_URL with its database name swapped, then
+ * localhost on POSTGRES_PORT. Nothing hardcodes 5432 but the last fallback — a machine that
+ * already has something there runs the stack with POSTGRES_PORT set, and the tests follow it.
  */
 
 /** A database of its own, dropped and recreated on every run, so isolation is total. */
@@ -43,8 +38,7 @@ function withDatabase(url: string, database: string): string {
   return parsed.toString()
 }
 
-// An env var set to the empty string means "not set" everywhere in this repo. The shared
-// helper for this rule is Phase 3's; this is the third copy and the one that pays for it.
+// An env var set to the empty string means "not set" everywhere in this repo.
 function readEnv(name: string): string | undefined {
   const value = process.env[name]
   return value === undefined || value === '' ? undefined : value

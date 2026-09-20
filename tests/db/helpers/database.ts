@@ -3,8 +3,8 @@ import { ACCOUNTS, type AccountCode } from '@payments/ledger'
 
 /**
  * A pool aimed at the test database. Built on `createPool()` rather than `new Pool()` so the
- * tests inherit the same connection settings and the same required `error` listener the
- * services get — a pool without one takes the process down when Postgres restarts.
+ * tests inherit the same settings and the same required `error` listener the services get — a
+ * pool without one takes the process down when Postgres restarts.
  */
 export function testPool(): Pool {
   return createPool()
@@ -23,14 +23,12 @@ export async function withClient<T>(pool: Pool, body: (client: PoolClient) => Pr
 /**
  * Empties every table the migrations created, leaving the schema in place.
  *
- * Two tables are held back. `schema_migrations` belongs to the runner, and wiping it would
- * make the next run think the database was never migrated. `ledger_accounts` is the chart of
- * accounts, seeded by the migration rather than by any test: truncating it would delete the
- * accounts the article names. Its balances are zeroed instead, and any account a test
- * invented through raw SQL is dropped.
+ * Two are held back: `schema_migrations`, because wiping it would make the next run think the
+ * database was never migrated, and `ledger_accounts`, the chart of accounts seeded by the
+ * migration. Its balances are zeroed instead, and any account a test invented is dropped.
  *
- * TRUNCATE does not fire the per-row append-only triggers, which is the only reason the
- * ledger can be emptied here at all.
+ * TRUNCATE does not fire the per-row append-only triggers, which is the only reason the ledger
+ * can be emptied here at all.
  */
 const PRESERVED_TABLES = ['schema_migrations', 'ledger_accounts']
 
@@ -49,10 +47,8 @@ export async function resetDatabase(pool: Pool): Promise<void> {
 }
 
 /**
- * Reads a balance straight from the column the trigger maintains.
- *
- * On purpose: a test that read balances through the ledger's own reader could not catch a
- * reader that lies. This is the database's own answer.
+ * Reads a balance straight from the column the trigger maintains. On purpose: a test that read
+ * balances through the ledger's own reader could not catch a reader that lies.
  */
 export async function balanceOf(pool: Pool, code: AccountCode): Promise<bigint> {
   const result = await pool.query<{ balance_minor: string }>(
@@ -67,12 +63,10 @@ export async function balanceOf(pool: Pool, code: AccountCode): Promise<bigint> 
 }
 
 /**
- * A latch that holds callers until `parties` of them have arrived, then releases them all at
- * once.
- *
- * This is what makes "concurrent" mean something. Two connections that merely start at
- * roughly the same time usually end up serialized by chance, and a race test that never
- * produces a race passes for the wrong reason forever.
+ * Holds callers until `parties` of them have arrived, then releases them all at once. This is
+ * what makes "concurrent" mean something: two connections that merely start at roughly the
+ * same time usually end up serialized by chance, and a race test that never produces a race
+ * passes for the wrong reason forever.
  */
 export function barrier(parties: number): () => Promise<void> {
   let arrived = 0

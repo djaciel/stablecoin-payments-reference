@@ -4,16 +4,13 @@ import { usePolling } from '../api/usePolling'
 import { HealthCard } from '../app/HealthCard'
 
 /**
- * Where the demo starts: the one address a human has to fund, what the chain says it
- * holds, and what the books say about it.
+ * Where the demo starts: the one address a human has to fund, what the chain says it holds, and
+ * what the books say about it.
  *
- * The two halves disagree on purpose while the ledger is empty, and the screen says so
- * rather than hiding it. Money on chain is not money in the books until something posts
- * it, and watching that gap close is the first thing this demo teaches.
+ * The two halves disagree on purpose while the ledger is empty, and the screen says so rather
+ * than hiding it: money on chain is not money in the books until something posts it.
  *
- * One poll for the whole screen: `/treasury` answers the address, the chain and the
- * ledger together. A card per request would multiply the traffic by the number of cards
- * and show figures read at three different moments.
+ * One poll for the whole screen, so the three figures are read at the same moment.
  */
 
 const USDC_FAUCET_URL = 'https://faucet.circle.com'

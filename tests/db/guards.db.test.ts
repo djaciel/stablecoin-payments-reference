@@ -9,12 +9,11 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { balanceOf, resetDatabase, testPool, withClient } from './helpers/database'
 
 /**
- * Three of the four guards in `migrations/0002_ledger.sql`, each violated on purpose (the fourth, the release rule, is tested in T-07).
+ * Three of the four guards in `migrations/0002_ledger.sql`, each violated on purpose (the
+ * release rule has `release.db.test.ts` to itself).
  *
  * Every guard is tried through raw SQL as the application role, not only through the posting
- * engine: a guarantee that holds for well-behaved callers only is not a guarantee. The
- * article claims the books cannot be unbalanced, cannot be edited and cannot go negative —
- * these are those three claims, executable.
+ * engine: a guarantee that holds for well-behaved callers only is not a guarantee.
  */
 
 const USDC = 'USDC'
@@ -84,9 +83,8 @@ describe('the ledger guards', () => {
     expect((refusal as NotZeroSum).imbalance).toBe(200n)
     expect(await countRows('ledger_transactions')).toBe(0)
 
-    // And it refuses to post at all without a transaction to be deferred until: in autocommit
-    // the transaction row would commit on its own, the first entry would trip the guard, and
-    // the append-only trigger would make that orphan impossible to delete.
+    // And it refuses to post without a transaction to be deferred until: in autocommit the
+    // transaction row commits on its own and the orphan it leaves cannot be deleted.
     const outside = await withClient(pool, (client) =>
       writeTransaction(client, {
         kind: 'seed',

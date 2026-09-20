@@ -1,18 +1,12 @@
 import { http, createPublicClient } from 'viem'
 import { baseSepolia } from 'viem/chains'
 
-/**
- * Everything chain-side is built from here, so there is one place that decides which
- * network this repo talks to. Base Sepolia, always: this repo never points at mainnet.
- */
+/** One place decides which network this repo talks to. Base Sepolia, always; never mainnet. */
 export const CHAIN = baseSepolia
 
 const DEFAULT_RPC_URL = 'https://sepolia.base.org'
 
-/**
- * The RPC endpoint, with a default that works. `RPC_URL` exists for the reader who has a
- * provider endpoint of their own; nothing in the demo requires it to be set.
- */
+/** `RPC_URL` exists for a reader with their own endpoint; the demo needs nothing set. */
 export function readRpcUrl(): string {
   const url = process.env['RPC_URL']
   // An empty variable is a mistake, not a request for the empty string.
@@ -20,13 +14,9 @@ export function readRpcUrl(): string {
 }
 
 /**
- * Reading the chain needs no key, so this client is always available. Nothing in this
- * package ever signs: the company seed lives in the signer, and this repo broadcasts
- * bytes that were signed there.
- *
+ * Reading the chain needs no key, so this client is always available. Nothing here ever signs.
  * The return type is inferred on purpose: viem encodes the chain into it, and writing
- * `PublicClient` by hand throws that away — callers then lose `client.chain` and the
- * chain-aware overloads.
+ * `PublicClient` by hand costs callers `client.chain` and the chain-aware overloads.
  */
 export function createChainClient() {
   return createPublicClient({ chain: CHAIN, transport: http(readRpcUrl()) })
@@ -36,8 +26,8 @@ export function createChainClient() {
 export type ChainClient = ReturnType<typeof createChainClient>
 
 /**
- * The RPC endpoint's host, which is what evidence prints. Never the URL: provider
- * endpoints carry the API key in the path, and these lines end up in logs and articles.
+ * The host, never the URL: provider endpoints carry the API key in the path, and these lines
+ * end up in logs and articles.
  */
 export function rpcHost(): string {
   try {

@@ -3,16 +3,13 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { barrier, testPool, withClient } from './helpers/database'
 
 /**
- * Invariant 4: every state change is `UPDATE … WHERE status = expected`, and exactly one row
- * has to have changed.
+ * Invariant 4: every state change is `UPDATE … WHERE status = expected`, and exactly one row has
+ * to have changed. Proved against a fixture table, so payments, deposits and invoices inherit
+ * the guarantee from one place.
  *
- * There is no `payments` table until Phase 8, so the helper is proved against a fixture table
- * of its own — which is the reason it lives in `packages/db` at all: the guarantee is tested
- * once here, and payments, deposits and invoices inherit it.
- *
- * The case worth testing is the one that looks like success. An UPDATE that matched nothing
- * is a perfectly good statement and Postgres has no complaint about it, so a caller that does
- * not read `rowCount` carries on as if the transition happened.
+ * The case worth testing is the one that looks like success: an UPDATE that matched nothing is a
+ * perfectly good statement, so a caller that does not read `rowCount` carries on as if the
+ * transition happened.
  */
 
 const pool = testPool()
@@ -41,9 +38,9 @@ const transition = {
 
 describe('a guarded transition', () => {
   it('lets exactly one of two parallel attempts win and tells the loser which state it found', async () => {
-    // Two workers both believe the payment is RESERVED and both try to move it on. The second
-    // UPDATE waits for the first one's row lock, re-checks its WHERE clause and matches zero
-    // rows — the row count is what turns that silence into a rejection.
+    // Two workers both believe the payment is RESERVED. The second UPDATE waits for the first
+    // one's row lock, re-checks its WHERE clause and matches zero rows — the row count is what
+    // turns that silence into a rejection.
     const startTogether = barrier(2)
     const attempt = (to: string): Promise<string> =>
       withClient(pool, (client) =>
@@ -60,8 +57,8 @@ describe('a guarded transition', () => {
     expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1)
     expect(await statusOf('PAY-0001')).toBe((winner as PromiseFulfilledResult<string>).value)
 
-    // And the loser's error names both states, so a log line is enough to tell "somebody beat
-    // me to it" apart from "this payment was never in that state".
+    // The loser's error names both states, so a log line is enough to tell "somebody beat me to
+    // it" apart from "this payment was never in that state".
     const refusal: unknown = outcomes.find((outcome) => outcome.status === 'rejected')?.reason
     expect(refusal).toBeInstanceOf(TransitionRejected)
     expect((refusal as TransitionRejected).expected).toBe('RESERVED')

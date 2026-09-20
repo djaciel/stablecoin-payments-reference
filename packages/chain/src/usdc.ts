@@ -2,16 +2,10 @@ import { type Address, type Log, decodeEventLog, getAddress, parseAbi } from 'vi
 import type { ChainClient } from './clients'
 
 /**
- * Circle's official testnet USDC on Base Sepolia. Verified live: `symbol()` returns
- * "USDC" and `decimals()` returns 6.
+ * Circle's official testnet USDC on Base Sepolia. Any other contract can emit a Transfer event
+ * with the same shape, so this address is half the settlement check.
  *
- * The article's settlement rule names this contract explicitly: a transfer only counts
- * when the Transfer event was emitted by the OFFICIAL stablecoin contract. Any other
- * contract can emit an event with the same shape, so the address is half the check.
- *
- * How many decimals it has is the ledger's business, not this file's: `@payments/ledger`
- * owns `USDC_DECIMALS` next to the functions that format and parse amounts. One constant
- * for one truth.
+ * Its decimal count lives in `@payments/ledger`, next to the functions that format amounts.
  */
 export const USDC_ADDRESS: Address = getAddress('0x036CbD53842c5426634e7929541eC2318f3dCF7e')
 
@@ -30,27 +24,18 @@ export interface ExpectedTransfer {
 }
 
 /**
- * Finds the Transfer event that proves a payment landed, and refuses to accept anything
+ * Finds the Transfer event that proves a payment landed, and refuses anything
  * close-but-not-equal.
  *
- * A receipt with status "success" is NOT proof of payment: a transaction can succeed
- * while transferring nothing, or transferring to somebody else, or emitting a Transfer
- * from a lookalike contract. What proves payment is this event, from this contract, with
- * this destination and this exact amount — the article's three checks, in this order:
+ * A receipt with status "success" is NOT proof of payment: a transaction can succeed while
+ * transferring nothing, or to somebody else, or emitting a Transfer from a lookalike contract.
+ * Three checks, all equality: the official contract, the exact destination, the exact amount.
  *
- *   1. the log came from the official contract (anyone can deploy a token called USDC);
- *   2. the destination is exactly the one the payment was for (an address that differs in
- *      one character is somebody else's money);
- *   3. the amount is exactly the one that was owed (a transfer short by one unit is not
- *      the transfer that was reserved for).
- *
- * Returns the matching log. Throws with the reason, and with what it saw instead, when
- * there is no match — the caller is expected to treat that as "not paid", never as
- * "probably fine".
+ * Throws with what it saw instead when there is no match — the caller is expected to treat that
+ * as "not paid", never as "probably fine".
  */
 export function findSettlementLog(logs: readonly Log[], expected: ExpectedTransfer): Log {
-  // Check 1. Everything a receipt carries from other contracts is dropped here, which is
-  // also why an unrelated log sitting in the same receipt is not a problem.
+  // Check 1, which is also why an unrelated log in the same receipt is not a problem.
   const fromOfficialContract = logs.filter((log) => getAddress(log.address) === USDC_ADDRESS)
 
   if (fromOfficialContract.length === 0) {
@@ -64,8 +49,7 @@ export function findSettlementLog(logs: readonly Log[], expected: ExpectedTransf
     return decoded === undefined ? [] : [{ log, ...decoded }]
   })
 
-  // Checks 2 and 3. Both are equality, deliberately: no tolerance, no "at least", no
-  // case-insensitive address compare beyond the checksum normalisation.
+  // Checks 2 and 3: no tolerance, no "at least", no address compare beyond the checksum.
   const match = transfers.find(
     (transfer) =>
       transfer.from === getAddress(expected.from) &&
@@ -97,11 +81,9 @@ function decodeTransfer(log: Log): { from: Address; to: Address; value: bigint }
 }
 
 /**
- * How much USDC an address holds, in minor units.
- *
- * `blockNumber` pins the read to one block. The public RPC is load balanced and its nodes
- * lag each other, so two reads without it can come from two different heights and quietly
- * disagree — pass the block when a figure has to line up with anything else.
+ * How much USDC an address holds, in minor units. `blockNumber` pins the read to one block: the
+ * public RPC is load balanced and its nodes lag each other, so two reads without it can come
+ * from two different heights and quietly disagree.
  */
 export function readUsdcBalance(client: ChainClient, address: Address, blockNumber?: bigint): Promise<bigint> {
   return client.readContract({

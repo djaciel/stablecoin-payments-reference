@@ -13,13 +13,13 @@ interface LockedAccount {
 /**
  * Writes one ledger transaction: the transaction row, then its entries.
  *
- * Runs inside the caller's database transaction and never opens or commits one of its own,
- * because a payment row and its reserve have to land together or not at all. Use
+ * Runs inside the caller's database transaction and never opens one of its own, because a
+ * payment row and its reserve have to land together or not at all. Use
  * `withLedgerTransaction` when a posting really is the whole unit of work.
  *
  * The database would refuse an illegal posting anyway (`migrations/0002_ledger.sql`). The
- * checks here exist so the caller hears it from the engine, where the numbers are still
- * known, instead of from a constraint that only knows which row gave way.
+ * checks here exist so the caller hears it where the numbers are still known, instead of from
+ * a constraint that only knows which row gave way.
  */
 export async function writeTransaction(client: PoolClient, input: TransactionInput): Promise<LedgerTransactionId> {
   assertWellFormed(input)
@@ -69,8 +69,8 @@ function assertWellFormed(input: TransactionInput): void {
 }
 
 /**
- * Invariant 1, checked before anything is written. The database enforces this too, at
- * COMMIT, but a caller deserves to hear it here — where the imbalance can still be named.
+ * Invariant 1, checked before anything is written. The database enforces this too, at COMMIT,
+ * but a caller deserves to hear it here — where the imbalance can still be named.
  */
 function assertZeroSum(input: TransactionInput): void {
   let imbalance = 0n
@@ -85,11 +85,10 @@ function assertZeroSum(input: TransactionInput): void {
 /**
  * Refuses to run outside a transaction the caller opened.
  *
- * Without this, autocommit turns each statement into its own transaction: the
- * `ledger_transactions` row commits on its own, the first entry then trips the deferred
- * zero-sum trigger, and what is left behind is a phantom transaction with no entries that
- * the append-only trigger makes impossible to delete. The row lock would also be released
- * the moment its statement ended, so every guarantee in this file would quietly evaporate.
+ * In autocommit the `ledger_transactions` row commits on its own, the first entry then trips
+ * the deferred zero-sum trigger, and what is left behind is a phantom transaction with no
+ * entries that the append-only trigger makes impossible to delete. The row lock would also be
+ * released the moment its statement ended.
  */
 async function assertInTransaction(client: PoolClient): Promise<void> {
   const state = await transactionState(client)
@@ -106,14 +105,10 @@ async function assertInTransaction(client: PoolClient): Promise<void> {
 /**
  * Takes the row locks this posting needs, all of them, in one statement.
  *
- * `ORDER BY code` is the whole point and is not a stylistic choice. Two transactions that
- * touch the same two accounts in opposite orders will each hold what the other is waiting
- * for, and Postgres resolves that by killing one of them. Sorting the codes means every
- * writer in this system queues for the same accounts in the same sequence, so they wait
- * instead of deadlocking.
- *
- * This is the lock the article's §5 is about: from here until the caller commits, nobody
- * else can read these balances to decide whether they can afford something.
+ * `ORDER BY code` is the whole point. Two transactions that touch the same two accounts in
+ * opposite orders will each hold what the other is waiting for, and Postgres resolves that by
+ * killing one of them. Sorting the codes means every writer queues for the same accounts in
+ * the same sequence, so they wait instead of deadlocking.
  */
 async function lockAccounts(client: PoolClient, entries: readonly Entry[]): Promise<Map<string, LockedAccount>> {
   const codes = [...new Set(entries.map((entry) => entry.account))].sort()
@@ -131,17 +126,16 @@ async function lockAccounts(client: PoolClient, entries: readonly Entry[]): Prom
 }
 
 /**
- * Invariant 3, evaluated while the rows are locked: replay this posting's entries against
- * the balances we just read and refuse if a guarded account dips below zero.
+ * Invariant 3, evaluated while the rows are locked: replay this posting's entries against the
+ * balances we just read and refuse if a guarded account dips below zero.
  *
  * Entry by entry, in order, because that is what the database will do: the balance trigger
  * fires per row, so an account that ends the posting whole can still be overdrawn halfway
- * through it, and the CHECK fires there. Netting the deltas instead would let such a posting
- * past this function and have the database reject it — with an error that no longer knows
- * the amounts, which is precisely what this check exists to provide.
+ * through it. Netting the deltas instead would let such a posting past this function and have
+ * the database reject it — with an error that no longer knows the amounts.
  *
- * An account the query did not return is not in the chart of accounts. Nothing is invented
- * for it here; the foreign key refuses the entry a few lines later.
+ * An account the query did not return is not in the chart of accounts; the foreign key refuses
+ * the entry a few lines later.
  */
 function assertBalancesSurvive(input: TransactionInput, accounts: Map<string, LockedAccount>): void {
   const running = new Map<string, bigint>()
@@ -163,17 +157,14 @@ function assertBalancesSurvive(input: TransactionInput, accounts: Map<string, Lo
 }
 
 /**
- * For callers whose whole unit of work is one posting. Anything that also writes a payment
- * row should open its own transaction and call `writeTransaction` inside it instead.
- *
- * COMMIT is where the deferred guards answer, so this is also the only place a zero-sum or
- * release violation can surface: it maps that failure like any other.
+ * For callers whose whole unit of work is one posting. COMMIT is where the deferred guards
+ * answer, so this is also the only place a zero-sum or release violation can surface.
  */
 export async function withLedgerTransaction<T>(pool: Pool, body: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect()
   // A client whose ROLLBACK failed may still be inside a transaction. Releasing it plainly
-  // would hand that transaction to whoever borrows it next, so the pool is told to destroy
-  // it instead: `release(error)` discards the connection rather than reusing it.
+  // would hand that transaction to whoever borrows it next, so `release(error)` is used to
+  // discard the connection instead.
   let poisoned: Error | undefined
 
   try {

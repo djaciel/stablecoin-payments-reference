@@ -3,11 +3,7 @@
  * changing one here means changing what the published text claims.
  */
 
-/**
- * The chart of accounts, the same nine rows `migrations/0002_ledger.sql` inserts. Codes are
- * plain text in the database rather than an enum column, so adding an account is an INSERT
- * and not a migration that rewrites a type.
- */
+/** The chart of accounts, the same nine rows `migrations/0002_ledger.sql` inserts. */
 export const ACCOUNTS = {
   treasuryAvailable: 'treasury:available',
   treasuryReserved: 'treasury:reserved',
@@ -45,17 +41,12 @@ export type LedgerTransactionKind =
   | 'scaffolding'
 
 /**
- * Money is minor units, always. USDC has 6 decimals, so 1,000 USDC is 1_000_000_000n.
  * `bigint` rather than `number` because a JavaScript number stops being exact at 2^53, and
  * rather than a decimal string because arithmetic on money must be arithmetic.
  */
 export type MinorUnits = bigint
 
-/**
- * One line of a ledger transaction, shaped exactly like the row it becomes: a positive
- * amount plus the direction it moves in. Signing the amount instead would let a caller
- * write a "negative debit", which is a thing no ledger has ever meant.
- */
+/** A positive amount plus a direction: signing it would let a caller write a "negative debit". */
 export interface Entry {
   readonly account: AccountCode
   readonly direction: Direction
@@ -64,10 +55,8 @@ export interface Entry {
 
 /**
  * Evidence that a transfer can no longer land, which is what lets reserved money go back to
- * available. Invariant 5.
- *
- * `blockNumber` is a number rather than a bigint because it is not money and is nowhere near
- * the limit of an exact integer. Money stays bigint, always.
+ * available. Invariant 5. `blockNumber` is a number rather than a bigint because it is not
+ * money; money stays bigint, always.
  */
 export interface ReversalProof {
   readonly txHash: string

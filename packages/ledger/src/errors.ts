@@ -1,21 +1,15 @@
 /**
- * The ledger refuses work by throwing, never by returning a falsy value: a caller that
- * ignores the result of a reserve must not be able to carry on as if money moved.
+ * The ledger refuses work by throwing, never by returning a falsy value: a caller that ignores
+ * the result of a reserve must not carry on as if money moved.
  *
- * There are three errors, and the split is about who found the problem. The engine names
- * the two money failures because it checked before writing, while it still knew the
- * numbers. Everything the DATABASE refused arrives as `LedgerRejected` carrying the
- * database's own message — no message parsing, no guessing which guard fired. Version 1 of
- * this repo read account names and imbalances out of Postgres message text with regexes,
- * and its own review noted that rewording a `RAISE EXCEPTION` would break them silently.
+ * The split is about who found the problem. The engine names the two money failures because it
+ * checked before writing, while it still knew the numbers; everything the DATABASE refused
+ * arrives as `LedgerRejected` carrying the database's own message, so nothing parses prose.
  */
 
 /**
- * An account that may not go negative was asked to. This is the article's "rejected for
- * insufficient funds", and in the race scenario exactly one of two callers gets it.
- *
- * The numbers are always here because the engine throws this under the row lock, having
- * just read the balance. That is the message the API shows.
+ * An account that may not go negative was asked to. The numbers are always here because the
+ * engine throws this under the row lock, having just read the balance.
  */
 export class InsufficientFunds extends Error {
   constructor(
@@ -40,11 +34,8 @@ export class NotZeroSum extends Error {
 }
 
 /**
- * The database said no. Which guard fired is in the message, verbatim, and the original
- * error is the `cause` so nothing is lost on the way to a log.
- *
- * Callers that need to branch (Phase 4 on a duplicate reference, say) match on `code` or
- * `constraint`, which Postgres guarantees, rather than on prose.
+ * The database said no. Callers that need to branch match on `code` or `constraint`, which
+ * Postgres guarantees, rather than on the message.
  */
 export class LedgerRejected extends Error {
   constructor(
@@ -66,15 +57,13 @@ interface PostgresError {
 }
 
 /**
- * Turns a database rejection into `LedgerRejected` and leaves everything else alone.
- *
- * "Everything else" matters: a `TypeError` dressed up as a ledger failure is a lie the API
- * would repeat to its caller. A Postgres error is recognised by carrying a string `code`
- * (`23514`, `23505`, `23001`, …), which is the one thing about it that is stable.
+ * Turns a database rejection into `LedgerRejected` and leaves everything else alone — a
+ * `TypeError` dressed up as a ledger failure is a lie the API would repeat. A Postgres error is
+ * recognised by its string `code`, the one stable thing about it.
  */
 export function toLedgerError(error: unknown): unknown {
-  // Already translated: the posting engine maps what it catches, and the transaction
-  // wrapper around it maps again when COMMIT is what the database refused.
+  // Already translated: the posting engine maps what it catches, and the transaction wrapper
+  // around it maps again when COMMIT is what the database refused.
   if (error instanceof LedgerRejected || typeof error !== 'object' || error === null) {
     return error
   }
