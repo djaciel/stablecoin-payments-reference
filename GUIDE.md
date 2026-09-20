@@ -87,16 +87,33 @@ harness and lists which test defends which rule). Or break a rule by hand:
 `docker compose exec postgres psql -U payments -d payments -c "UPDATE ledger_accounts SET balance_minor = -1 WHERE code = 'treasury:available'"`
 is refused by the database.
 
+## The chain: a receipt is not a payment (§7)
+
+- `packages/chain/src/clients.ts` — the one client that talks to Base Sepolia (the public
+  RPC by default; `RPC_URL` only if you want your own) and the explorer links.
+- `packages/chain/src/usdc.ts` — the official USDC contract and `findSettlementLog`, the
+  article's rule in one function: the event must come from the official contract, to the
+  exact destination, for the exact amount — or it is not a payment. Its four tests are
+  built from a real transaction's log.
+- `apps/api/src/treasury/treasury.controller.ts` — `GET /treasury`: one read for the
+  Start screen, with the onchain balances pinned to one block next to the ledger figures.
+
+See it: `curl localhost:3000/treasury`. `docs/dev/faucets.md` explains how to fund the
+address it prints (you need testnet USDC and Base Sepolia ETH for gas).
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
   `/partner` is the partner's side.
+- `apps/ui/src/admin/StartScreen.tsx` — where the demo starts: the treasury address, the
+  faucet links, and what the chain holds next to what the books say.
 - `apps/ui/src/api/client.ts` — everything the browser knows how to ask the api.
 
 Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-The payment API with its idempotency key (§4), the real chain steps (§7), the four failures
-(§9), reconciliation (§10) and the partner side (§8) arrive in later phases; each will add
-its entry here when it lands.
+The watcher that posts what arrives (so the books follow the chain), the payment API with
+its idempotency key (§4), the real chain steps (§7), the four failures (§9), reconciliation
+(§10) and the partner side (§8) arrive in later phases; each will add its entry here when it
+lands.
