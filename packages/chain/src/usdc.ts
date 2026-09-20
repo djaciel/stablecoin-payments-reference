@@ -2,10 +2,8 @@ import { type Address, type Hex, type Log, decodeEventLog, getAbiItem, getAddres
 import type { ChainClient } from './clients'
 
 /**
- * Circle's official testnet USDC on Base Sepolia. Any other contract can emit a Transfer event
- * with the same shape, so this address is half the settlement check.
- *
- * Its decimal count lives in `@payments/ledger`, next to the functions that format amounts.
+ * Circle's official testnet USDC on Base Sepolia. Any other contract can emit a Transfer with
+ * the same shape, so this address is half the settlement check.
  */
 export const USDC_ADDRESS: Address = getAddress('0x036CbD53842c5426634e7929541eC2318f3dCF7e')
 
@@ -47,18 +45,13 @@ export interface TransferQuery {
 /**
  * Every USDC transfer that arrived at one of these addresses in this block range.
  *
- * ONE `eth_getLogs`, whatever the number of addresses: the `to` topic takes a list, and the
- * node does the filtering. This is the difference between a watcher that costs one request
- * per tick and one that costs a request per partner — and with a public RPC in front of it,
- * that difference is the whole design.
+ * ONE `eth_getLogs` whatever the number of addresses: the `to` topic takes a list and the
+ * node does the filtering, which is the difference between one request per tick and one per
+ * partner. `address` pins the query to the official contract — the first of the article's
+ * three settlement checks.
  *
- * `address` pins the query to the official contract, which is the first of the article's
- * three settlement checks. The other two (exact destination, exact amount) are the caller's:
- * here the destination is whatever it asked to watch, and the amount is whatever arrived.
- *
- * The range must be bounded by the caller. `https://sepolia.base.org` refuses more than
- * 10,000 blocks in one request (measured 2026-09-17: `-32614 eth_getLogs is limited to a
- * 10,000 range`).
+ * The caller must bound the range: `https://sepolia.base.org` refuses more than 10,000 blocks
+ * in one request (`-32614 eth_getLogs is limited to a 10,000 range`).
  */
 export async function findTransfersTo(client: ChainClient, query: TransferQuery): Promise<ObservedTransfer[]> {
   const logs = await client.getLogs({
@@ -67,8 +60,7 @@ export async function findTransfersTo(client: ChainClient, query: TransferQuery)
     args: { to: [...query.addresses] },
     fromBlock: query.fromBlock,
     toBlock: query.toBlock,
-    // Drops anything whose arguments did not decode, so `args` below is complete rather
-    // than "probably there".
+    // Drops anything whose arguments did not decode, so `args` below is complete.
     strict: true,
   })
 
@@ -83,18 +75,14 @@ export async function findTransfersTo(client: ChainClient, query: TransferQuery)
 }
 
 /**
- * Finds the Transfer event that proves a payment landed, and refuses anything
- * close-but-not-equal.
- *
- * A receipt with status "success" is NOT proof of payment: a transaction can succeed while
- * transferring nothing, or to somebody else, or emitting a Transfer from a lookalike contract.
- * Three checks, all equality: the official contract, the exact destination, the exact amount.
- *
- * Throws with what it saw instead when there is no match — the caller is expected to treat that
- * as "not paid", never as "probably fine".
+ * Finds the Transfer event that proves a payment landed. A receipt with status "success" is
+ * NOT proof: a transaction can succeed while transferring nothing, or to somebody else, or
+ * emitting a Transfer from a lookalike contract. Three checks, all equality — official
+ * contract, exact destination, exact amount — and it throws with what it saw instead, which
+ * the caller must treat as "not paid" rather than "probably fine".
  */
 export function findSettlementLog(logs: readonly Log[], expected: ExpectedTransfer): Log {
-  // Check 1, which is also why an unrelated log in the same receipt is not a problem.
+  // Check 1, which is also why an unrelated log in the same receipt is harmless.
   const fromOfficialContract = logs.filter((log) => getAddress(log.address) === USDC_ADDRESS)
 
   if (fromOfficialContract.length === 0) {
@@ -140,9 +128,8 @@ function decodeTransfer(log: Log): { from: Address; to: Address; value: bigint }
 }
 
 /**
- * How much USDC an address holds, in minor units. `blockNumber` pins the read to one block: the
- * public RPC is load balanced and its nodes lag each other, so two reads without it can come
- * from two different heights and quietly disagree.
+ * `blockNumber` pins the read to one block: the public RPC is load balanced and its nodes lag
+ * each other, so two reads without it can come from two heights and quietly disagree.
  */
 export function readUsdcBalance(client: ChainClient, address: Address, blockNumber?: bigint): Promise<bigint> {
   return client.readContract({

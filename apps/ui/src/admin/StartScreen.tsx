@@ -4,17 +4,11 @@ import { usePolling } from '../api/usePolling'
 import { HealthCard } from '../app/HealthCard'
 
 /**
- * Where the demo starts: the one address a human has to fund, what the chain says it
- * holds, and what the books say about it.
+ * The two halves can disagree, and the screen says so rather than hiding it: money on chain is
+ * not money in the books until the watcher posts it, and that gap closing is the first thing
+ * this demo teaches.
  *
- * The two halves can disagree, and the screen says so rather than hiding it: money on chain
- * is not money in the books until something posts it. That something is the watcher, which
- * scans for transfers to this address every few seconds and posts what it finds — so the gap
- * closing, with a transaction named underneath it, is the first thing this demo teaches.
- *
- * One poll for the whole screen: `/treasury` answers the address, the chain and the
- * ledger together. A card per request would multiply the traffic by the number of cards
- * and show figures read at three different moments.
+ * One poll for the whole screen — a card per request would show figures read at three moments.
  */
 
 const USDC_FAUCET_URL = 'https://faucet.circle.com'

@@ -4,13 +4,13 @@ import { writeTransaction } from './engine'
 import { ACCOUNTS, type LedgerTransactionId, type MinorUnits, type ReversalProof } from './types'
 
 /**
- * One function per row of the spec's posting table. They add no SQL of their own: the lock,
- * the zero-sum check and the typed rejections all live in the engine, and each takes a client
+ * One function per row of the spec's posting table. No SQL of their own — the lock, the
+ * zero-sum check and the typed rejections live in the engine — and each takes a client
  * because the caller owns the transaction.
  *
- * `reversal` and `cancel` write the SAME entry pair and differ only in what justifies it, so
- * nothing here is what keeps a third door shut: the deferred trigger in
- * `migrations/0002_ledger.sql` refuses that movement under any other kind.
+ * `reversal` and `cancel` write the SAME entry pair and differ only in what justifies it.
+ * What keeps a third door shut is not this file: it is the deferred trigger in
+ * `migrations/0002_ledger.sql`, which refuses that movement under any other kind.
  */
 
 export interface TransferInput {
@@ -44,27 +44,17 @@ export interface FundingInput {
 }
 
 /**
- * What makes a funding unique: one Transfer event, named by the transaction that carried it
- * and its position inside it.
- *
- * The `(kind, reference)` unique index turns that name into the guarantee. Re-scanning a
- * range of blocks — after a crash, after a cursor rewind, after anything — cannot post the
- * same money twice, and the reason it cannot is a database constraint rather than a careful
- * caller.
+ * One Transfer event, named by the transaction that carried it and its position inside it.
+ * The `(kind, reference)` unique index turns that name into the guarantee: re-scanning a
+ * range cannot post the same money twice, and what stops it is a constraint, not a caller.
  */
 export function fundingReference(txHash: string, logIndex: number): string {
   return `tx:${txHash}:${logIndex}`
 }
 
 /**
- * Money arriving at the treasury, seen onchain. Dr `treasury:available` / Cr
- * `equity:opening`.
- *
- * This is the posting that makes the books chain-true: every figure the demo shows
- * afterwards descends from a transfer that really happened, at the amount the event carried,
- * rather than from a seeded round number. A faucet, a colleague, an exchange withdrawal —
- * the watcher does not care where it came from, only that the official contract says it
- * arrived and that the block it arrived in can no longer be reorganised away.
+ * Money arriving at the treasury, seen onchain. Dr `treasury:available` / Cr `equity:opening`
+ * at the amount the event carried, which is what makes the books chain-true.
  *
  * It never touches `treasury:reserved`, so the release trigger has nothing to say about it
  * and no new guard is needed.
@@ -82,8 +72,8 @@ export async function funding(client: PoolClient, input: FundingInput): Promise<
     ],
   })
 
-  // Same database transaction as the entries, like every other audit row here: the books say
-  // the balance went up, this says which transaction on which chain put it there.
+  // Same database transaction as the entries: the books say the balance went up, this says
+  // which transaction on which chain put it there.
   await recordAudit(client, {
     actor: 'watcher',
     subjectType: 'treasury',
@@ -139,10 +129,9 @@ export function settle(client: PoolClient, input: TransferInput): Promise<Ledger
  * First release door. SENT → FAILED, with proof. Dr `treasury:available` / Cr
  * `treasury:reserved`.
  *
- * This is the posting that must never happen on a timeout — a transaction that has not landed
- * yet can still land, and releasing the hold there is how a system pays twice. The required
- * `proof` argument is what keeps that mistake from being one forgotten branch away. Whether
- * the hash really reverted in the block it names is reconciliation's job, not this one's.
+ * It must never happen on a timeout: a transaction that has not landed yet can still land,
+ * and releasing the hold there is how a system pays twice. The required `proof` argument is
+ * what keeps that mistake from being one forgotten branch away.
  */
 export async function reversal(client: PoolClient, input: ReversalInput): Promise<LedgerTransactionId> {
   const id = await writeTransaction(client, {
@@ -156,8 +145,7 @@ export async function reversal(client: PoolClient, input: ReversalInput): Promis
     ],
   })
 
-  // Same database transaction as the entries it justifies: either the release and its reason
-  // are both in the books, or neither is.
+  // Same transaction as the entries it justifies: the release and its reason land together.
   await recordAudit(client, {
     actor: 'worker',
     subjectType: 'payment',
@@ -176,13 +164,11 @@ export async function reversal(client: PoolClient, input: ReversalInput): Promis
 
 /**
  * Second release door. RESERVED → FAILED, before anything was signed: the same entry pair as a
- * reversal, recorded as `cancel` and with no chain proof. No signed bytes exist, so no node
- * can ever include them, and that absence IS the proof.
+ * reversal, with no chain proof, because no signed bytes exist and that absence IS the proof.
  *
  * The ledger does NOT check the payment's status or its hash — it cannot. Those conditions
- * (status RESERVED, `tx_hash IS NULL`, `signed_tx IS NULL`) belong to the payment service,
- * inside one transaction holding `SELECT … FROM payments WHERE reference = $1 FOR UPDATE`,
- * which is what makes cancel and sign unable to interleave.
+ * belong to the payment service, inside one transaction holding `SELECT … FROM payments
+ * WHERE reference = $1 FOR UPDATE`, which is what makes cancel and sign unable to interleave.
  */
 export async function cancel(client: PoolClient, input: CancelInput): Promise<LedgerTransactionId> {
   const id = await writeTransaction(client, {
@@ -195,8 +181,8 @@ export async function cancel(client: PoolClient, input: CancelInput): Promise<Le
     ],
   })
 
-  // The same `released` event as a reversal, because the same thing happened to the money.
-  // What distinguishes the two doors is `proof`.
+  // The same `released` event as a reversal — the same thing happened to the money. What
+  // distinguishes the two doors is `proof`.
   await recordAudit(client, {
     actor: 'admin',
     subjectType: 'payment',

@@ -1,8 +1,5 @@
--- The watcher's two tables: what to look at, and how far it has looked.
---
--- Everything the watcher needs is here and nowhere else. It holds no seed, asks no signer
--- and reads no configuration file: a worker that can reach Postgres and an RPC endpoint can
--- do the whole job, which is what lets the schedule run in the plainest process in the repo.
+-- The watcher's two tables: what to look at, and how far it has looked. Everything it needs
+-- is here, so a worker that can reach Postgres and an RPC endpoint can do the whole job.
 --
 -- Convention reminder from 0001_init.sql: no BEGIN/COMMIT/ROLLBACK here.
 
@@ -37,16 +34,13 @@ CREATE TABLE watcher_state (
   -- One row per scan, and there is exactly one scan today: 'usdc-transfers'. A name rather
   -- than a singleton row with no key, so a second kind of scan does not need a migration.
   name         text        PRIMARY KEY,
-  -- The last block that has been scanned AND whose findings are committed. The next tick
-  -- starts at last_block + 1.
-  --
-  -- It is written in the same database transaction as whatever that tick posted, and that
-  -- is the entire safety argument: a worker that dies mid-tick leaves the cursor where it
-  -- was, so the range is scanned again rather than skipped. Re-scanning is free — the
-  -- ledger's (kind, reference) unique index means the same transfer cannot be posted twice.
+  -- The last block scanned AND committed; the next tick starts at last_block + 1. Written in
+  -- the same transaction as whatever that tick posted, which is the entire safety argument: a
+  -- worker that dies mid-tick re-scans the range instead of skipping it, and re-scanning is
+  -- free because (kind, reference) means the same transfer cannot be posted twice.
   last_block   bigint      NOT NULL,
-  -- When the RPC was last asked, which is what the adaptive skip reads: once the treasury
-  -- has been funded the watcher stops asking every 10 seconds and idles instead.
+  -- When the RPC was last asked. The adaptive skip reads it: once something has been funded
+  -- and the watcher is caught up, it idles instead of asking every 10 seconds.
   last_scan_at timestamptz NOT NULL DEFAULT now()
 );
 

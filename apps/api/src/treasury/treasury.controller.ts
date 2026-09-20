@@ -33,18 +33,12 @@ export class TreasuryController {
   ) {}
 
   /**
-   * The whole Start screen in one read: who the treasury is, what it holds on chain, what
-   * the books say about it, and which transaction put it there.
-   *
-   * One request instead of four because a screen that polls four endpoints multiplies its
-   * traffic by the number of cards, and because the figures are only worth comparing when
+   * The whole Start screen in one read, because the figures are only worth comparing when
    * they were read at the same moment.
    *
-   * The address is asked of the signer on every call rather than cached. It cannot change
-   * while the seed file is stable, so a cache would be correct — and it would also mean
-   * the api answers from memory about a service that may have died, and that the first
-   * tester to hit this endpoint while the signer was still starting would get a wrong
-   * answer for the life of the process.
+   * The address is asked of the signer every call rather than cached: a cache would be
+   * correct while the seed file is stable, and would also mean the api answers from memory
+   * about a service that may have died.
    */
   @Get()
   async read(): Promise<TreasuryView> {
@@ -79,14 +73,11 @@ export class TreasuryController {
   }
 
   /**
-   * The chain half, and the one dependency whose failure is NOT a 503: a public RPC
-   * hiccup must not blank a screen whose other half comes from a database that is
-   * answering perfectly well. The card says the chain is unreachable and everything else
-   * stays on screen.
+   * The one dependency whose failure is NOT a 503: an RPC hiccup must not blank a screen
+   * whose other half comes from a database that is answering perfectly well.
    *
-   * Both balances are pinned to one block. Reading them at `latest` would let a
-   * load-balanced RPC answer the two calls from two nodes at different heights, and the
-   * screen would show two figures that never existed together.
+   * Both balances are pinned to one block. At `latest` a load-balanced RPC can answer the two
+   * calls from nodes at different heights, and the screen shows figures that never coexisted.
    */
   private async readOnchain(address: Address): Promise<Pick<TreasuryView, 'onchain' | 'chainError'>> {
     try {

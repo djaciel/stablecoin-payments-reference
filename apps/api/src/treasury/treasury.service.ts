@@ -6,12 +6,9 @@ import { getAddress, type Address } from 'viem'
 import type { SignerClient } from '../signer/signer-client.service'
 
 /**
- * The injection token for this service.
- *
- * It lives here rather than in `treasury.module.ts`, unlike the other tokens in this api,
- * for one reason: the module registers the controller, so a token defined there and imported
- * by the controller is a cycle — and the symptom is a runtime `Cannot access 'X' before
- * initialization` at startup, not a compiler error.
+ * Here rather than in `treasury.module.ts`, unlike the other tokens in this api: the module
+ * registers the controller, so a token defined there and imported by the controller is a
+ * cycle — and the symptom is a runtime `Cannot access 'X' before initialization`.
  */
 export const TREASURY_SERVICE = Symbol('TREASURY_SERVICE')
 
@@ -33,12 +30,9 @@ export interface LastFunding {
 
 /**
  * Everything `GET /treasury` knows that is not HTTP, plus the one thing the api does for the
- * watcher: it tells the database which address to watch.
- *
- * That registration is here rather than in a migration because the address does not exist
- * until the signer has generated the company seed — it is a runtime fact, not a schema one.
- * The worker then needs neither the signer nor a seed: it reads `watched_addresses` and asks
- * the chain about whatever is in it.
+ * watcher: it registers the address to watch. That cannot be a migration — the address does
+ * not exist until the signer has generated the seed — and doing it here is what lets the
+ * worker need neither the signer nor a seed.
  */
 export class TreasuryService implements OnApplicationBootstrap {
   private readonly logger = new Logger(TreasuryService.name)
@@ -49,12 +43,9 @@ export class TreasuryService implements OnApplicationBootstrap {
   ) {}
 
   /**
-   * Runs once, after the module graph is up and before the api serves. Idempotent, so every
-   * restart is a no-op rather than a decision.
-   *
-   * A failure here does not stop the api: the screen still works, and what is lost is the
-   * watcher's input, which is exactly what the error line says. Under compose the signer is
-   * healthy before this process starts (`depends_on`), so this is the unusual path.
+   * Runs once, before the api serves, and idempotent so every restart is a no-op. A failure
+   * here does not stop the api: the screen still works and what is lost is the watcher's
+   * input, which is what the error line says.
    */
   async onApplicationBootstrap(): Promise<void> {
     try {
@@ -96,11 +87,8 @@ export class TreasuryService implements OnApplicationBootstrap {
   }
 
   /**
-   * The most recent funding, read from the audit log rather than from the entries.
-   *
-   * The books say how much Available there is; this says which transaction on which chain
-   * put it there, which is an audit question. The two cannot disagree: the watcher writes
-   * the entries and this row in the same database transaction.
+   * Read from the audit log rather than the entries: which transaction put the money there is
+   * an audit question. The two cannot disagree — the watcher writes both in one transaction.
    */
   async lastFunding(): Promise<LastFunding | null> {
     const result = await this.pool.query<{ at: Date; context: Record<string, unknown> }>(

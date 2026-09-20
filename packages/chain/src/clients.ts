@@ -13,9 +13,8 @@ export function readRpcUrl(): string {
 }
 
 /**
- * Reading the chain needs no key, so this client is always available. Nothing here ever signs.
- * The return type is inferred on purpose: viem encodes the chain into it, and writing
- * `PublicClient` by hand costs callers `client.chain` and the chain-aware overloads.
+ * Reading the chain needs no key; nothing here ever signs. The return type is inferred on
+ * purpose — writing `PublicClient` by hand costs callers the chain-aware overloads.
  */
 export function createChainClient() {
   return createPublicClient({ chain: CHAIN, transport: http(readRpcUrl()) })
@@ -24,10 +23,7 @@ export function createChainClient() {
 /** The inferred client type, so a caller can hold one without rebuilding the expression. */
 export type ChainClient = ReturnType<typeof createChainClient>
 
-/**
- * The host, never the URL: provider endpoints carry the API key in the path, and these lines
- * end up in logs and articles.
- */
+/** The host, never the URL: provider endpoints carry the API key in the path. */
 export function rpcHost(): string {
   try {
     return new URL(readRpcUrl()).host

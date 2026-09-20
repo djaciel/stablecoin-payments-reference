@@ -3,12 +3,12 @@ import { log, proxyActivities } from '@temporalio/workflow'
 import type * as activities from './activities'
 
 const { watchChain } = proxyActivities<typeof activities>({
-  // One tick, and one attempt at it. A tick that fails does not need a retry policy: the
-  // schedule starts a new run ten seconds later, from a cursor that did not move, so the
-  // range is simply scanned again. Retrying inside the workflow would only put two attempts
-  // where the schedule already puts one.
-  startToCloseTimeout: '30 seconds',
-  retry: { maximumAttempts: 1 },
+  // Bounded on purpose, and the reason is a real incident: an unbounded tick retried for two
+  // days, and because the schedule's overlap policy is SKIP (a tick must never run beside
+  // itself) every later tick was skipped in silence — 22,897 of them. Three quick attempts
+  // instead, so a broken tick ends its run FAILED and the next scheduled one starts clean.
+  startToCloseTimeout: '10 seconds',
+  retry: { maximumAttempts: 3, initialInterval: '1 second', backoffCoefficient: 1 },
 })
 
 const { sign, execute, watch, settle } = proxyActivities<typeof activities>({
@@ -20,17 +20,13 @@ const { sign, execute, watch, settle } = proxyActivities<typeof activities>({
 })
 
 /**
- * The chain-side half of a payment. The API owns everything before this — validations,
- * the ledger reserve, the CREATED → RESERVED transition — and starts this workflow only
- * once that has been committed. The workflow id is the payment reference (`PAY-XXXX`),
- * which is also what makes dispatching twice a no-op.
+ * The chain-side half of a payment. The API owns everything before this — validations, the
+ * ledger reserve, the CREATED → RESERVED transition — and starts this workflow only once
+ * that is committed. The workflow id is the payment reference, which is what makes
+ * dispatching twice a no-op.
  *
- * Everything awaited here is recorded in Temporal's history, so a worker that dies
- * mid-run is replayed from that history on restart: finished steps return their recorded
- * result instead of running again.
- *
- * Phase 5 gives the steps real bodies. The shape below is the one the spec fixes, so it
- * does not change: only the activities do.
+ * Everything awaited here is recorded in Temporal's history, so a worker that dies mid-run
+ * replays from it: finished steps return their recorded result instead of running again.
  */
 export async function PaymentWorkflow(reference: string): Promise<string[]> {
   const timeline: string[] = []
@@ -45,16 +41,11 @@ export async function PaymentWorkflow(reference: string): Promise<string[]> {
 }
 
 /**
- * What the `watcher` schedule starts, every 10 seconds (see schedules.ts).
- *
- * It is this thin because a Schedule can only start a workflow, and everything the tick does
- * — reading the cursor, asking the chain, writing the books — belongs in an activity, where
- * it may talk to the network and the database. The workflow is the handle Temporal holds:
- * one run per tick, each one visible in the UI with the line the tick logged as its result.
+ * What the `watcher` schedule starts every 10 seconds. It is this thin because a Schedule
+ * can only start a workflow, and everything the tick does belongs in an activity.
  */
 export async function WatcherWorkflow(): Promise<string> {
-  // Returned, not logged: the activity already wrote the line, and a workflow that repeats
-  // it would double every tick in `docker compose logs worker`. The return value is what the
-  // Temporal UI shows next to the run.
+  // Returned, not logged: the activity already wrote the line, and repeating it here would
+  // double every tick in `docker compose logs worker`. The Temporal UI shows the return.
   return watchChain()
 }

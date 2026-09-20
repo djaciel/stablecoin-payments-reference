@@ -7,11 +7,7 @@ import type { SignerClient } from '../signer/signer-client.service'
 import { TreasuryController } from './treasury.controller'
 import { TREASURY_SERVICE, TreasuryService } from './treasury.service'
 
-/**
- * The treasury feature finally provides something — it registers the address the watcher
- * looks at, and reads the books — so by this repo's rule it gets a module of its own. Until
- * T-09 it was one controller registered in `app.module.ts`.
- */
+/** It provides a service now, so by this repo's rule the feature gets a module of its own. */
 @Module({
   imports: [ChainModule, DbModule, SignerClientModule],
   controllers: [TreasuryController],

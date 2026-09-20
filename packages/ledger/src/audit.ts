@@ -1,9 +1,8 @@
 import type { PoolClient } from '@payments/db'
 
 /**
- * The audit log's writer. Takes a client, never a pool, so the record commits with the thing it
- * describes: an audit row that survived a rolled-back release would be a story about money that
- * never moved.
+ * Takes a client, never a pool, so the record commits with the thing it describes: an audit
+ * row that survived a rolled-back release would be a story about money that never moved.
  */
 
 /** Who acted: a synchronous request path, a Temporal activity, the chain watcher, an operator, fixtures. */
@@ -30,9 +29,8 @@ export async function recordAudit(client: PoolClient, event: AuditEvent): Promis
 }
 
 /**
- * Turns bigints into decimal strings, at any depth. Money is bigint everywhere and JSON has no
- * bigint, so an amount in `context` would otherwise take the caller's whole transaction down
- * with `TypeError: Do not know how to serialize a BigInt` — in the middle of a release.
+ * Money is bigint everywhere and JSON has none, so an amount in `context` would otherwise take
+ * the caller's whole transaction down with `Do not know how to serialize a BigInt`.
  */
 function jsonSafe(value: unknown): unknown {
   if (typeof value === 'bigint') {
