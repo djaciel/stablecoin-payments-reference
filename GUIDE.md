@@ -53,9 +53,19 @@ See it: `pnpm demo:workflow`, then open `http://localhost:8080` and find the run
   transaction.
 - `packages/ledger/src/errors.ts` — the three things the engine can answer with:
   insufficient funds, not zero-sum, rejected by the database.
+- `packages/ledger/src/postings.ts` — the article's movements, one function per row of its
+  tables: `reserve` (available → reserved, §5) and `settle` (reserved out, partner debt
+  cleared, §7). They add no SQL of their own; the engine does the writing.
+- `packages/ledger/src/seed.ts` — the article's opening figures (Available 10,000, Partner
+  debt 1,000) and the race's 1,500, posted as real balanced transactions.
+- `tests/db/race.db.test.ts` — §9's race: two payments of 1,000 against 1,500 at the same
+  instant, one reserved, one rejected, available ends at 500. Next to it, a canary that
+  proves the test really runs two things at once.
 
-See it: `pnpm test:db` runs the tests against a real Postgres (`tests/db/README.md` explains
-the harness and lists which test defends which rule). Or break a rule by hand:
+See it: `pnpm ledger:seed --walkthrough` prints the article's three snapshots (§5 → reserve
+→ §7 settle) from a fresh ledger; `pnpm ledger:seed --race` prints the 1,500 opening.
+`pnpm test:db` runs the tests against a real Postgres (`tests/db/README.md` explains the
+harness and lists which test defends which rule). Or break a rule by hand:
 `docker compose exec postgres psql -U payments -d payments -c "UPDATE ledger_accounts SET balance_minor = -1 WHERE code = 'treasury:available'"`
 is refused by the database.
 
