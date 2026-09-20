@@ -62,8 +62,26 @@ See it: `pnpm demo:workflow`, then open `http://localhost:8080` and find the run
   instant, one reserved, one rejected, available ends at 500. Next to it, a canary that
   proves the test really runs two things at once.
 
-See it: `pnpm ledger:seed --walkthrough` prints the article's three snapshots (§5 → reserve
-→ §7 settle) from a fresh ledger; `pnpm ledger:seed --race` prints the 1,500 opening.
+### When it fails, where is the money? The two release doors (§6)
+
+Reserved money goes back to available in exactly two ways, and the database refuses every
+other one whatever it is called: `reversal`, with proof that the transaction reverted
+onchain, and `cancel`, only before anything was signed. Both write their reason to the audit
+log in the same database transaction as the entries.
+
+- `packages/ledger/src/movements.ts` — `reversal` (proof required by the type) and `cancel`
+  (a reason required), next to `reserve` and `settle`.
+- `migrations/0003_audit_log.sql` + `packages/ledger/src/audit.ts` — the append-only log
+  every step writes to. An audit log you can edit is not an audit log; the trigger says so.
+- `packages/db/src/guarded-update.ts` — how a state changes: one `UPDATE … WHERE status =
+  expected`, exactly one row or a typed refusal. Every payment transition later uses it.
+- `tests/db/release.db.test.ts` — the rule tried from every side: with proof, without
+  proof, disguised as a settle, and by cancel. `tests/db/README.md` — the index: five
+  invariants → the file that defends each → where the database enforces it.
+
+See it: `pnpm ledger:seed --release=reversal` and `--release=cancel` print the release and
+its audit line; `pnpm ledger:seed --walkthrough` prints the article's three snapshots (§5 →
+reserve → §7 settle) from a fresh ledger; `pnpm ledger:seed --race` prints the 1,500 opening.
 `pnpm test:db` runs the tests against a real Postgres (`tests/db/README.md` explains the
 harness and lists which test defends which rule). Or break a rule by hand:
 `docker compose exec postgres psql -U payments -d payments -c "UPDATE ledger_accounts SET balance_minor = -1 WHERE code = 'treasury:available'"`
