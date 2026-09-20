@@ -2,7 +2,7 @@ import {
   ACCOUNTS,
   InsufficientFunds,
   NotZeroSum,
-  postTransaction,
+  writeTransaction,
   withLedgerTransaction,
 } from '@payments/ledger'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
@@ -34,7 +34,7 @@ beforeEach(async () => {
 /** Puts money in the treasury the way every other posting does: through the engine. */
 async function seedTreasury(amount: bigint): Promise<void> {
   await withLedgerTransaction(pool, (client) =>
-    postTransaction(client, {
+    writeTransaction(client, {
       kind: 'seed',
       currency: USDC,
       entries: [
@@ -70,7 +70,7 @@ describe('the ledger guards', () => {
 
     // The engine says the same thing earlier and better: before writing, naming the gap.
     const refusal = await withLedgerTransaction(pool, (client) =>
-      postTransaction(client, {
+      writeTransaction(client, {
         kind: 'seed',
         currency: USDC,
         entries: [
@@ -88,7 +88,7 @@ describe('the ledger guards', () => {
     // the transaction row would commit on its own, the first entry would trip the guard, and
     // the append-only trigger would make that orphan impossible to delete.
     const outside = await withClient(pool, (client) =>
-      postTransaction(client, {
+      writeTransaction(client, {
         kind: 'seed',
         currency: USDC,
         entries: [
@@ -121,7 +121,7 @@ describe('the ledger guards', () => {
 
     // Through the engine, under the row lock, with the numbers the API shows in the race.
     const refusal = await withLedgerTransaction(pool, (client) =>
-      postTransaction(client, {
+      writeTransaction(client, {
         kind: 'reserve',
         reference: 'PAY-0001',
         currency: USDC,

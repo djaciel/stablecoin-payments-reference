@@ -2,12 +2,12 @@ import { type Pool, createPool, readDatabaseUrl } from '@payments/db'
 import {
   ACCOUNTS,
   type AccountBalance,
-  CANONICAL_PARTNER_DEBT,
+  ARTICLE_PARTNER_DEBT,
   formatMinor,
   getBalances,
   reserve,
-  seedCanonical,
-  seedRaceScenario,
+  seedArticle,
+  seedRace,
   settle,
   withLedgerTransaction,
 } from '@payments/ledger'
@@ -40,7 +40,7 @@ const DISPLAYED = [
 
 /** The payment the article follows, and the amount it follows it with. */
 const REFERENCE = 'PAY-4821'
-const PAYMENT = CANONICAL_PARTNER_DEBT
+const PAYMENT = ARTICLE_PARTNER_DEBT
 const USDC = 'USDC'
 
 type Mode = 'opening' | 'walkthrough' | 'race'
@@ -59,13 +59,13 @@ async function main(): Promise<void> {
     await resetLedger(pool)
 
     if (mode === 'race') {
-      await withLedgerTransaction(pool, (client) => seedRaceScenario(client))
+      await withLedgerTransaction(pool, (client) => seedRace(client))
       header('race scenario (§9): 1,500 is enough for one payment of 1,000 and not for two')
       snapshot(await position(pool))
       return
     }
 
-    await withLedgerTransaction(pool, (client) => seedCanonical(client))
+    await withLedgerTransaction(pool, (client) => seedArticle(client))
     if (mode === 'opening') {
       header('canonical opening position (§5, §7)')
       snapshot(await position(pool))

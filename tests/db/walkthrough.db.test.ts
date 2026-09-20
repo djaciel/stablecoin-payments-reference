@@ -1,11 +1,11 @@
 import {
   ACCOUNTS,
-  CANONICAL_PARTNER_DEBT,
-  CANONICAL_TREASURY,
+  ARTICLE_PARTNER_DEBT,
+  ARTICLE_TREASURY,
   type MinorUnits,
   getBalances,
   reserve,
-  seedCanonical,
+  seedArticle,
   settle,
   toMinor,
   withLedgerTransaction,
@@ -36,15 +36,15 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await resetDatabase(pool)
-  await withLedgerTransaction(pool, (client) => seedCanonical(client))
+  await withLedgerTransaction(pool, (client) => seedArticle(client))
 })
 
 describe('the walkthrough the article follows', () => {
   it('opens at §5 and §7: Available 10,000, Reserved 0, Partner debt 1,000, posted as two balanced seeds', async () => {
     expect(await position()).toEqual({
-      available: CANONICAL_TREASURY,
+      available: ARTICLE_TREASURY,
       reserved: 0n,
-      partnerDebt: CANONICAL_PARTNER_DEBT,
+      partnerDebt: ARTICLE_PARTNER_DEBT,
     })
 
     // Not written as balances: two `seed` transactions of two entries each, through the same
@@ -64,7 +64,7 @@ describe('the walkthrough the article follows', () => {
     expect(await position()).toEqual({
       available: toMinor(9_000),
       reserved: PAYMENT,
-      partnerDebt: CANONICAL_PARTNER_DEBT,
+      partnerDebt: ARTICLE_PARTNER_DEBT,
     })
 
     await withLedgerTransaction(pool, (client) =>

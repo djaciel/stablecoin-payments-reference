@@ -47,13 +47,13 @@ See it: `pnpm demo:workflow`, then open `http://localhost:8080` and find the run
   enforces itself: a posted entry cannot be edited or deleted, every transaction sums to
   zero, `treasury:available` never goes negative, and reserved money goes back to available
   only through a reversal with proof or a cancel.
-- `packages/ledger/src/post.ts` — the engine that writes a transaction: locks the accounts in
+- `packages/ledger/src/engine.ts` — the engine that writes a transaction: locks the accounts in
   a fixed order, checks the sum is zero before writing, replays the entries against the
   running balance so a negative is caught with the amounts, and refuses to run outside a
   transaction.
 - `packages/ledger/src/errors.ts` — the three things the engine can answer with:
   insufficient funds, not zero-sum, rejected by the database.
-- `packages/ledger/src/postings.ts` — the article's movements, one function per row of its
+- `packages/ledger/src/movements.ts` — the article's movements, one function per row of its
   tables: `reserve` (available → reserved, §5) and `settle` (reserved out, partner debt
   cleared, §7). They add no SQL of their own; the engine does the writing.
 - `packages/ledger/src/seed.ts` — the article's opening figures (Available 10,000, Partner

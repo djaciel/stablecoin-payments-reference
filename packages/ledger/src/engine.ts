@@ -1,6 +1,6 @@
 import { type Pool, type PoolClient, transactionState } from '@payments/db'
 import { InsufficientFunds, NotZeroSum, toLedgerError } from './errors'
-import type { Entry, LedgerTransactionId, NormalSide, PostingInput } from './types'
+import type { Entry, LedgerTransactionId, NormalSide, TransactionInput } from './types'
 
 /** An account as the engine reads it while holding its lock. */
 interface LockedAccount {
@@ -21,7 +21,7 @@ interface LockedAccount {
  * checks here exist so the caller hears it from the engine, where the numbers are still
  * known, instead of from a constraint that only knows which row gave way.
  */
-export async function postTransaction(client: PoolClient, input: PostingInput): Promise<LedgerTransactionId> {
+export async function writeTransaction(client: PoolClient, input: TransactionInput): Promise<LedgerTransactionId> {
   assertWellFormed(input)
   assertZeroSum(input)
   await assertInTransaction(client)
@@ -55,7 +55,7 @@ export async function postTransaction(client: PoolClient, input: PostingInput): 
 }
 
 /** Shape checks that do not need the database. */
-function assertWellFormed(input: PostingInput): void {
+function assertWellFormed(input: TransactionInput): void {
   if (input.entries.length === 0) {
     // The deferred zero-sum trigger fires per inserted entry, so a transaction with no
     // entries at all would never be asked whether it balances.
@@ -72,7 +72,7 @@ function assertWellFormed(input: PostingInput): void {
  * Invariant 1, checked before anything is written. The database enforces this too, at
  * COMMIT, but a caller deserves to hear it here — where the imbalance can still be named.
  */
-function assertZeroSum(input: PostingInput): void {
+function assertZeroSum(input: TransactionInput): void {
   let imbalance = 0n
   for (const entry of input.entries) {
     imbalance += entry.direction === 'debit' ? entry.amount : -entry.amount
@@ -99,7 +99,7 @@ async function assertInTransaction(client: PoolClient): Promise<void> {
   throw new Error(
     state === 'aborted'
       ? 'this client is inside an aborted transaction; roll it back before posting to the ledger'
-      : 'postTransaction must run inside a transaction the caller opened, so the posting and whatever else the caller is writing commit together or not at all. Use withLedgerTransaction if the posting is the whole unit of work.',
+      : 'writeTransaction must run inside a transaction the caller opened, so the posting and whatever else the caller is writing commit together or not at all. Use withLedgerTransaction if the posting is the whole unit of work.',
   )
 }
 
@@ -143,7 +143,7 @@ async function lockAccounts(client: PoolClient, entries: readonly Entry[]): Prom
  * An account the query did not return is not in the chart of accounts. Nothing is invented
  * for it here; the foreign key refuses the entry a few lines later.
  */
-function assertBalancesSurvive(input: PostingInput, accounts: Map<string, LockedAccount>): void {
+function assertBalancesSurvive(input: TransactionInput, accounts: Map<string, LockedAccount>): void {
   const running = new Map<string, bigint>()
 
   for (const entry of input.entries) {
@@ -164,7 +164,7 @@ function assertBalancesSurvive(input: PostingInput, accounts: Map<string, Locked
 
 /**
  * For callers whose whole unit of work is one posting. Anything that also writes a payment
- * row should open its own transaction and call `postTransaction` inside it instead.
+ * row should open its own transaction and call `writeTransaction` inside it instead.
  *
  * COMMIT is where the deferred guards answer, so this is also the only place a zero-sum or
  * release violation can surface: it maps that failure like any other.

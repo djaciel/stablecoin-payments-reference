@@ -76,7 +76,7 @@ export interface ReversalProof {
 }
 
 /** What one ledger transaction is made of. */
-export interface PostingInput {
+export interface TransactionInput {
   readonly kind: LedgerTransactionKind
   /** What this movement belongs to, e.g. `PAY-4821`. Fixtures have none. */
   readonly reference?: string

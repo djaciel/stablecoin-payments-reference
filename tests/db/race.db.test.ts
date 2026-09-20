@@ -4,7 +4,7 @@ import {
   InsufficientFunds,
   RACE_TREASURY,
   reserve,
-  seedRaceScenario,
+  seedRace,
   toMinor,
   withLedgerTransaction,
 } from '@payments/ledger'
@@ -37,7 +37,7 @@ beforeEach(async () => {
 
 describe('two payments racing for the same money', () => {
   it('reserves exactly one of them, rejects the other for insufficient funds, and leaves no trace of it', async () => {
-    await withLedgerTransaction(pool, (client) => seedRaceScenario(client))
+    await withLedgerTransaction(pool, (client) => seedRace(client))
 
     // The latch is what makes this a race. Each attempt opens its own transaction on its own
     // connection and waits here, so both are open and contending for the same account row

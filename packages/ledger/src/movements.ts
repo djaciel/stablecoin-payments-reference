@@ -1,5 +1,5 @@
 import type { PoolClient } from '@payments/db'
-import { postTransaction } from './post'
+import { writeTransaction } from './engine'
 import { ACCOUNTS, type LedgerTransactionId, type MinorUnits } from './types'
 
 /**
@@ -32,7 +32,7 @@ export interface TransferInput {
  * article's §9 race, from the loser's side.
  */
 export function reserve(client: PoolClient, input: TransferInput): Promise<LedgerTransactionId> {
-  return postTransaction(client, {
+  return writeTransaction(client, {
     kind: 'reserve',
     reference: input.reference,
     currency: input.currency,
@@ -50,7 +50,7 @@ export function reserve(client: PoolClient, input: TransferInput): Promise<Ledge
  * does not move here — it was already reduced at reserve time.
  */
 export function settle(client: PoolClient, input: TransferInput): Promise<LedgerTransactionId> {
-  return postTransaction(client, {
+  return writeTransaction(client, {
     kind: 'settle',
     reference: input.reference,
     currency: input.currency,
