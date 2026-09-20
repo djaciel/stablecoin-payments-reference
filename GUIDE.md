@@ -7,6 +7,20 @@ map, not a manual: each entry is a few lines and points at one or two files.
 
 Start with `docker compose up`. Everything below assumes the stack is running.
 
+## What does what
+
+Five libraries carry the whole demo; nothing is hand-rolled underneath them.
+
+- **viem** talks to the blockchain: it generates the seed phrase and derives addresses in
+  the signer, creates the client to Base Sepolia, reads balances, decodes the USDC transfer
+  events and, later, signs and broadcasts transactions.
+- **Temporal** (server + TypeScript SDK) is the durable workflow engine: it runs the payment
+  steps, retries them and resumes them after a crash, and runs the scheduled jobs.
+- **PostgreSQL** with **node-postgres** holds the books; the ledger rules are plain SQL
+  (triggers and constraints), with no ORM in between.
+- **NestJS** is the shape of the two services with HTTP routes, the api and the signer.
+- **React + Vite** is the browser app.
+
 ## The system in one picture (article §3)
 
 `docker-compose.yml` is the picture. Seven services, one per box in the article: Postgres
