@@ -16,6 +16,8 @@ export type {
   PartnerWalletFunding,
   PayableSummary,
   Payables,
+  PaymentFailureReason,
+  PaymentView,
   Treasury,
 } from './api'
 export { optionalEnv, readEnv, requireEnv } from './env'

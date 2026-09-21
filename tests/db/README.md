@@ -56,15 +56,24 @@ because a guarantee that only holds for well-behaved callers is not a guarantee.
 | 4 | Transitions are guarded and change exactly one row | `guarded-transition.db.test.ts` | `applyGuardedTransition` in `packages/db`: `UPDATE … WHERE status = $expected`, then `rowCount === 1` or `TransitionRejected` |
 | 5 | Reserved money is released only with proof the transfer can no longer land | `release.db.test.ts` | `reversal` requires the proof argument; `CHECK (kind <> 'reversal' OR proof IS NOT NULL)`; and the deferred trigger `ledger_entries_release_is_allowed`, which refuses that movement of money under any kind but `reversal` and `cancel` |
 
+And the article's idempotency key (§4, §9's double click), one test per claim, all in
+`payments.db.test.ts`, calling `createPayment` from `apps/api/src/payments/create-payment.ts`
+directly:
+
+| Claim | Test | Enforced at |
+|---|---|---|
+| The same key and the same body is the same payment, with zero new rows in `payments`, `ledger_transactions`, `ledger_entries` or `audit_log` | "answers the same request twice…" | the unique index `payments_idempotency_key`: the second INSERT fails with 23505 and the winner is read back |
+| The same key with a different body is refused, and nothing is written | "refuses the same key with a different body…" | the request fingerprint stored next to the key |
+| Two calls with one key in parallel make one payment and one `reserve` | "makes one payment out of two parallel calls…" | the same index: the loser waits on it until the winner commits. A SELECT before the INSERT fails this test |
+
 Three notes on what a green suite does NOT say:
 
 - **Invariant 5 is proved as far as the books go.** The release cannot be written without its
   evidence, and evidence and entries commit together. Whether the hash inside a proof really
   reverted in the block it names is checked by reconciliation in Phase 9, not here.
-- **Invariant 4 is proved against a fixture table the test creates.** There is no `payments`
-  table until Phase 8; the helper is what carries the guarantee forward. The rest of the
-  `cancel` rule — status RESERVED, no stored hash, under the payment row lock — arrives with
-  that table too.
+- **Invariant 4 is proved against a fixture table the test creates.** `payments` moves through
+  the same helper; the rest of the `cancel` rule — status RESERVED, no stored hash, under the
+  payment row lock — arrives with the hash columns and cancel itself.
 - **The race proves an outcome, not an instant.** An outside observer cannot see a
   mid-transaction balance; "Available never goes negative" is carried by the final figure plus
   the `CHECK` that `guards.db.test.ts` violates on purpose.

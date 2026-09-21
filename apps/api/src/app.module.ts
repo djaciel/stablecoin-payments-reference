@@ -3,6 +3,7 @@ import { DbModule } from './db/db.module'
 import { HealthController } from './health/health.controller'
 import { PartnersModule } from './partners/partners.module'
 import { PayablesModule } from './payables/payables.module'
+import { PaymentsController } from './payments/payments.controller'
 import { TreasuryModule } from './treasury/treasury.module'
 
 /**
@@ -19,6 +20,6 @@ import { TreasuryModule } from './treasury/treasury.module'
  */
 @Module({
   imports: [DbModule, PartnersModule, PayablesModule, TreasuryModule],
-  controllers: [HealthController],
+  controllers: [HealthController, PaymentsController],
 })
 export class AppModule {}

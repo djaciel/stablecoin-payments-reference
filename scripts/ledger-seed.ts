@@ -24,8 +24,9 @@ import {
  *   pnpm ledger:seed --release=reversal  reserve, then the transfer reverts onchain (§6): Available back to 10,000
  *   pnpm ledger:seed --release=cancel    reserve, then cancel before signing: the same figures, no chain proof
  *
- * THIS COMMAND DESTROYS WHAT IS IN THE LEDGER: every run empties the ledger and the audit log
- * first, because seeds carry no reference and a second run would otherwise double the figures.
+ * THIS COMMAND DESTROYS WHAT IS IN THE LEDGER: every run empties the ledger, the audit log, the
+ * payments and the invoices first, because seeds carry no reference and a second run would
+ * otherwise double the figures.
  * Which is also why it refuses to run against any database but the demo ones.
  */
 
@@ -194,10 +195,12 @@ function assertDemoDatabase(): void {
  * TRUNCATE does not fire the append-only triggers, which is the only reason the ledger can be
  * emptied at all. `ledger_accounts` keeps its rows — the chart of accounts comes from the
  * migration — and only its balances go back to zero. `audit_log` is named explicitly because
- * it has no foreign key to the ledger, so CASCADE never reaches it.
+ * it has no foreign key to the ledger, so CASCADE never reaches it. `payments` and `payables` go
+ * too: a RESERVED payment or an invoice whose entries were just emptied would be a story the
+ * books no longer tell.
  */
 async function resetLedger(pool: Pool): Promise<void> {
-  await pool.query('TRUNCATE ledger_entries, ledger_transactions, audit_log RESTART IDENTITY CASCADE')
+  await pool.query('TRUNCATE ledger_entries, ledger_transactions, audit_log, payments, payables RESTART IDENTITY CASCADE')
   await pool.query('UPDATE ledger_accounts SET balance_minor = 0')
 }
 

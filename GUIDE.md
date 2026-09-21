@@ -130,6 +130,14 @@ Dr `expense:services` / Cr `partner:payable` (Partner debt) in one transaction. 
 `packages/ledger/src/movements.ts` and `apps/ui/src/admin/PayablesScreen.tsx`. See it: create one
 on `/admin/payables` and watch Partner debt move there and on the Start screen.
 
+## The payment API: one key, one payment (§4, §5, §9)
+
+`apps/api/src/payments/create-payment.ts` is `POST /payments` in six steps and one database
+transaction: insert the intent, lock the invoice, validate, reserve, then RESERVED or FAILED with a
+reason. `migrations/0007_payments.sql`: its unique index IS the idempotency. `tests/db/payments.db.test.ts`:
+the key against real Postgres, double click included. See it: `curl` the same `idempotency-key` twice
+and read the same reference back; `curl localhost:3000/payments/<reference>` reads it later.
+
 ## The chain: a receipt is not a payment (§7)
 
 - `packages/chain/src/clients.ts` — the one client that talks to Base Sepolia (the public
@@ -204,6 +212,6 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-The payment API with its idempotency key (§4), the real chain steps (§7), the four failures
-(§9), reconciliation (§10) and the partner side that pays a receivable (§8) arrive in later
-phases; each will add its entry here when it lands.
+The real chain steps (§7), the four failures as buttons (§9), reconciliation (§10) and the
+partner side that pays a receivable (§8) arrive in later phases; each will add its entry here
+when it lands.

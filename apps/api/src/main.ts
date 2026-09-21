@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 import { Logger } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
+import { ExpressAdapter } from '@nestjs/platform-express'
 import { readEnv } from '@payments/domain'
 import { AppModule } from './app.module'
 
@@ -26,7 +27,11 @@ async function main(): Promise<void> {
 
   // Nest's own logger, on purpose: it already prints the routes it mapped and the modules
   // it started, which is exactly what you want to read in `docker compose logs api`.
-  const app = await NestFactory.create(AppModule)
+  //
+  // The adapter is passed in, not left for Nest to `import()`: under tsx that import and the app's
+  // `require` load the one @nestjs/common on disk as two module instances, so the adapter's 400 for
+  // unparsable JSON failed `instanceof HttpException` here and answered 500.
+  const app = await NestFactory.create(AppModule, new ExpressAdapter())
 
   // PID 1 is a special case in Linux: a process with no handler of its own does NOT get
   // the default "die on SIGTERM" behaviour, so `docker compose stop` would wait ten

@@ -144,3 +144,28 @@ export interface Payables {
   readonly partners: readonly { readonly id: string; readonly name: string }[]
   readonly partnerDebt: string
 }
+
+/** Why a payment was refused: short codes a screen turns into a sentence and the article can quote. */
+export type PaymentFailureReason =
+  | 'payable_not_open'
+  | 'partner_inactive'
+  | 'destination_not_allowlisted'
+  | 'amount_out_of_range'
+  | 'compliance_rejected'
+  | 'insufficient_funds'
+
+/**
+ * One payment, as `POST /payments` and `GET /payments/:reference` answer it. `reason` is present
+ * only when the payment FAILED, and a replay answers exactly what the first attempt answered.
+ */
+export interface PaymentView {
+  /** `PAY-XXXX`, the article's format. */
+  readonly reference: string
+  readonly status: 'CREATED' | 'RESERVED' | 'SENT' | 'SETTLED' | 'FAILED' | 'REVIEW'
+  readonly amount: string
+  readonly destination: string
+  /** The invoice it pays. Null only for a payment to an address, which has no invoice. */
+  readonly payableId: string | null
+  readonly reason?: PaymentFailureReason
+  readonly createdAt: string
+}
