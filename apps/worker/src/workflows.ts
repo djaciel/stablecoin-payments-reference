@@ -1,12 +1,10 @@
-import { log, proxyActivities } from '@temporalio/workflow'
+import { continueAsNew, log, proxyActivities, rootCause, sleep } from '@temporalio/workflow'
 // Type-only: activity code must never be bundled into the workflow sandbox.
 import type * as activities from './activities'
 
 const { watchChain } = proxyActivities<typeof activities>({
-  // Bounded on purpose, and the reason is a real incident: an unbounded tick retried for two
-  // days, and because the schedule's overlap policy is SKIP (a tick must never run beside
-  // itself) every later tick was skipped in silence — 22,897 of them. Three quick attempts
-  // instead, so a broken tick ends its run FAILED and the next scheduled one starts clean.
+  // Bounded on purpose: a tick that cannot finish must not hold the loop. Three quick attempts,
+  // then the failure comes back to the loop below, which logs it and waits for the next tick.
   startToCloseTimeout: '10 seconds',
   retry: { maximumAttempts: 3, initialInterval: '1 second', backoffCoefficient: 1 },
 })
@@ -40,12 +38,31 @@ export async function PaymentWorkflow(reference: string): Promise<string[]> {
   return timeline
 }
 
+/** 11 history events per iteration (measured), so a run closes under 4,000 — an hour at 10s. */
+const TICKS_PER_RUN = 360
+
 /**
- * What the `watcher` schedule starts every 10 seconds. It is this thin because a Schedule
- * can only start a workflow, and everything the tick does belongs in an activity.
+ * The watcher: tick, wait ten seconds, tick again, and start a fresh run after an hour. One
+ * workflow that never ends, not one workflow per tick.
+ *
+ * Nothing is returned or accumulated: the tick writes its own line and keeps its cursor in the
+ * database, so a loop that runs for an hour holds nothing but its counter.
  */
-export async function WatcherWorkflow(): Promise<string> {
-  // Returned, not logged: the activity already wrote the line, and repeating it here would
-  // double every tick in `docker compose logs worker`. The Temporal UI shows the return.
-  return watchChain()
+export async function WatcherWorkflow(): Promise<void> {
+  for (let tick = 0; tick < TICKS_PER_RUN; tick += 1) {
+    try {
+      await watchChain()
+    } catch (error) {
+      // The activity already said which attempt failed and against which RPC host; this line
+      // is the one that matters at 2 a.m. — the watcher is still alive.
+      log.error(`watcher: tick failed after its attempts, next one in 10s — ${rootCause(error)}`)
+    }
+
+    // Durable: the timer lives in Temporal, so a worker that dies mid-wait resumes it.
+    await sleep('10 seconds')
+  }
+
+  // Outside the try, because `continueAsNew` works by throwing. It takes no arguments here —
+  // there is no state to carry into the next run, which is what makes this safe to do forever.
+  await continueAsNew<typeof WatcherWorkflow>()
 }

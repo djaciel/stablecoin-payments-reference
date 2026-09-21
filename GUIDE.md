@@ -117,23 +117,26 @@ address it prints (you need testnet USDC and Base Sepolia ETH for gas).
 
 ## The watcher: the books follow the chain
 
-The chain does not tell you when money arrives; something has to look. A Temporal
-schedule ticks every ten seconds inside the worker and asks the USDC contract, in one
-request, for transfers to the addresses the database says to watch — only in blocks that
-are already final, so nothing it posts can be undone.
+The chain does not tell you when money arrives; something has to look. One Temporal
+workflow that never ends does it — tick, wait ten seconds, tick again — asking the USDC
+contract, in one request, for transfers to the addresses the database says to watch, only
+in blocks that are already final, so nothing it posts can be undone.
 
 - `apps/worker/src/watcher.ts` — one tick, top to bottom: final block → range → the logs →
   one `funding` entry per transfer, exactly once (the transaction hash and log index are
   the reference, and the database refuses a second one) → cursor moved in the same
   database transaction.
-- `apps/worker/src/schedules.ts` — creates the schedule when the worker starts.
+- `apps/worker/src/workflows.ts` — `WatcherWorkflow`: the loop, and the failed tick it
+  survives. `apps/worker/src/index.ts` starts it when the worker boots if it is not
+  already running, which is also the only thing that brings it back if you terminate it.
 - `packages/chain/src/finality.ts` — what "final" means here (the chain's `safe` tag).
 - `migrations/0004_watcher.sql` — the two small tables: which addresses to watch, and
   how far the watcher has read.
 
 See it: fund the treasury, wait a few ticks, and the Start screen's two halves agree, with
 the transaction that closed the gap named underneath. `docker compose logs -f worker`
-shows every tick. Open `http://localhost:8080` and the schedule is listed there.
+shows every tick. Open `http://localhost:8080/namespaces/default/workflows/watcher` and
+there is one entry, id `watcher`, running since the worker started.
 
 ## The screens
 
