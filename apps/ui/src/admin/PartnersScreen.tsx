@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { createPartner, getPartners, type AddressBalance, type Partners } from '../api/client'
+import type { AddressBalance, Partners } from '@payments/domain'
+import { createPartner, getPartners } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine } from '../app/AddressLine'
 

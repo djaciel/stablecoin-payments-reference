@@ -167,7 +167,7 @@ that says what it is. Gas never reaches the books at all; it goes to the audit l
 - `apps/signer/src/sign/sign.controller.ts` — the signer learns to sign: an ERC-20 transfer
   and a plain ether one. It is told the nonce and the gas fields because it talks to no node,
   and it answers with the raw bytes plus the hash, which exists before anything is broadcast.
-- `apps/api/src/treasury/treasury.service.ts` — the seven steps, in order: read the balances,
+- `apps/api/src/treasury/fund-partner-wallet.service.ts` — the seven steps, in order: read the balances,
   refuse if short, fetch nonce and fees, sign both and broadcast both, check the USDC receipt
   against the official contract, post one entry, answer with both hashes.
 - `packages/ledger/src/movements.ts` — `scaffolding`: Dr `demo:partner-funding` / Cr
@@ -186,7 +186,9 @@ watcher posts nothing for it: it looks for money arriving, and this is money lea
   faucet links, what the chain holds next to what the books say, and the partner wallet with
   the button that funds it.
 - `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses.
-- `apps/ui/src/api/client.ts` — everything the browser knows how to ask the api.
+- `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint.
+  The shapes of the answers are in `packages/domain/src/api.ts`, which the api writes with
+  and the browser reads.
 
 Open `http://localhost:5173/admin`.
 

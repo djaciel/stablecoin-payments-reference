@@ -1,51 +1,17 @@
 import { Controller, Get, HttpCode, HttpStatus, Inject, Logger, Post, ServiceUnavailableException } from '@nestjs/common'
 import { chainErrorMessage, explorerAddressUrl, readUsdcBalance, rpcHost, type ChainClient } from '@payments/chain'
+import type { PartnerWalletFunding, Treasury } from '@payments/domain'
 import { formatMinor } from '@payments/ledger'
 import { formatEther, type Address } from 'viem'
 import { CHAIN_CLIENT } from '../chain/chain.module'
 import { SignerUnavailableError } from '../signer/signer-client.service'
-import {
-  TREASURY_SERVICE,
-  type FundingAmounts,
-  type LedgerFigures,
-  type PartnerWalletFunding,
-  type TreasuryService,
-} from './treasury.service'
+import { FUND_PARTNER_WALLET_SERVICE, type FundPartnerWalletService } from './fund-partner-wallet.service'
+import { TREASURY_SERVICE, type TreasuryService } from './treasury.service'
 
 /** Balances of one address, or nulls when the chain could not be read. Unknown is not zero. */
 interface Balances {
   readonly usdc: string | null
   readonly eth: string | null
-}
-
-/**
- * What the Start screen needs, in one answer. Amounts are decimal strings in whole tokens
- * (the spec's wire format): the browser formats nothing and rounds nothing.
- */
-interface TreasuryView {
-  readonly address: Address
-  readonly explorerUrl: string
-  /** What the chain says, or null when the RPC could not be reached. */
-  readonly onchain: { readonly usdc: string; readonly eth: string; readonly blockNumber: string } | null
-  /** Set only when `onchain` is null: one sentence a screen can print. */
-  readonly chainError?: string
-  /** What the books say. The article's three accounts, by their published names. */
-  readonly ledger: LedgerFigures
-  /**
-   * The shared wallet the partners pay from — demo scaffolding, funded from the treasury by
-   * the button on the same screen. Read at the same block as the treasury's own balances.
-   */
-  readonly partnerWallet: {
-    readonly address: Address
-    readonly explorerUrl: string
-    readonly usdc: string | null
-    readonly eth: string | null
-    /**
-     * What one click sends and what the treasury must hold for it to be allowed. From the
-     * api, so the screen's disabled button and the api's refusal use one set of figures.
-     */
-    readonly funding: FundingAmounts
-  }
 }
 
 @Controller('treasury')
@@ -54,6 +20,7 @@ export class TreasuryController {
 
   constructor(
     @Inject(TREASURY_SERVICE) private readonly treasury: TreasuryService,
+    @Inject(FUND_PARTNER_WALLET_SERVICE) private readonly funding: FundPartnerWalletService,
     @Inject(CHAIN_CLIENT) private readonly chain: ChainClient,
   ) {}
 
@@ -66,7 +33,7 @@ export class TreasuryController {
    * about a service that may have died.
    */
   @Get()
-  async read(): Promise<TreasuryView> {
+  async read(): Promise<Treasury> {
     const address = await this.readAddress()
     const partnerWallet = this.treasury.partnerWalletAddress()
 
@@ -87,7 +54,7 @@ export class TreasuryController {
         address: partnerWallet,
         explorerUrl: explorerAddressUrl(partnerWallet),
         ...onchain.partnerWallet,
-        funding: this.treasury.fundingAmounts(),
+        funding: this.funding.fundingAmounts(),
       },
     }
   }
@@ -104,7 +71,7 @@ export class TreasuryController {
   @HttpCode(HttpStatus.OK)
   async fundPartnerWallet(): Promise<PartnerWalletFunding> {
     try {
-      return await this.treasury.fundPartnerWallet()
+      return await this.funding.fundPartnerWallet()
     } catch (error) {
       if (error instanceof SignerUnavailableError) {
         this.logger.error(error.message)
@@ -144,7 +111,7 @@ export class TreasuryController {
     treasury: Address,
     partnerWallet: Address,
   ): Promise<{
-    treasury: TreasuryView['onchain']
+    treasury: Treasury['onchain']
     partnerWallet: Balances
     chainError?: string
   }> {

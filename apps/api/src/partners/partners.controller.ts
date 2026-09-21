@@ -1,39 +1,13 @@
 import { BadRequestException, Body, Controller, Get, Inject, Logger, Post, ServiceUnavailableException } from '@nestjs/common'
 import { chainErrorMessage, explorerAddressUrl, readUsdcBalance, rpcHost, type ChainClient } from '@payments/chain'
+import type { PartnerSummary, Partners } from '@payments/domain'
 import { formatMinor } from '@payments/ledger'
-import type { Address } from 'viem'
 import { CHAIN_CLIENT } from '../chain/chain.module'
 import { SignerUnavailableError } from '../signer/signer-client.service'
 import { PARTNERS_SERVICE, type Partner, type PartnersService } from './partners.service'
 
 /** The longest name the screen shows without wrapping into nonsense. */
 const MAX_NAME_LENGTH = 80
-
-/** One address as the screen draws it: the text, the link, and what it holds. */
-interface AddressView {
-  readonly address: Address
-  readonly explorerUrl: string
-  /** Decimal USDC in whole tokens, or null when the chain could not be read. */
-  readonly usdc: string | null
-}
-
-interface PartnerView {
-  readonly id: string
-  readonly name: string
-  readonly derivationIndex: number
-  /** Company seed: where this partner pays. */
-  readonly deposit: AddressView
-  /** Partner seed, demo scaffolding: where the company pays this partner. */
-  readonly payout: AddressView
-}
-
-interface PartnersList {
-  readonly partners: readonly PartnerView[]
-  /** The block every balance above was read at, or null when the RPC could not be reached. */
-  readonly blockNumber: string | null
-  /** Set only when `blockNumber` is null: one sentence a screen can print. */
-  readonly chainError?: string
-}
 
 @Controller('partners')
 export class PartnersController {
@@ -50,7 +24,7 @@ export class PartnersController {
    * different heights and the list shows figures that never coexisted.
    */
   @Get()
-  async list(): Promise<PartnersList> {
+  async list(): Promise<Partners> {
     const partners = await this.partners.list()
     return this.withBalances(partners)
   }
@@ -61,7 +35,7 @@ export class PartnersController {
    * next poll.
    */
   @Post()
-  async create(@Body() body: unknown): Promise<PartnersList> {
+  async create(@Body() body: unknown): Promise<Partners> {
     const name = readPartnerName(body)
 
     try {
@@ -87,7 +61,7 @@ export class PartnersController {
    * that Postgres answered perfectly well. The addresses are the point; the balances are
    * the extra.
    */
-  private async withBalances(partners: readonly Partner[]): Promise<PartnersList> {
+  private async withBalances(partners: readonly Partner[]): Promise<Partners> {
     try {
       const blockNumber = await this.chain.getBlockNumber()
       const views = await Promise.all(
@@ -112,7 +86,7 @@ export class PartnersController {
   }
 }
 
-function toView(partner: Partner, depositUsdc: string | null, payoutUsdc: string | null): PartnerView {
+function toView(partner: Partner, depositUsdc: string | null, payoutUsdc: string | null): PartnerSummary {
   return {
     id: partner.id,
     name: partner.name,

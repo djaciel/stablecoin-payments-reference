@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, Logger, ServiceUnavailableException } from '@nestjs/common'
 import type { Pool } from '@payments/db'
+import type { Health } from '@payments/domain'
 import { DATABASE_POOL } from '../db/db.module'
 
 @Controller('health')
@@ -14,7 +15,7 @@ export class HealthController {
    * compose, a load balancer and a reader all believe it.
    */
   @Get()
-  async check(): Promise<{ status: string; database: string }> {
+  async check(): Promise<Health> {
     try {
       await this.pool.query('SELECT 1')
       return { status: 'ok', database: 'up' }

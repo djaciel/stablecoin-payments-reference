@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { fundPartnerWallet, getTreasury, type PartnerWalletFunding, type Treasury } from '../api/client'
+import type { PartnerWalletFunding, Treasury } from '@payments/domain'
+import { fundPartnerWallet, getTreasury } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine } from '../app/AddressLine'
 import { HealthCard } from '../app/HealthCard'
