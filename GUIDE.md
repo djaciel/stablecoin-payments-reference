@@ -124,19 +124,59 @@ is refused by the database.
 
 ### The invoice that becomes a debt (§5, §7)
 
-The company owes a partner from the moment an invoice exists: creating one writes the row and
-Dr `expense:services` / Cr `partner:payable` (Partner debt) in one transaction. Open
-`migrations/0006_payables.sql`, `apps/api/src/payables/payables.service.ts`, `payable` in
-`packages/ledger/src/movements.ts` and `apps/ui/src/admin/PayablesScreen.tsx`. See it: create one
-on `/admin/payables` and watch Partner debt move there and on the Start screen.
+The company owes a partner from the moment an invoice exists, so the books move when it is
+created, not when it is paid: one transaction writes the invoice and Dr `expense:services` /
+Cr `partner:payable`, the article's Partner debt. Either both exist or neither does.
+
+- `migrations/0006_payables.sql` — the invoices the company owes. The destination is copied
+  from the partner at creation, because what was promised is the address it was promised to.
+- `apps/api/src/payables/payables.service.ts` — creating an invoice in one transaction (the
+  row, the debt, the audit line), and the one read the screen needs.
+- `apps/api/src/payables/payables.controller.ts` — `GET /payables` and `POST /payables`, with
+  the checks on what a person typed.
+- `packages/ledger/src/movements.ts` — `payable`, the movement that puts the debt on the
+  books, named by the invoice so it can only be posted once.
+- `packages/ledger/src/money.ts` — `toMinorFromDecimal`: the one place a typed "0.50" becomes
+  exact minor units, with no floating point. `money.test.ts` pins it.
+- `apps/api/src/config.ts` — the numbers a reader might change: the invoice and payment
+  limits, and the compliance mock's denylist.
+
+See it: create an invoice on `/admin/payables` and watch Partner debt go up there and on the
+Start screen, while Available and Reserved do not move.
 
 ## The payment API: one key, one payment (§4, §5, §9)
 
-`apps/api/src/payments/create-payment.ts`: `POST /payments` in six steps and one transaction (intent,
-invoice lock, validations, reserve, RESERVED or FAILED). `migrations/0007_payments.sql`: its unique
-index IS the idempotency; `tests/db/payments.db.test.ts` tests it. `apps/ui/src/admin/PayablesScreen.tsx`:
-Pay, one key per attempt. See it: press Pay on `/admin/payables` and Reserved goes up while nothing is
-signed; `curl` the same `idempotency-key` twice and read the same reference back.
+A payment is created, checked and has its money set aside in one database transaction,
+before anything is signed. The idempotency key is what makes a double click, a retry or a
+lost answer safe: the same key always gets the same payment back.
+
+- `apps/api/src/payments/create-payment.ts` — the heart, in six steps read top to bottom:
+  record the intent (CREATED), lock the invoice, run the checks, reserve the money, then
+  RESERVED or FAILED with a reason. It never opens its own transaction; the caller owns it.
+- `migrations/0007_payments.sql` — the payments table. Its unique index on the idempotency
+  key IS the whole mechanism: a second request with the same key waits for the first one to
+  commit, then gets its answer.
+- `apps/api/src/payments/payments.controller.ts` — `POST /payments` (the `idempotency-key`
+  header plus `{ payableId }`) and `GET /payments/:reference`, and which outcome gets which
+  code: 201 created, 200 replay, 409 same key with a different body, 422 refused.
+- `apps/api/src/payments/compliance.ts` — a mock, and marked as one: the place where a real
+  compliance provider plugs in.
+- `tests/db/payments.db.test.ts` — the three claims, against a real Postgres: the same request
+  twice writes nothing new, the same key with a different body is refused, and two parallel
+  calls with one key make one payment.
+- `apps/ui/src/admin/PayablesScreen.tsx` — Pay and its confirmation. The browser makes one key
+  per attempt and keeps it across clicks, so a double click cannot pay twice; after a
+  refusal, the next attempt gets a new key.
+
+See it: press Pay on `/admin/payables` and Reserved goes up while nothing is signed; pay an
+invoice larger than Available and read the refusal on its row. From the shell, send the same
+key twice and read the same reference back (it sets aside treasury money, so pick a small
+invoice):
+
+```
+curl -s -X POST localhost:3000/payments -H 'idempotency-key: try-1' \
+  -H 'content-type: application/json' -d '{"payableId":"<an OPEN invoice id from /payables>"}'
+```
 
 ## The chain: a receipt is not a payment (§7)
 
