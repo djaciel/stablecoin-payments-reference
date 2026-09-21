@@ -119,23 +119,26 @@ function CreatePayable({
             </option>
           ))}
         </select>
-        <input
-          className="field is-short"
-          value={amount}
-          onChange={(event) => {
-            setAmount(event.target.value)
-          }}
-          inputMode="decimal"
-          placeholder="0.50"
-          aria-label="Amount in USDC"
-        />
+        <span className="field-unit">
+          <input
+            className="field is-short"
+            value={amount}
+            onChange={(event) => {
+              setAmount(event.target.value)
+            }}
+            inputMode="decimal"
+            placeholder="0.50"
+            aria-label="Amount in USDC"
+          />
+          USDC
+        </span>
         <input
           className="field"
           value={description}
           onChange={(event) => {
             setDescription(event.target.value)
           }}
-          placeholder="March logistics"
+          placeholder="Description"
           aria-label="Description"
         />
         <button type="submit" className="button" disabled={busy || selected === ''}>
@@ -143,7 +146,7 @@ function CreatePayable({
         </button>
       </form>
       {error === undefined ? (
-        <p className="card-note">Amount in USDC. The partner's payout address is copied onto the invoice as its destination.</p>
+        <p className="card-note">The partner's payout address is copied onto the invoice as its destination.</p>
       ) : (
         <p className="card-value is-bad">{error}</p>
       )}
