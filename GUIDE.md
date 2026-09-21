@@ -158,12 +158,33 @@ See it: fund the treasury, wait a few ticks, and the Start screen's two halves a
 `docker compose logs -f worker` shows every tick. Open `http://localhost:8080/namespaces/default/workflows/watcher` and
 there is one entry, id `watcher`, running since the worker started.
 
+## The one movement that is not a payment (§5)
+
+"Fund partner wallet" moves USDC and gas from the treasury to the wallet the partners pay
+from. It is demo plumbing, not a payment — and it is still posted to the books, under a label
+that says what it is. Gas never reaches the books at all; it goes to the audit log.
+
+- `apps/signer/src/sign/sign.controller.ts` — the signer learns to sign: an ERC-20 transfer
+  and a plain ether one. It is told the nonce and the gas fields because it talks to no node,
+  and it answers with the raw bytes plus the hash, which exists before anything is broadcast.
+- `apps/api/src/treasury/treasury.service.ts` — the seven steps, in order: read the balances,
+  refuse if short, fetch nonce and fees, sign both and broadcast both, check the USDC receipt
+  against the official contract, post one entry, answer with both hashes.
+- `packages/ledger/src/movements.ts` — `scaffolding`: Dr `demo:partner-funding` / Cr
+  `treasury:available`, named by the transaction hash so the same one cannot post twice.
+
+See it: `curl -s -X POST localhost:3000/treasury/fund-partner-wallet`, or the button on
+`/admin`. Then `SELECT kind, reference FROM ledger_transactions ORDER BY created_at DESC
+LIMIT 1` and the audit row next to it, which carries the gas the books refuse to hold. The
+watcher posts nothing for it: it looks for money arriving, and this is money leaving.
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
   `/partner` is the partner's side.
 - `apps/ui/src/admin/StartScreen.tsx` — where the demo starts: the treasury address, the
-  faucet links, and what the chain holds next to what the books say.
+  faucet links, what the chain holds next to what the books say, and the partner wallet with
+  the button that funds it.
 - `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses.
 - `apps/ui/src/api/client.ts` — everything the browser knows how to ask the api.
 

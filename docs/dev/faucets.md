@@ -38,6 +38,31 @@ one if the first refuses you:
 A single request is far more than the demo needs: a USDC transfer on Base Sepolia costs on
 the order of 0.0000002 ETH, so a faucet's usual drop covers thousands of them.
 
+## Funding the partner wallet from the treasury
+
+The demo has a second address that needs money: the **partner wallet**, the shared wallet every
+partner pays you from. It is on the Start screen with a **Fund partner wallet** button, and
+that button is the way to fund it: one click sends 2 USDC and 0.005 ETH from the treasury,
+signs both transactions in the signer, broadcasts them, waits for both receipts, and writes
+one entry in the books labelled `demo:partner-funding`.
+
+You could fund it from the faucets instead — Circle's limit is **20 USDC every 2 hours, per
+address and per blockchain**, with no account and no sign-in, so a second address is not a
+second queue (checked 2026-09-21, and faucet rules drift; see below). The button is still the
+default, for two reasons:
+
+- It is the only place in this demo where money leaves the treasury without being a payment,
+  and watching it get posted to the books anyway is the point. A transfer nobody records is
+  how a treasury and its ledger start to disagree.
+- The partner wallet also needs gas, and the gas faucets are the ones with sign-in and
+  queues. The button sends both, so there is one address to beg for and not two.
+
+The treasury needs to hold both before it can send any, and a little more ether than it sends:
+2 USDC (on chain and in the books) and 0.0051 ETH, the 0.005 it transfers plus the allowance
+the two transactions pay their own gas with. `GET /treasury` publishes those two figures under
+`partnerWallet.funding.requires`, the button is disabled below them, and the api refuses with a
+message saying by how much it is short.
+
 ## Faucet rules drift
 
 Everything above was true when it was written and none of it is a promise. Faucets change

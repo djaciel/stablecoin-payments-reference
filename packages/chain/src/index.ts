@@ -8,6 +8,7 @@
 export { TREASURY_ADDRESS_INDEX, deriveAccount } from './derive'
 export {
   CHAIN,
+  chainErrorMessage,
   createChainClient,
   explorerAddressUrl,
   explorerTransactionUrl,

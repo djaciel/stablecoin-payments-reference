@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Inject, Logger, Post, ServiceUnavailableException } from '@nestjs/common'
-import { explorerAddressUrl, readUsdcBalance, rpcHost, type ChainClient } from '@payments/chain'
+import { chainErrorMessage, explorerAddressUrl, readUsdcBalance, rpcHost, type ChainClient } from '@payments/chain'
 import { formatMinor } from '@payments/ledger'
 import type { Address } from 'viem'
 import { CHAIN_CLIENT } from '../chain/chain.module'
@@ -102,7 +102,7 @@ export class PartnersController {
       return { partners: views, blockNumber: blockNumber.toString() }
     } catch (error) {
       // The host, never the URL: a provider endpoint carries its API key in the path.
-      this.logger.error(`the RPC at ${rpcHost()} did not answer: ${error instanceof Error ? error.message : String(error)}`)
+      this.logger.error(`the RPC at ${rpcHost()} did not answer: ${chainErrorMessage(error)}`)
       return {
         partners: partners.map((partner) => toView(partner, null, null)),
         blockNumber: null,

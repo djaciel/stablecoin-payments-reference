@@ -23,10 +23,13 @@ export {
   fundingReference,
   reserve,
   reversal,
+  scaffolding,
+  scaffoldingReference,
   settle,
   type CancelInput,
   type FundingInput,
   type ReversalInput,
+  type ScaffoldingInput,
   type TransferInput,
 } from './movements'
 export { recordAudit, type AuditActor, type AuditEvent } from './audit'

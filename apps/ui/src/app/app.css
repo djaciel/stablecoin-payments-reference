@@ -246,3 +246,43 @@ a {
   font: inherit;
   cursor: pointer;
 }
+
+/* The one dialog in the demo: "Fund partner wallet" says what it is about to do before it
+   does it, and what it did afterwards. Scrollable because the result block grows. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgb(0 0 0 / 60%);
+}
+
+.modal {
+  width: min(42rem, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.2rem 1.4rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+/* What the api is about to do, in the order it does it. A list, not a progress bar. */
+.steps {
+  margin: 0.8rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.steps li + li {
+  margin-top: 0.3rem;
+}
+
+.result {
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}

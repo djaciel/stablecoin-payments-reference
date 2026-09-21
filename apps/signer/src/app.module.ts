@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { AddressesController } from './addresses/addresses.controller'
 import { HealthController } from './health/health.controller'
 import { KeysModule } from './keys/keys.module'
+import { SignController } from './sign/sign.controller'
 
 /**
  * The root module, with the same shape as the api's: controller folders are registered
@@ -10,6 +11,6 @@ import { KeysModule } from './keys/keys.module'
  */
 @Module({
   imports: [KeysModule],
-  controllers: [HealthController, AddressesController],
+  controllers: [HealthController, AddressesController, SignController],
 })
 export class AppModule {}

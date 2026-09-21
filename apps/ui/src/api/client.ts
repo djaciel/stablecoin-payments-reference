@@ -32,6 +32,57 @@ export interface Treasury {
   readonly onchain: { readonly usdc: string; readonly eth: string; readonly blockNumber: string } | null
   readonly chainError?: string
   readonly ledger: { readonly available: string; readonly reserved: string; readonly partnerDebt: string }
+  /** The wallet the partners pay from, and what one click of the button sends to it. */
+  readonly partnerWallet: {
+    readonly address: string
+    readonly explorerUrl: string
+    readonly usdc: string | null
+    readonly eth: string | null
+    /**
+     * What one click sends, and under `requires` the minimum the api refuses below — the
+     * button reads those, so it is never enabled on a treasury the api would turn away.
+     */
+    readonly funding: {
+      readonly usdc: string
+      readonly eth: string
+      readonly requires: { readonly usdc: string; readonly eth: string }
+    }
+  }
+}
+
+/** One of the two transactions "Fund partner wallet" sends. */
+export interface FundingTransfer {
+  readonly hash: string
+  readonly explorerUrl: string
+  readonly amount: string
+  readonly blockNumber: string
+}
+
+/**
+ * What `POST /treasury/fund-partner-wallet` answers once both transactions have landed and
+ * the entry is in the books. The whole thing arrives in one answer because the endpoint is
+ * synchronous: there is nothing to poll for.
+ */
+export interface PartnerWalletFunding {
+  readonly usdc: FundingTransfer
+  readonly gas: FundingTransfer
+  /**
+   * What the two transactions cost, split into the Base fee and the fee for posting their
+   * bytes to Ethereum. `basis` is the api's own caveat about the second one; the screen
+   * prints it rather than presenting the total as a settled figure.
+   */
+  readonly gasSpent: {
+    readonly totalEth: string
+    readonly l2Eth: string
+    readonly l1Eth: string
+    readonly basis: string
+  }
+  readonly ledger: { readonly reference: string; readonly posted: boolean }
+  readonly balances: {
+    readonly treasury: { readonly usdc: string; readonly eth: string }
+    readonly partnerWallet: { readonly usdc: string; readonly eth: string }
+    readonly blockNumber: string
+  } | null
 }
 
 /** One address on a screen: the text, the link, and what it holds at `blockNumber`. */
@@ -76,6 +127,15 @@ export function createPartner(name: string): Promise<Partners> {
 }
 
 /**
+ * Sends USDC and gas from the treasury to the partner wallet. It takes as long as two
+ * transactions take to land (a few seconds on Base Sepolia) because the answer is the
+ * evidence: both hashes, the gas that was spent, and the entry written to the books.
+ */
+export function fundPartnerWallet(): Promise<PartnerWalletFunding> {
+  return send<PartnerWalletFunding>('/treasury/fund-partner-wallet', undefined)
+}
+
+/**
  * One rule for every endpoint: anything but a 2xx is a failure the screen shows as-is.
  * A degraded api (503 with a body) and an api that is not there at all (the proxy's own
  * error) both land here, and both mean the same thing to a card: this is not live data.
@@ -97,7 +157,8 @@ async function send<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${API_BASE_PATH}${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+    // Some of these endpoints are a verb with no arguments; they send no body at all.
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
 
   if (!response.ok) {

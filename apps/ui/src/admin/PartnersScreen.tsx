@@ -81,7 +81,9 @@ interface AddressBlockProps {
 }
 
 function AddressBlock({ heading, sub, address, secondary = false, emptyNote, fundedNote }: AddressBlockProps) {
-  const empty = address.usdc === null || Number(address.usdc) === 0
+  // Three states, not two: unknown is not zero. When the RPC is down the note has to say the
+  // balance could not be read, or the screen quietly claims nobody has paid.
+  const note = address.usdc === null ? 'Balance unknown: the chain could not be read.' : Number(address.usdc) === 0 ? emptyNote : fundedNote
 
   return (
     <div className={secondary ? 'address-block is-secondary' : 'address-block'}>
@@ -94,7 +96,7 @@ function AddressBlock({ heading, sub, address, secondary = false, emptyNote, fun
           <dd>{address.usdc ?? '—'}</dd>
         </div>
       </dl>
-      <p className="card-note">{empty ? emptyNote : fundedNote}</p>
+      <p className="card-note">{note}</p>
     </div>
   )
 }

@@ -33,6 +33,13 @@ export interface CancelInput extends TransferInput {
   readonly reason: string
 }
 
+export interface ScaffoldingInput {
+  /** The USDC transfer that moved the money. Its hash names the ledger transaction. */
+  readonly txHash: string
+  readonly amount: MinorUnits
+  readonly currency: string
+}
+
 export interface FundingInput {
   readonly txHash: string
   /** Position of the Transfer event inside that transaction. */
@@ -90,6 +97,32 @@ export async function funding(client: PoolClient, input: FundingInput): Promise<
   })
 
   return id
+}
+
+/** One transaction, one entry pair. The hash is the whole name: a transfer carries one of these. */
+export function scaffoldingReference(txHash: string): string {
+  return `tx:${txHash}`
+}
+
+/**
+ * "Fund partner wallet": the one movement that takes money out of the treasury without being a
+ * payment. Dr `demo:partner-funding` / Cr `treasury:available`, at the USDC amount the chain
+ * carried — the gas that moved it is never posted (spec assumption 2), it goes to the audit log.
+ *
+ * It never touches `treasury:reserved`, so the release trigger has nothing to say about it.
+ * Unlike `funding`, the audit row is the caller's to write: what makes this entry readable is
+ * the gas transaction next to it, and only the caller has seen that receipt.
+ */
+export function scaffolding(client: PoolClient, input: ScaffoldingInput): Promise<LedgerTransactionId> {
+  return writeTransaction(client, {
+    kind: 'scaffolding',
+    reference: scaffoldingReference(input.txHash),
+    currency: input.currency,
+    entries: [
+      { account: ACCOUNTS.demoPartnerFunding, direction: 'debit', amount: input.amount },
+      { account: ACCOUNTS.treasuryAvailable, direction: 'credit', amount: input.amount },
+    ],
+  })
 }
 
 /**

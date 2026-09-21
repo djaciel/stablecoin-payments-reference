@@ -106,6 +106,19 @@ describe('KeysService.load', () => {
     expect(logLines.filter((line) => leaked.test(line))).toEqual([])
   })
 
+  it('hands out an account that signs without carrying the seed phrase', async () => {
+    const service = await KeysService.load(keysDir)
+    const firstWord = await firstSeedWordOf(keysDir)
+    // What the signing endpoints hold while they work. It CAN sign — it is spending power
+    // over the treasury — and that is exactly why it must not also be the whole seed: an
+    // account that leaked would cost this one address, not every address the seed derives.
+    const account = service.treasury()
+
+    expect(firstWord).not.toBe('')
+    expect(JSON.stringify(account)).not.toContain(firstWord)
+    expect(inspect(account, { depth: 5 })).not.toContain(firstWord)
+  })
+
   it('does not expose the mnemonic when the service is serialised or printed', async () => {
     const service = await KeysService.load(keysDir)
     // Read from disk rather than from the service: there is no way to get it out of the

@@ -25,10 +25,28 @@ export type ChainClient = ReturnType<typeof createChainClient>
 
 /** The host, never the URL: provider endpoints carry the API key in the path. */
 export function rpcHost(): string {
+  return hostOf(readRpcUrl())
+}
+
+/**
+ * A chain failure as it is safe to print or log.
+ *
+ * Two things happen here. viem's errors run to five lines and quote the endpoint they called
+ * (`URL: https://…`), which for a provider endpoint carries the API key; and only the first
+ * line says anything a reader can act on. So: first line, every URL in it replaced by its
+ * host. Use it in every path that reports a chain error, response or log alike.
+ */
+export function chainErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  const firstLine = message.split('\n')[0] ?? message
+  return firstLine.replace(/https?:\/\/[^\s'")]+/g, hostOf)
+}
+
+function hostOf(url: string): string {
   try {
-    return new URL(readRpcUrl()).host
+    return new URL(url).host
   } catch {
-    return '(unparseable RPC_URL)'
+    return '(unparseable URL)'
   }
 }
 
