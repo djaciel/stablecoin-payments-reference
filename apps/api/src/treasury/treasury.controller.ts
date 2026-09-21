@@ -4,7 +4,7 @@ import { formatMinor } from '@payments/ledger'
 import { formatEther, type Address } from 'viem'
 import { CHAIN_CLIENT } from '../chain/chain.module'
 import { SignerUnavailableError } from '../signer/signer-client.service'
-import { TREASURY_SERVICE, type LastFunding, type LedgerFigures, type TreasuryService } from './treasury.service'
+import { TREASURY_SERVICE, type LedgerFigures, type TreasuryService } from './treasury.service'
 
 /**
  * What the Start screen needs, in one answer. Amounts are decimal strings in whole tokens
@@ -19,8 +19,6 @@ interface TreasuryView {
   readonly chainError?: string
   /** What the books say. The article's three accounts, by their published names. */
   readonly ledger: LedgerFigures
-  /** Which transaction the watcher turned into those books, or null before the first one. */
-  readonly lastFunding: LastFunding | null
 }
 
 @Controller('treasury')
@@ -46,13 +44,9 @@ export class TreasuryController {
 
     // Independent halves, neither waiting for the other: the books come from Postgres on
     // the compose network, the balances from a public RPC across the internet.
-    const [onchain, ledger, lastFunding] = await Promise.all([
-      this.readOnchain(address),
-      this.treasury.ledgerFigures(),
-      this.treasury.lastFunding(),
-    ])
+    const [onchain, ledger] = await Promise.all([this.readOnchain(address), this.treasury.ledgerFigures()])
 
-    return { address, explorerUrl: explorerAddressUrl(address), ...onchain, ledger, lastFunding }
+    return { address, explorerUrl: explorerAddressUrl(address), ...onchain, ledger }
   }
 
   /** No address, no screen: this one failure is still a 503. */

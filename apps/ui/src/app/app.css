@@ -129,6 +129,13 @@ body {
   margin-top: 0.35rem;
 }
 
+/* The Start screen's panel comes after the cards, the Partners one before them: same gap
+   either way. */
+.panel + *,
+.cards + .card-note {
+  margin-top: 1rem;
+}
+
 a {
   color: var(--accent);
 }
@@ -179,22 +186,22 @@ a {
 }
 
 .address-heading {
-  margin: 0 0 0.4rem;
-  font-size: 0.85rem;
+  margin: 0;
+  font-size: 0.95rem;
   font-weight: 600;
 }
 
-/* Where an address comes from, said once per column rather than on every line. */
-.tag {
-  margin-left: 0.4rem;
-  padding: 0.1rem 0.4rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
+/* What the address technically is, under the line that says which way the money goes. */
+.address-sub {
+  margin: 0.1rem 0 0.4rem;
   color: var(--muted);
-  font-size: 0.7rem;
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 0.75rem;
+}
+
+/* The payout address is the partner's own wallet: shown, but never the louder of the two. */
+.address-block.is-secondary .address-heading {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .form-row {

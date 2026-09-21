@@ -38,18 +38,19 @@ export function PartnersScreen() {
                 </h2>
 
                 <AddressBlock
-                  heading="Deposit address"
-                  source="company seed"
+                  heading="They pay you here"
+                  sub="deposit address, derived from the company seed"
                   address={partner.deposit}
-                  emptyNote="Nothing paid in yet. This is where this partner pays what it owes."
+                  emptyNote="Nothing paid in yet."
                   fundedNote="On chain, and not in the books yet: crediting a deposit to the partner it belongs to arrives with receivables."
                 />
 
                 <AddressBlock
-                  heading="Payout address"
-                  source="demo scaffolding"
+                  heading="You pay them here"
+                  sub="their wallet, on the allowlist"
                   address={partner.payout}
-                  emptyNote="Nothing paid out yet. This is where the company pays what it owes this partner."
+                  secondary
+                  emptyNote="Nothing paid out yet."
                   fundedNote="The partner's own money. It never appears on the company's books."
                 />
               </section>
@@ -71,20 +72,21 @@ export function PartnersScreen() {
 
 interface AddressBlockProps {
   readonly heading: string
-  readonly source: string
+  readonly sub: string
   readonly address: AddressBalance
+  /** The payout address: still shown, but it is not the one this screen is teaching. */
+  readonly secondary?: boolean
   readonly emptyNote: string
   readonly fundedNote: string
 }
 
-function AddressBlock({ heading, source, address, emptyNote, fundedNote }: AddressBlockProps) {
+function AddressBlock({ heading, sub, address, secondary = false, emptyNote, fundedNote }: AddressBlockProps) {
   const empty = address.usdc === null || Number(address.usdc) === 0
 
   return (
-    <div className="address-block">
-      <h3 className="address-heading">
-        {heading} <span className="tag">{source}</span>
-      </h3>
+    <div className={secondary ? 'address-block is-secondary' : 'address-block'}>
+      <h3 className="address-heading">{heading}</h3>
+      <p className="address-sub">{sub}</p>
       <AddressLine address={address.address} explorerUrl={address.explorerUrl} />
       <dl className="figures">
         <div className="figure">

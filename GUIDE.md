@@ -154,9 +154,8 @@ in blocks that are already final, so nothing it posts can be undone.
 - `migrations/0004_watcher.sql` — the two small tables: which addresses to watch, and
   how far the watcher has read.
 
-See it: fund the treasury, wait a few ticks, and the Start screen's two halves agree, with
-the transaction that closed the gap named underneath. `docker compose logs -f worker`
-shows every tick. Open `http://localhost:8080/namespaces/default/workflows/watcher` and
+See it: fund the treasury, wait a few ticks, and the Start screen's two halves agree.
+`docker compose logs -f worker` shows every tick. Open `http://localhost:8080/namespaces/default/workflows/watcher` and
 there is one entry, id `watcher`, running since the worker started.
 
 ## The screens

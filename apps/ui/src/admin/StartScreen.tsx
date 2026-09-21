@@ -27,31 +27,68 @@ export function StartScreen() {
         <BooksCard treasury={data} error={error} />
       </div>
 
-      <section className="panel">
-        <h2 className="card-title">Fund the treasury</h2>
-        <p className="panel-lead">
-          The treasury needs <strong>both</strong>: testnet USDC, which is the money being moved, and Base Sepolia
-          ETH, which pays the gas to move it. One without the other gets you a demo that cannot send anything.
-        </p>
-        <ul className="panel-links">
-          <li>
-            <a href={USDC_FAUCET_URL} target="_blank" rel="noreferrer">
-              Circle faucet
-            </a>{' '}
-            — testnet USDC. Pick Base Sepolia and paste the treasury address.
-          </li>
-          <li>
-            <a href={GAS_FAUCET_URL} target="_blank" rel="noreferrer">
-              Coinbase Developer Platform faucet
-            </a>{' '}
-            — Base Sepolia ETH for gas.
-          </li>
-        </ul>
-        <p className="card-note">
-          More faucets, and what to do when one of them refuses you: <code>{FAUCET_DOC}</code> in this repo.
-        </p>
-      </section>
+      {isFunded(data) ? <FaucetNote /> : <FaucetPanel />}
     </>
+  )
+}
+
+/**
+ * Both or nothing: USDC is the money and ETH is the gas that moves it, so a treasury holding
+ * one of them still cannot send anything. Unknown balances (RPC down) count as not funded —
+ * the instructions are the safer thing to show when the screen cannot tell.
+ */
+function isFunded(treasury: Treasury | undefined): boolean {
+  const onchain = treasury?.onchain
+  if (onchain === undefined || onchain === null) {
+    return false
+  }
+  return Number(onchain.usdc) > 0 && Number(onchain.eth) > 0
+}
+
+/** The first thing a reader has to do, for as long as it is still undone. */
+function FaucetPanel() {
+  return (
+    <section className="panel">
+      <h2 className="card-title">Fund the treasury</h2>
+      <p className="panel-lead">
+        The treasury needs <strong>both</strong>: testnet USDC, which is the money being moved, and Base Sepolia
+        ETH, which pays the gas to move it. One without the other gets you a demo that cannot send anything.
+      </p>
+      <ul className="panel-links">
+        <li>
+          <a href={USDC_FAUCET_URL} target="_blank" rel="noreferrer">
+            Circle faucet
+          </a>{' '}
+          — testnet USDC. Pick Base Sepolia and paste the treasury address.
+        </li>
+        <li>
+          <a href={GAS_FAUCET_URL} target="_blank" rel="noreferrer">
+            Coinbase Developer Platform faucet
+          </a>{' '}
+          — Base Sepolia ETH for gas.
+        </li>
+      </ul>
+      <p className="card-note">
+        More faucets, and what to do when one of them refuses you: <code>{FAUCET_DOC}</code> in this repo.
+      </p>
+    </section>
+  )
+}
+
+/** Once the money is there the faucets are a footnote, not a step. */
+function FaucetNote() {
+  return (
+    <p className="card-note">
+      Need more test funds?{' '}
+      <a href={USDC_FAUCET_URL} target="_blank" rel="noreferrer">
+        Circle faucet
+      </a>{' '}
+      (USDC) ·{' '}
+      <a href={GAS_FAUCET_URL} target="_blank" rel="noreferrer">
+        CDP faucet
+      </a>{' '}
+      (gas) — see <code>{FAUCET_DOC}</code>
+    </p>
   )
 }
 
@@ -111,27 +148,12 @@ function BooksCard({ treasury, error }: CardProps) {
           ['Partner debt', treasury.ledger.partnerDebt],
         ]}
       />
-      {treasury.lastFunding === null ? (
-        <p className="card-note">
-          The ledger, in USDC. Fund the address above and the watcher posts what arrives, so these figures follow the
-          chain — one entry per transfer, at the amount the chain actually carried.
-        </p>
-      ) : (
-        <p className="card-note">
-          Last {treasury.lastFunding.amount} posted by the watcher from{' '}
-          <a href={treasury.lastFunding.explorerUrl} target="_blank" rel="noreferrer">
-            transaction {shortHash(treasury.lastFunding.txHash)} ↗
-          </a>{' '}
-          at block {treasury.lastFunding.blockNumber}.
-        </p>
-      )}
+      <p className="card-note">
+        The ledger, in USDC. It only changes by a posting — the watcher writes one entry per transfer that arrives,
+        at the amount the chain actually carried.
+      </p>
     </Card>
   )
-}
-
-/** A hash is 66 characters; what a human checks against the explorer is both ends. */
-function shortHash(hash: string): string {
-  return `${hash.slice(0, 10)}…${hash.slice(-6)}`
 }
 
 function Card({ title, children }: { readonly title: string; readonly children: React.ReactNode }) {
