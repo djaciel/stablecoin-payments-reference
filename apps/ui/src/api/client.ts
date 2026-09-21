@@ -11,7 +11,7 @@
  * variable.
  */
 
-import type { Health, Partners, PartnerWalletFunding, Treasury } from '@payments/domain'
+import type { Health, Partners, PartnerWalletFunding, Payables, Treasury } from '@payments/domain'
 
 const API_BASE_PATH = '/api'
 
@@ -30,6 +30,15 @@ export function getPartners(): Promise<Partners> {
 /** Answers with the whole list, so the screen shows the new partner without waiting a poll. */
 export function createPartner(name: string): Promise<Partners> {
   return send<Partners>('/partners', { name })
+}
+
+export function getPayables(): Promise<Payables> {
+  return read<Payables>('/payables')
+}
+
+/** Answers with the whole screen, so the new invoice and the higher Partner debt show at once. */
+export function createPayable(invoice: { partnerId: string; amount: string; description: string }): Promise<Payables> {
+  return send<Payables>('/payables', invoice)
 }
 
 /**

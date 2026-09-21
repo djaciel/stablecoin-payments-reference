@@ -40,6 +40,13 @@ export interface ScaffoldingInput {
   readonly currency: string
 }
 
+export interface PayableInput {
+  /** The invoice this debt belongs to. Its id names the ledger transaction. */
+  readonly payableId: string
+  readonly amount: MinorUnits
+  readonly currency: string
+}
+
 export interface FundingInput {
   readonly txHash: string
   /** Position of the Transfer event inside that transaction. */
@@ -121,6 +128,23 @@ export function scaffolding(client: PoolClient, input: ScaffoldingInput): Promis
     entries: [
       { account: ACCOUNTS.demoPartnerFunding, direction: 'debit', amount: input.amount },
       { account: ACCOUNTS.treasuryAvailable, direction: 'credit', amount: input.amount },
+    ],
+  })
+}
+
+/**
+ * An invoice the company owes: Dr `expense:services` / Cr `partner:payable`, the article's
+ * Partner debt. No money moves yet. The `(kind, reference)` unique index is why one invoice
+ * can put its debt on the books only once. The audit row is the caller's, like `scaffolding`.
+ */
+export function payable(client: PoolClient, input: PayableInput): Promise<LedgerTransactionId> {
+  return writeTransaction(client, {
+    kind: 'payable',
+    reference: input.payableId,
+    currency: input.currency,
+    entries: [
+      { account: ACCOUNTS.expenseServices, direction: 'debit', amount: input.amount },
+      { account: ACCOUNTS.partnerPayable, direction: 'credit', amount: input.amount },
     ],
   })
 }

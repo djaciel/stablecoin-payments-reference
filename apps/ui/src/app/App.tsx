@@ -1,5 +1,6 @@
 import { NavLink, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { PartnersScreen } from '../admin/PartnersScreen'
+import { PayablesScreen } from '../admin/PayablesScreen'
 import { StartScreen } from '../admin/StartScreen'
 import { PartnerHome } from '../partner/PartnerHome'
 
@@ -32,6 +33,7 @@ export function App() {
           <Route path="/admin" element={<AdminScreens />}>
             <Route index element={<StartScreen />} />
             <Route path="partners" element={<PartnersScreen />} />
+            <Route path="payables" element={<PayablesScreen />} />
           </Route>
           <Route path="/partner" element={<PartnerHome />} />
           {/* No landing page: `/` and anything unknown go to the company's side, where the demo starts. */}
@@ -53,6 +55,9 @@ function AdminScreens() {
         </NavLink>
         <NavLink to="/admin/partners" className={navClass}>
           Partners
+        </NavLink>
+        <NavLink to="/admin/payables" className={navClass}>
+          Payables
         </NavLink>
       </nav>
       <Outlet />

@@ -122,3 +122,25 @@ export interface Partners {
   /** Set only when `blockNumber` is null: one sentence a screen can print. */
   readonly chainError?: string
 }
+
+/** One invoice the company owes, as the Payables screen lists it. */
+export interface PayableSummary {
+  readonly id: string
+  /** Null only for an ad-hoc payable to an address, which has no partner. */
+  readonly partnerName: string | null
+  readonly amount: string
+  readonly description: string
+  readonly status: 'OPEN' | 'PAYING' | 'PAID'
+  /** Where it will be paid: the partner's payout address, as it was when the invoice was created. */
+  readonly destination: { readonly address: string; readonly explorerUrl: string }
+}
+
+/**
+ * What `GET /payables` and `POST /payables` answer: the invoices newest first, the partners an
+ * invoice can be written to (the form's select), and the Partner debt figure the books hold.
+ */
+export interface Payables {
+  readonly payables: readonly PayableSummary[]
+  readonly partners: readonly { readonly id: string; readonly name: string }[]
+  readonly partnerDebt: string
+}

@@ -21,6 +21,7 @@ export {
   cancel,
   funding,
   fundingReference,
+  payable,
   reserve,
   reversal,
   scaffolding,
@@ -28,6 +29,7 @@ export {
   settle,
   type CancelInput,
   type FundingInput,
+  type PayableInput,
   type ReversalInput,
   type ScaffoldingInput,
   type TransferInput,
@@ -35,4 +37,4 @@ export {
 export { recordAudit, type AuditActor, type AuditEvent } from './audit'
 export { ARTICLE_PARTNER_DEBT, ARTICLE_TREASURY, RACE_TREASURY, seedArticle, seedRace } from './seed'
 export { getBalances } from './balances'
-export { USDC_DECIMALS, formatMinor, toMinor } from './money'
+export { USDC_DECIMALS, formatMinor, toMinor, toMinorFromDecimal } from './money'

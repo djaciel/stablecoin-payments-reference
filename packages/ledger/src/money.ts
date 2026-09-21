@@ -26,3 +26,24 @@ export function formatMinor(amount: MinorUnits): string {
 export function toMinor(wholeTokens: number | bigint): MinorUnits {
   return BigInt(wholeTokens) * SCALE
 }
+
+const PLAIN_DECIMAL = new RegExp(`^\\d+(\\.\\d{1,${USDC_DECIMALS}})?$`)
+
+/**
+ * The one place a typed amount becomes money: `"0.50"` is 500_000n. Strings and bigints only,
+ * never a float, because `0.1 + 0.2` is not `0.3` and a form that loses a cent loses the reader.
+ * No sign, no exponent, no more decimals than USDC has, and not zero.
+ */
+export function toMinorFromDecimal(value: string): MinorUnits {
+  if (!PLAIN_DECIMAL.test(value)) {
+    throw new RangeError(`"${value}" is not an amount: a plain decimal with at most ${USDC_DECIMALS} decimals, like "0.50"`)
+  }
+
+  const [whole = '', fraction = ''] = value.split('.')
+  const amount = BigInt(whole) * SCALE + BigInt(fraction.padEnd(USDC_DECIMALS, '0'))
+
+  if (amount === 0n) {
+    throw new RangeError('an amount must be more than zero')
+  }
+  return amount
+}

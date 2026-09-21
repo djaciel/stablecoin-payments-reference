@@ -122,6 +122,14 @@ harness and lists which test defends which rule). Or break a rule by hand:
 `docker compose exec postgres psql -U payments -d payments -c "UPDATE ledger_accounts SET balance_minor = -1 WHERE code = 'treasury:available'"`
 is refused by the database.
 
+### The invoice that becomes a debt (§5, §7)
+
+The company owes a partner from the moment an invoice exists: creating one writes the row and
+Dr `expense:services` / Cr `partner:payable` (Partner debt) in one transaction. Open
+`migrations/0006_payables.sql`, `apps/api/src/payables/payables.service.ts`, `payable` in
+`packages/ledger/src/movements.ts` and `apps/ui/src/admin/PayablesScreen.tsx`. See it: create one
+on `/admin/payables` and watch Partner debt move there and on the Start screen.
+
 ## The chain: a receipt is not a payment (§7)
 
 - `packages/chain/src/clients.ts` — the one client that talks to Base Sepolia (the public
@@ -186,6 +194,8 @@ watcher posts nothing for it: it looks for money arriving, and this is money lea
   faucet links, what the chain holds next to what the books say, and the partner wallet with
   the button that funds it.
 - `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses.
+- `apps/ui/src/admin/PayablesScreen.tsx` — the invoices the company owes, and the Partner debt
+  they add up to.
 - `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint.
   The shapes of the answers are in `packages/domain/src/api.ts`, which the api writes with
   and the browser reads.

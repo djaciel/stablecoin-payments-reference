@@ -206,6 +206,7 @@ a {
 
 .form-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
   margin: 0.7rem 0 0;
 }
@@ -219,6 +220,11 @@ a {
   background: var(--bg);
   color: var(--text);
   font: inherit;
+}
+
+/* An amount is a few characters; it should not take the width a description gets. */
+.field.is-short {
+  flex: 0 1 8rem;
 }
 
 .button {
