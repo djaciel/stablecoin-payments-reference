@@ -5,7 +5,7 @@
  * shape of the answer. A caller writes `await signer.treasuryAddress()` and never learns
  * that there is an HTTP hop at all, which is what keeps the boundary movable: the signer
  * is a separate process because it holds the seed, not because the api wants a network
- * call. Deposit addresses and signing join this file when the flows that need them do.
+ * call. Signing joins this file when the flow that needs it does.
  */
 
 import { isAddress, type Address } from 'viem'
@@ -26,20 +26,37 @@ export class SignerClient {
   constructor(private readonly baseUrl: string) {}
 
   /** Index 0 of the company seed: the address a human funds from a faucet. */
-  async treasuryAddress(): Promise<SignerAddress> {
-    const url = `${this.baseUrl}/addresses/treasury`
+  treasuryAddress(): Promise<SignerAddress> {
+    return this.askForAddress('/addresses/treasury', {}, 'the treasury address')
+  }
+
+  /**
+   * The deposit address of the partner at `index` — where that partner pays what it owes.
+   * The api never derives it: the company seed is the signer's and nobody else's.
+   */
+  depositAddress(index: number): Promise<SignerAddress> {
+    return this.askForAddress(
+      '/addresses/deposit',
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ index }) },
+      `the deposit address at index ${String(index)}`,
+    )
+  }
+
+  /** One request, one answer, one failure type. `what` names the thing in the error. */
+  private async askForAddress(path: string, init: RequestInit, what: string): Promise<SignerAddress> {
+    const url = `${this.baseUrl}${path}`
 
     let response: Response
     try {
       // Without a timeout a signer that accepts connections and never answers would hang
       // this request until the client gives up, and /treasury would stop answering at all.
-      response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+      response = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
     } catch (error) {
       throw new SignerUnavailableError(`the signer at ${this.baseUrl} did not answer: ${messageOf(error)}`)
     }
 
     if (!response.ok) {
-      throw new SignerUnavailableError(`the signer at ${this.baseUrl} answered ${response.status} for the treasury address`)
+      throw new SignerUnavailableError(`the signer at ${this.baseUrl} answered ${response.status} for ${what}`)
     }
 
     const body: unknown = await response.json().catch(() => undefined)

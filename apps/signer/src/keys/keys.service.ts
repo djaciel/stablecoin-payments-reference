@@ -1,4 +1,4 @@
-import { access, chmod, readFile, writeFile } from 'node:fs/promises'
+import { access, chmod, readFile, stat, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { join } from 'node:path'
 import { Logger } from '@nestjs/common'
@@ -131,12 +131,25 @@ async function requireWritableDirectory(keysDir: string): Promise<void> {
     'your machine. Running the signer directly: set KEYS_DIR to a directory you can write to.',
   ].join('\n  ')
 
-  try {
-    await access(keysDir, constants.W_OK | constants.X_OK)
-  } catch (error) {
-    const reason = (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'does not exist' : 'is not writable by the signer'
-    throw new Error(`the signer needs a keys directory to hold the company seed, and this one ${reason}.\n  ${advice}`, {
-      cause: error,
-    })
+  const problem = await directoryProblem(keysDir)
+  if (problem !== undefined) {
+    throw new Error(`the signer needs a keys directory to hold the company seed, and this one ${problem}.\n  ${advice}`)
   }
+}
+
+/** `undefined` when the directory is usable; otherwise the half-sentence the error prints. */
+async function directoryProblem(keysDir: string): Promise<string | undefined> {
+  const stats = await stat(keysDir).catch(() => undefined)
+  if (stats === undefined) {
+    return 'does not exist'
+  }
+  // A file where the directory should be fails at the first write with a bare ENOTDIR,
+  // which says nothing about the bind mount that is actually wrong.
+  if (!stats.isDirectory()) {
+    return 'is a file, not a directory'
+  }
+  return access(keysDir, constants.W_OK | constants.X_OK).then(
+    () => undefined,
+    () => 'is not writable by the signer',
+  )
 }

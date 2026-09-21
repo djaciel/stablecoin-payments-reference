@@ -44,12 +44,45 @@ export interface Treasury {
   } | null
 }
 
+/** One address on a screen: the text, the link, and what it holds at `blockNumber`. */
+export interface AddressBalance {
+  readonly address: string
+  readonly explorerUrl: string
+  /** Decimal USDC in whole tokens, or null when the api could not reach the chain. */
+  readonly usdc: string | null
+}
+
+/**
+ * What `GET /partners` answers: every partner with its two addresses, and the one block all
+ * the balances were read at — figures read at different heights would not be comparable.
+ */
+export interface Partners {
+  readonly partners: readonly {
+    readonly id: string
+    readonly name: string
+    readonly derivationIndex: number
+    readonly deposit: AddressBalance
+    readonly payout: AddressBalance
+  }[]
+  readonly blockNumber: string | null
+  readonly chainError?: string
+}
+
 export function getHealth(): Promise<Health> {
   return read<Health>('/health')
 }
 
 export function getTreasury(): Promise<Treasury> {
   return read<Treasury>('/treasury')
+}
+
+export function getPartners(): Promise<Partners> {
+  return read<Partners>('/partners')
+}
+
+/** Answers with the whole list, so the screen shows the new partner without waiting a poll. */
+export function createPartner(name: string): Promise<Partners> {
+  return send<Partners>('/partners', { name })
 }
 
 /**
@@ -63,4 +96,28 @@ async function read<T>(path: string): Promise<T> {
     throw new Error(`the api answered ${String(response.status)}`)
   }
   return (await response.json()) as T
+}
+
+/**
+ * The same rule for writes, with one addition: a refused write has a reason the person who
+ * typed it needs to read ("name must be text of 1 to 80 characters"), and Nest puts that
+ * sentence in the body. A bare status code would send them to the logs for a typo.
+ */
+async function send<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE_PATH}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    throw new Error(await refusalMessage(response))
+  }
+  return (await response.json()) as T
+}
+
+async function refusalMessage(response: Response): Promise<string> {
+  const body: unknown = await response.json().catch(() => undefined)
+  const message = typeof body === 'object' && body !== null ? (body as { message?: unknown }).message : undefined
+  return typeof message === 'string' ? message : `the api answered ${String(response.status)}`
 }

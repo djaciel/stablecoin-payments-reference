@@ -161,6 +161,75 @@ a {
   font-size: 0.85rem;
 }
 
+/* The admin side's own tabs, under the app header: same links, quieter. */
+.sub-nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+/* One of the two addresses on a partner card. The rule separates them without a box. */
+.address-block + .address-block {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.address-heading {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Where an address comes from, said once per column rather than on every line. */
+.tag {
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.form-row {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0.7rem 0 0;
+}
+
+.field {
+  flex: 1 1 18rem;
+  max-width: 24rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.button {
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button:disabled {
+  border-color: var(--line);
+  color: var(--muted);
+  cursor: default;
+}
+
 /* A button that behaves like a link, because copying an address is not a form action. */
 .link-button {
   padding: 0;

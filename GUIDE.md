@@ -43,6 +43,27 @@ See it: `curl localhost:3000/treasury` prints the treasury address; the same add
 `docker compose logs signer`. `docker compose down -v && docker compose up` keeps it, because
 the seed lives on your disk, not in a volume.
 
+## Two seeds, and the partners between them (§8)
+
+You know who paid by where the money came in, never by who sent it. That is why each partner
+has a deposit address derived from the company seed: the address IS the attribution. The
+other side of the pair, the payout address, belongs to the partner and comes from a second
+seed this demo only holds because one machine has to play both sides.
+
+- `apps/api/src/demo-scaffolding/partner-keys.service.ts` — the partner seed, generated into
+  `./.keys/partner/` on first start. In the api and never in the signer, on purpose; the file
+  says why, and so does the label on every address it produces.
+- `apps/api/src/partners/partners.service.ts` — creating a partner: the next index, the
+  deposit address from the signer, the payout address from the partner seed, and the row that
+  tells the watcher to watch the deposit address — one transaction, or nothing.
+- `migrations/0005_partners.sql` — the table, and the two addresses each partner carries.
+- `apps/ui/src/admin/PartnersScreen.tsx` — both address families side by side, with balances.
+
+See it: open `http://localhost:5173/admin/partners`, add a partner, and watch its deposit
+address appear in `SELECT * FROM watched_addresses` and in the watcher's next tick without a
+restart. Send test USDC to a deposit address: the balance on the screen goes up and the books
+do not move, because crediting a deposit to a partner is the receivables flow, later.
+
 ## The durable workflow engine (§3, and the crash in §9)
 
 - `apps/worker/src/workflows.ts` — `PaymentWorkflow`: the recipe, four steps in order
@@ -144,13 +165,13 @@ there is one entry, id `watcher`, running since the worker started.
   `/partner` is the partner's side.
 - `apps/ui/src/admin/StartScreen.tsx` — where the demo starts: the treasury address, the
   faucet links, and what the chain holds next to what the books say.
+- `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses.
 - `apps/ui/src/api/client.ts` — everything the browser knows how to ask the api.
 
 Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-The watcher that posts what arrives (so the books follow the chain), the payment API with
-its idempotency key (§4), the real chain steps (§7), the four failures (§9), reconciliation
-(§10) and the partner side (§8) arrive in later phases; each will add its entry here when it
-lands.
+The payment API with its idempotency key (§4), the real chain steps (§7), the four failures
+(§9), reconciliation (§10) and the partner side that pays a receivable (§8) arrive in later
+phases; each will add its entry here when it lands.

@@ -1,6 +1,6 @@
-import { useState } from 'react'
 import { getTreasury, type Treasury } from '../api/client'
 import { usePolling } from '../api/usePolling'
+import { AddressLine } from '../app/AddressLine'
 import { HealthCard } from '../app/HealthCard'
 
 /**
@@ -61,30 +61,13 @@ interface CardProps {
 }
 
 function TreasuryCard({ treasury, error }: CardProps) {
-  const [copied, setCopied] = useState(false)
-
   if (error !== undefined || treasury === undefined) {
     return <Card title="Treasury address">{placeholder(error)}</Card>
   }
 
-  const copy = (): void => {
-    void navigator.clipboard.writeText(treasury.address).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
-  }
-
   return (
     <Card title="Treasury address">
-      <p className="card-value is-address">{treasury.address}</p>
-      <p className="card-actions">
-        <button type="button" className="link-button" onClick={copy}>
-          {copied ? 'copied' : 'copy'}
-        </button>
-        <a href={treasury.explorerUrl} target="_blank" rel="noreferrer">
-          explorer
-        </a>
-      </p>
+      <AddressLine address={treasury.address} explorerUrl={treasury.explorerUrl} />
       <p className="card-note">Derived from the company seed by the signer. This is the address the faucets fund.</p>
     </Card>
   )

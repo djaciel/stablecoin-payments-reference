@@ -159,6 +159,11 @@ services:
       # only way in: the signer publishes no port, so nothing outside this network can
       # reach it, and the api is how the treasury address becomes visible to a browser.
       SIGNER_URL: http://signer:3001
+      # The partner seed's directory inside the container, made the host's ./.keys/partner
+      # by the bind mount below. It is the api's and not the signer's on purpose: the
+      # partner seed stands in for wallets the company does not control (see
+      # apps/api/src/demo-scaffolding/).
+      PARTNER_KEYS_DIR: /partner-keys
       # The chain endpoint, passed through EMPTY unless you set it. The api falls back to
       # the public Base Sepolia RPC, which is what makes "no environment variable to run"
       # true; set RPC_URL only to point the demo at a provider endpoint of your own.
@@ -176,6 +181,10 @@ services:
       # Everything else still lives in the image, so `--build` is required after changing
       # TypeScript. Only migrations get this treatment, because only migrations fail quietly.
       - ./migrations:/app/migrations:ro
+      # The partner seed, on the host for the same reason as the company one: the partner
+      # wallet is funded from the treasury, and `docker compose down -v` would take a named
+      # volume with it. Docker creates ./.keys/partner on your machine the first time.
+      - ./.keys/partner:/partner-keys
     # No `depends_on: temporal` here on purpose: the api does not dispatch a workflow
     # until Phase 5. Adding it now would only make the api wait for a service it never
     # talks to. It joins when the dispatch does.
