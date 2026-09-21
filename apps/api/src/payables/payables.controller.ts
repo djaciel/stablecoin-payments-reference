@@ -17,7 +17,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export class PayablesController {
   constructor(@Inject(PAYABLES_SERVICE) private readonly payables: PayablesService) {}
 
-  /** The whole Payables screen in one read: the invoices, the form's partners, the Partner debt. */
+  /** The whole Payables screen in one read: the invoices with their payments, the form's partners, the books. */
   @Get()
   async list(): Promise<Payables> {
     const overview = await this.payables.list()
@@ -29,9 +29,14 @@ export class PayablesController {
         description: invoice.description,
         status: invoice.status,
         destination: { address: invoice.destination, explorerUrl: explorerAddressUrl(invoice.destination) },
+        payment: invoice.payment,
       })),
       partners: overview.partners,
-      partnerDebt: formatMinor(overview.partnerDebt),
+      ledger: {
+        available: formatMinor(overview.available),
+        reserved: formatMinor(overview.reserved),
+        partnerDebt: formatMinor(overview.partnerDebt),
+      },
     }
   }
 

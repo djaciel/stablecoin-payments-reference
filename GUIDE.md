@@ -132,11 +132,11 @@ on `/admin/payables` and watch Partner debt move there and on the Start screen.
 
 ## The payment API: one key, one payment (§4, §5, §9)
 
-`apps/api/src/payments/create-payment.ts` is `POST /payments` in six steps and one database
-transaction: insert the intent, lock the invoice, validate, reserve, then RESERVED or FAILED with a
-reason. `migrations/0007_payments.sql`: its unique index IS the idempotency. `tests/db/payments.db.test.ts`:
-the key against real Postgres, double click included. See it: `curl` the same `idempotency-key` twice
-and read the same reference back; `curl localhost:3000/payments/<reference>` reads it later.
+`apps/api/src/payments/create-payment.ts`: `POST /payments` in six steps and one transaction (intent,
+invoice lock, validations, reserve, RESERVED or FAILED). `migrations/0007_payments.sql`: its unique
+index IS the idempotency; `tests/db/payments.db.test.ts` tests it. `apps/ui/src/admin/PayablesScreen.tsx`:
+Pay, one key per attempt. See it: press Pay on `/admin/payables` and Reserved goes up while nothing is
+signed; `curl` the same `idempotency-key` twice and read the same reference back.
 
 ## The chain: a receipt is not a payment (§7)
 
@@ -202,8 +202,8 @@ watcher posts nothing for it: it looks for money arriving, and this is money lea
   faucet links, what the chain holds next to what the books say, and the partner wallet with
   the button that funds it.
 - `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses.
-- `apps/ui/src/admin/PayablesScreen.tsx` — the invoices the company owes, and the Partner debt
-  they add up to.
+- `apps/ui/src/admin/PayablesScreen.tsx` — the invoices the company owes, the books they move,
+  and Pay, with each invoice's payment on its row.
 - `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint.
   The shapes of the answers are in `packages/domain/src/api.ts`, which the api writes with
   and the browser reads.

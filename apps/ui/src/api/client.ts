@@ -11,7 +11,7 @@
  * variable.
  */
 
-import type { Health, Partners, PartnerWalletFunding, Payables, Treasury } from '@payments/domain'
+import type { Health, Partners, PartnerWalletFunding, Payables, PaymentView, Treasury } from '@payments/domain'
 
 const API_BASE_PATH = '/api'
 
@@ -42,6 +42,20 @@ export function createPayable(invoice: { partnerId: string; amount: string; desc
 }
 
 /**
+ * `POST /payments` for one invoice, with the key the screen made for this attempt. A 422 resolves
+ * instead of throwing: it is a payment the api recorded as FAILED, and its body carries the reason
+ * the screen puts in a sentence. A 400, a 409 or an api that is not there throw, with the api's
+ * own sentence when it sent one.
+ */
+export async function payPayable(payableId: string, idempotencyKey: string): Promise<PaymentView> {
+  const response = await post('/payments', { payableId }, { 'idempotency-key': idempotencyKey })
+  if (!response.ok && response.status !== 422) {
+    throw new Error(await refusalMessage(response))
+  }
+  return (await response.json()) as PaymentView
+}
+
+/**
  * Sends USDC and gas from the treasury to the partner wallet. It takes as long as two
  * transactions take to land (a few seconds on Base Sepolia) because the answer is the
  * evidence: both hashes, the gas that was spent, and the entry written to the books.
@@ -69,17 +83,20 @@ async function read<T>(path: string): Promise<T> {
  * sentence in the body. A bare status code would send them to the logs for a typo.
  */
 async function send<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE_PATH}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    // Some of these endpoints are a verb with no arguments; they send no body at all.
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  })
-
+  const response = await post(path, body)
   if (!response.ok) {
     throw new Error(await refusalMessage(response))
   }
   return (await response.json()) as T
+}
+
+function post(path: string, body: unknown, headers: Record<string, string> = {}): Promise<Response> {
+  return fetch(`${API_BASE_PATH}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    // Some of these endpoints are a verb with no arguments; they send no body at all.
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  })
 }
 
 async function refusalMessage(response: Response): Promise<string> {

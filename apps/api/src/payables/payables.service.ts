@@ -1,7 +1,7 @@
 import { BadRequestException, UnprocessableEntityException } from '@nestjs/common'
 import { inTransaction, type Pool, type PoolClient } from '@payments/db'
-import type { PayableSummary } from '@payments/domain'
-import { ACCOUNTS, getBalances, payable, recordAudit, type MinorUnits } from '@payments/ledger'
+import type { PayableSummary, PaymentFailureReason, PaymentView } from '@payments/domain'
+import { ACCOUNTS, getBalances, payable, recordAudit, type AccountCode, type MinorUnits } from '@payments/ledger'
 
 /** Defined here and not in the module, for the same cycle reason as `PARTNERS_SERVICE`. */
 export const PAYABLES_SERVICE = Symbol('PAYABLES_SERVICE')
@@ -20,13 +20,16 @@ export interface Payable {
   readonly amountMinor: MinorUnits
   readonly description: string
   readonly status: PayableSummary['status']
+  readonly payment: PayableSummary['payment']
 }
 
 /** Everything the Payables screen shows. */
 export interface PayablesOverview {
   readonly payables: readonly Payable[]
   readonly partners: readonly { readonly id: string; readonly name: string }[]
-  /** `partner:payable`: what the company owes all partners together. */
+  /** `treasury:available`, `treasury:reserved` and `partner:payable`: the figures a Pay moves. */
+  readonly available: MinorUnits
+  readonly reserved: MinorUnits
   readonly partnerDebt: MinorUnits
 }
 
@@ -42,22 +45,41 @@ export class PayablesService {
   async list(): Promise<PayablesOverview> {
     const client = await this.pool.connect()
     try {
-      const payables = await client.query<PayableRow>(
-        `SELECT p.id, partners.name AS partner_name, p.destination, p.amount_minor, p.description, p.status
-           FROM payables p
-           LEFT JOIN partners ON partners.id = p.partner_id
-          ORDER BY p.created_at DESC`,
-      )
-      const partners = await client.query<{ id: string; name: string }>(
-        "SELECT id, name FROM partners WHERE status = 'active' ORDER BY derivation_index",
-      )
-      const debt = (await getBalances(client)).find((balance) => balance.code === ACCOUNTS.partnerPayable)
+      return await inTransaction(client, async () => {
+        // One snapshot for the three reads, so a payment committing in between cannot show on the
+        // books and not on its invoice.
+        await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')
 
-      return {
-        payables: payables.rows.map(toPayable),
-        partners: partners.rows,
-        partnerDebt: debt?.balanceMinor ?? 0n,
-      }
+        // The payment on each row is the one linked to the invoice, else its latest attempt: a
+        // FAILED attempt never links the invoice, so the join is through `payments.payable_id`.
+        const payables = await client.query<PayableRow>(
+          `SELECT p.id, partners.name AS partner_name, p.destination, p.amount_minor, p.description, p.status,
+                  attempt.reference AS attempt_reference, attempt.status AS attempt_status,
+                  attempt.failure_reason AS attempt_reason
+             FROM payables p
+             LEFT JOIN partners ON partners.id = p.partner_id
+             LEFT JOIN LATERAL (
+                    SELECT reference, status, failure_reason FROM payments
+                     WHERE payments.payable_id = p.id
+                     ORDER BY (payments.reference = p.payment_reference) IS TRUE DESC, payments.created_at DESC
+                     LIMIT 1
+                  ) attempt ON true
+            ORDER BY p.created_at DESC`,
+        )
+        const partners = await client.query<{ id: string; name: string }>(
+          "SELECT id, name FROM partners WHERE status = 'active' ORDER BY derivation_index",
+        )
+        const balances = await getBalances(client)
+        const of = (code: AccountCode): MinorUnits => balances.find((balance) => balance.code === code)?.balanceMinor ?? 0n
+
+        return {
+          payables: payables.rows.map(toPayable),
+          partners: partners.rows,
+          available: of(ACCOUNTS.treasuryAvailable),
+          reserved: of(ACCOUNTS.treasuryReserved),
+          partnerDebt: of(ACCOUNTS.partnerPayable),
+        }
+      })
     } finally {
       client.release()
     }
@@ -138,6 +160,9 @@ interface PayableRow {
   readonly amount_minor: string
   readonly description: string
   readonly status: PayableSummary['status']
+  readonly attempt_reference: string | null
+  readonly attempt_status: PaymentView['status'] | null
+  readonly attempt_reason: PaymentFailureReason | null
 }
 
 function toPayable(row: PayableRow): Payable {
@@ -148,5 +173,9 @@ function toPayable(row: PayableRow): Payable {
     amountMinor: BigInt(row.amount_minor),
     description: row.description,
     status: row.status,
+    payment:
+      row.attempt_reference === null || row.attempt_status === null
+        ? null
+        : { reference: row.attempt_reference, status: row.attempt_status, reason: row.attempt_reason ?? undefined },
   }
 }

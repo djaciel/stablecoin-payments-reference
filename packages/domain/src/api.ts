@@ -133,16 +133,22 @@ export interface PayableSummary {
   readonly status: 'OPEN' | 'PAYING' | 'PAID'
   /** Where it will be paid: the partner's payout address, as it was when the invoice was created. */
   readonly destination: { readonly address: string; readonly explorerUrl: string }
+  /**
+   * The payment on this invoice: the one paying it, else its latest attempt (a FAILED one leaves
+   * the invoice OPEN, to be paid again). Null until someone presses Pay.
+   */
+  readonly payment: Pick<PaymentView, 'reference' | 'status' | 'reason'> | null
 }
 
 /**
  * What `GET /payables` and `POST /payables` answer: the invoices newest first, the partners an
- * invoice can be written to (the form's select), and the Partner debt figure the books hold.
+ * invoice can be written to (the form's select), and the books, read in the same snapshot as the
+ * invoices so a row never disagrees with the figures above it.
  */
 export interface Payables {
   readonly payables: readonly PayableSummary[]
   readonly partners: readonly { readonly id: string; readonly name: string }[]
-  readonly partnerDebt: string
+  readonly ledger: LedgerFigures
 }
 
 /** Why a payment was refused: short codes a screen turns into a sentence and the article can quote. */

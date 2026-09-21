@@ -161,6 +161,11 @@ a {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* In a full-width panel the figures keep a card's width, so each amount stays next to its label. */
+.panel .figures {
+  max-width: 24rem;
+}
+
 .card-actions {
   display: flex;
   gap: 1rem;
@@ -196,6 +201,11 @@ a {
   margin: 0.1rem 0 0.4rem;
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+/* On an invoice card the destination starts its own block, after the state and the Pay button. */
+.card > .address-sub {
+  margin-top: 0.9rem;
 }
 
 /* The payout address is the partner's own wallet: shown, but never the louder of the two. */
@@ -261,8 +271,8 @@ a {
   cursor: pointer;
 }
 
-/* The one dialog in the demo: "Fund partner wallet" says what it is about to do before it
-   does it, and what it did afterwards. Scrollable because the result block grows. */
+/* The dialogs say what they are about to do before they do it; "Fund partner wallet" also
+   shows what it did afterwards. Scrollable because that result block grows. */
 .modal-backdrop {
   position: fixed;
   inset: 0;

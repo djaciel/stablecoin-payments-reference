@@ -6,26 +6,33 @@ import { useState } from 'react'
  * faucet, and pasting it into a faucet is the first thing this demo asks of anyone.
  */
 export function AddressLine({ address, explorerUrl }: { readonly address: string; readonly explorerUrl: string }) {
+  return (
+    <>
+      <p className="card-value is-address">{address}</p>
+      <p className="card-actions">
+        <CopyButton text={address} />
+        <a href={explorerUrl} target="_blank" rel="noreferrer">
+          explorer
+        </a>
+      </p>
+    </>
+  )
+}
+
+/** For strings a reader pastes somewhere else: an address, a payment reference. */
+export function CopyButton({ text }: { readonly text: string }) {
   const [copied, setCopied] = useState(false)
 
   const copy = (): void => {
-    void navigator.clipboard.writeText(address).then(() => {
+    void navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     })
   }
 
   return (
-    <>
-      <p className="card-value is-address">{address}</p>
-      <p className="card-actions">
-        <button type="button" className="link-button" onClick={copy}>
-          {copied ? 'copied' : 'copy'}
-        </button>
-        <a href={explorerUrl} target="_blank" rel="noreferrer">
-          explorer
-        </a>
-      </p>
-    </>
+    <button type="button" className="link-button" onClick={copy}>
+      {copied ? 'copied' : 'copy'}
+    </button>
   )
 }
