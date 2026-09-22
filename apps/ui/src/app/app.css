@@ -415,3 +415,32 @@ a {
   font-size: 0.85rem;
   overflow-wrap: anywhere;
 }
+
+/* Under the admin tabs while a failure-injection flag is armed, so nobody presses Pay without knowing. */
+.armed-banner {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--bad);
+  border-radius: 4px;
+  background: rgb(229 119 107 / 10%);
+  color: var(--bad);
+  font-size: 0.85rem;
+}
+
+/* The flags could not be read: said once, under the admin tabs. */
+.flags-unavailable {
+  margin-bottom: 1rem;
+}
+
+/* A switch's state next to its name: red only while armed. */
+.badge {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+
+.badge.is-armed {
+  border-color: var(--bad);
+  color: var(--bad);
+}

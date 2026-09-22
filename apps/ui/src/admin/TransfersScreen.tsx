@@ -199,7 +199,7 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
         lines.push({ name: 'Reserved', rows: [step], text: `${payment.amount} USDC moved from Available to Reserved.` })
         break
       case 'signed':
-        lines.push({ name: 'Signed', rows: [step], text: <>Its hash and nonce {context.nonce}, stored before anything was sent: <Hash hash={context.txHash} /></> })
+        lines.push({ name: 'Signed', rows: [step], text: <>{gasTooLowText(context)}Its hash and nonce {context.nonce}, stored before anything was sent: <Hash hash={context.txHash} /></> })
         break
       case 'sent':
         lines.push({ name: 'Sent', rows: [step], text: sentText(context, signedHash) })
@@ -261,6 +261,14 @@ function sentText(context: AuditStep['context'], signedHash: string | undefined)
     return sameHash ? 'The network already had it, the same hash, so nothing was sent again.' : <>The network already had <Hash hash={context.txHash} /></>
   }
   return sameHash ? 'A node accepted it, the same hash.' : <>A node accepted <Hash hash={context.txHash} /></>
+}
+
+/** Break it's revert flag, as the `signed` row records it: the gas signed, and what the payout would have had. */
+function gasTooLowText(context: AuditStep['context']): string {
+  if (context.failureInjection !== 'revert_next_payment') {
+    return ''
+  }
+  return `The gas limit was set too low on purpose (Break it): ${context.gas} instead of ${context.estimatedGas ?? 'its estimate'}, so it runs out of gas and reverts onchain. `
 }
 
 function reasonInWords(code: string | undefined): string {

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { DbModule } from './db/db.module'
+import { ExperimentsController } from './experiments/experiments.controller'
 import { HealthController } from './health/health.controller'
 import { PartnersModule } from './partners/partners.module'
 import { PayablesModule } from './payables/payables.module'
@@ -21,6 +22,6 @@ import { TreasuryModule } from './treasury/treasury.module'
  */
 @Module({
   imports: [DbModule, PartnersModule, PayablesModule, TemporalModule, TreasuryModule],
-  controllers: [HealthController, PaymentsController],
+  controllers: [ExperimentsController, HealthController, PaymentsController],
 })
 export class AppModule {}

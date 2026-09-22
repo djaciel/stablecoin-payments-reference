@@ -11,7 +11,7 @@
  * variable.
  */
 
-import type { Health, Partners, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, Treasury } from '@payments/domain'
+import type { Experiments, Health, Partners, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, Treasury } from '@payments/domain'
 
 const API_BASE_PATH = '/api'
 
@@ -48,7 +48,7 @@ export function createPayable(invoice: { partnerId: string; amount: string; desc
  * own sentence when it sent one.
  */
 export async function payPayable(payableId: string, idempotencyKey: string): Promise<PaymentView> {
-  const response = await post('/payments', { payableId }, { 'idempotency-key': idempotencyKey })
+  const response = await write('POST', '/payments', { payableId }, { 'idempotency-key': idempotencyKey })
   if (!response.ok && response.status !== 422) {
     throw new Error(await refusalMessage(response))
   }
@@ -73,6 +73,16 @@ export function fundPartnerWallet(): Promise<PartnerWalletFunding> {
   return send<PartnerWalletFunding>('/treasury/fund-partner-wallet', undefined)
 }
 
+/** The failure-injection flags the Break it screen switches. */
+export function getExperiments(): Promise<Experiments> {
+  return read<Experiments>('/settings/experiments')
+}
+
+/** Answers the flags as stored, so the screen shows what the api holds, not what it sent. */
+export function setExperiments(experiments: Experiments): Promise<Experiments> {
+  return send<Experiments>('/settings/experiments', experiments, 'PUT')
+}
+
 /**
  * One rule for every endpoint: anything but a 2xx is a failure the screen shows as-is.
  * A degraded api (503 with a body) and an api that is not there at all (the proxy's own
@@ -91,17 +101,17 @@ async function read<T>(path: string): Promise<T> {
  * typed it needs to read ("name must be text of 1 to 80 characters"), and Nest puts that
  * sentence in the body. A bare status code would send them to the logs for a typo.
  */
-async function send<T>(path: string, body: unknown): Promise<T> {
-  const response = await post(path, body)
+async function send<T>(path: string, body: unknown, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
+  const response = await write(method, path, body)
   if (!response.ok) {
     throw new Error(await refusalMessage(response))
   }
   return (await response.json()) as T
 }
 
-function post(path: string, body: unknown, headers: Record<string, string> = {}): Promise<Response> {
+function write(method: 'POST' | 'PUT', path: string, body: unknown, headers: Record<string, string> = {}): Promise<Response> {
   return fetch(`${API_BASE_PATH}${path}`, {
-    method: 'POST',
+    method,
     headers: { 'content-type': 'application/json', ...headers },
     // Some of these endpoints are a verb with no arguments; they send no body at all.
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),

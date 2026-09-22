@@ -379,6 +379,39 @@ its reference. Reserved is there at once, Signed and Sent within seconds, Paid a
 finality, without a reload (keep the tab in front: a hidden tab pauses polling).
 `curl localhost:3000/payments/<its reference>/timeline` is the same story as data.
 
+## Breaking it on purpose: a revert you can switch on (§6, §9)
+
+§6: a transfer that reached the chain and reverted is the proof that nothing moved. One switch makes
+the next payment's transaction do exactly that, on the real network, for the price of its gas; until
+something reads that proof, the payment waits SENT with its money reserved.
+
+- `migrations/0009_settings.sql` — the `settings` table: one row per failure-injection flag. An
+  absent row is off.
+- `packages/domain/src/experiments.ts` — every flag in one place: its key, what it does, and the
+  `Experiments` shape the api answers and the screen sends.
+- `apps/api/src/experiments/experiments.controller.ts` — `GET` and `PUT /settings/experiments`; the
+  api stores the flags and never acts on one, so Pay and the Start screen work the same while one is armed.
+- `apps/api/src/app.module.ts` — registers that controller (it has no service, so no module).
+- `apps/worker/src/experiments.ts` — `claimRevertNextPayment`: one UPDATE takes the flag and switches
+  it off, so exactly one payment gets it.
+- `apps/worker/src/sign.ts` — the claim, inside the transaction that stores the hash (a rollback leaves
+  the flag armed); the `signed` row records the gas signed and what the payout would have had.
+- `apps/worker/src/config.ts` — `REVERT_GAS_LIMIT` (30,000): enough for a node to accept the
+  transaction, too little for the USDC contract to finish, so it is included and reverts.
+- `packages/chain/src/usdc.test.ts` — a real reverted receipt: `reverted` once its block is final, not
+  final one block before. A revert that is not final proves nothing yet.
+- `apps/ui/src/admin/BreakItScreen.tsx` — the Break it screen: "Revert the next payment", what it does
+  in the article's words, a red "armed" badge, Arm and Disarm.
+- `apps/ui/src/app/App.tsx` — the Break it tab, the one poll of the flags, and the red banner every admin
+  screen shows while one is armed.
+- `apps/ui/src/api/client.ts` — `getExperiments` and `setExperiments` (a PUT).
+- `apps/ui/src/admin/TransfersScreen.tsx` — the Signed line says when the gas limit was set too low on
+  purpose, with both numbers.
+
+See it (real testnet gas, no USDC moves): arm "Revert the next payment" on `/admin/break-it`, press
+Pay on a small invoice and open its story: Signed says the gas was set too low on purpose, the explorer
+shows it failed (out of gas, no Transfer), and it stays SENT with its amount in Reserved (`/treasury`).
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -391,6 +424,8 @@ finality, without a reload (keep the tab in front: a hidden tab pauses polling).
   and Pay, with each invoice's payment on its row.
 - `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, and each one's story
   step by step.
+- `apps/ui/src/admin/BreakItScreen.tsx` — the failure-injection switches; a red banner on every
+  admin screen while one is armed.
 - `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint.
   The shapes of the answers are in `packages/domain/src/api.ts`, which the api writes with
   and the browser reads.
@@ -399,7 +434,7 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-What happens when a transfer fails, and REVIEW with the money held and its resume (§6); deposits
-and treasury fundings on the Transfers screen, with the partner side that pays a receivable (§8);
-the four failures as buttons (§9); and reconciliation (§10) arrive in later phases. Each will add
-its entry here when it lands.
+A reverted payment ending FAILED with its reversal, and REVIEW with the money held and its resume
+(§6); deposits and treasury fundings on the Transfers screen, with the partner side that pays a
+receivable (§8); the four failures as buttons (§9); and reconciliation (§10) arrive in later phases.
+Each will add its entry here when it lands.

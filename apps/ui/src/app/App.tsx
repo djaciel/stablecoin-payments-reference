@@ -1,8 +1,13 @@
-import { NavLink, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, NavLink, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import type { Experiments } from '@payments/domain'
+import { BreakItScreen, type ExperimentsContext } from '../admin/BreakItScreen'
 import { PartnersScreen } from '../admin/PartnersScreen'
 import { PayablesScreen } from '../admin/PayablesScreen'
 import { StartScreen } from '../admin/StartScreen'
 import { TransfersScreen } from '../admin/TransfersScreen'
+import { getExperiments } from '../api/client'
+import { usePolling } from '../api/usePolling'
 import { PartnerHome } from '../partner/PartnerHome'
 
 /**
@@ -38,6 +43,7 @@ export function App() {
             <Route path="transfers" element={<TransfersScreen />} />
             {/* A payment's story has its own address, so an invoice row can link straight to it. */}
             <Route path="transfers/:reference" element={<TransfersScreen />} />
+            <Route path="break-it" element={<BreakItScreen />} />
           </Route>
           <Route path="/partner" element={<PartnerHome />} />
           {/* No landing page: `/` and anything unknown go to the company's side, where the demo starts. */}
@@ -48,8 +54,23 @@ export function App() {
   )
 }
 
-/** The company's screens, with their own row of tabs above whichever one is open. */
+/**
+ * The company's screens, with their own row of tabs above whichever one is open, and the one poll
+ * of the failure-injection flags: the banner on every screen and the Break it card both read it.
+ */
 function AdminScreens() {
+  const polled = usePolling(getExperiments)
+  // The poll and a switch on Break it both write here, so a change shows at once, banner included.
+  const [experiments, showExperiments] = useState<Experiments | undefined>(undefined)
+
+  useEffect(() => {
+    if (polled.data !== undefined) {
+      showExperiments(polled.data)
+    }
+  }, [polled.data])
+
+  const context: ExperimentsContext = { experiments, show: showExperiments }
+
   return (
     <>
       <nav className="sub-nav">
@@ -66,8 +87,22 @@ function AdminScreens() {
         <NavLink to="/admin/transfers" className={navClass}>
           Transfers
         </NavLink>
+        <NavLink to="/admin/break-it" className={navClass}>
+          Break it
+        </NavLink>
       </nav>
-      <Outlet />
+      {polled.error !== undefined && (
+        <p className="card-value is-bad flags-unavailable">
+          The failure-injection flags are unavailable — {polled.error}.
+          {experiments === undefined ? '' : " The banner and Break it show the api's last answer."}
+        </p>
+      )}
+      {experiments?.revertNextPayment === true && (
+        <p className="armed-banner">
+          Failure injection armed: the next payment will revert. <Link to="/admin/break-it">Break it</Link>
+        </p>
+      )}
+      <Outlet context={context} />
     </>
   )
 }

@@ -8,9 +8,10 @@ import { type LandedTransaction, USDC_ADDRESS, findSettlementLog, paidVerdict } 
  * transfer of 0.1 USDC (100000 units, 6 decimals). Copied verbatim from the receipt so
  * these tests exercise the shape the network actually produces.
  *
- * One test per thing the settlement rule claims to do. After the first `findSettlementLog`
- * test, each one is a transaction that SUCCEEDED on chain, and none of them is a payment.
- * `paidVerdict` adds the other half, finality: the right event alone is not paid yet.
+ * One test per thing the settlement rule claims to do. The other `findSettlementLog` tests are
+ * transactions that SUCCEEDED on chain, and none of them is a payment. `paidVerdict` adds the
+ * other half, finality: the right event alone is not paid yet, and a revert proves nothing until
+ * its block is final.
  */
 const PROBE_ADDRESS = getAddress('0x1Ac9Fe52f99fcb60C80EfB97f022a8BcA8a30423')
 const AMOUNT = 100_000n
@@ -86,5 +87,26 @@ describe('paidVerdict', () => {
 
     expect(verdict.outcome).toBe('paid')
     expect(verdict.outcome === 'paid' ? verdict.log.logIndex : undefined).toBe(89)
+  })
+
+  it('calls a reverted transfer reverted only once its block is final', () => {
+    // Real, too: USDC transfer(self, 10000) signed with a gas limit of 30,000 on Base Sepolia, tx
+    // 0x1e17bf863c094adeabfc8445d3a7ad3188bd138f48ceabf38bd86dac92bb4891. Included in this block, it
+    // used all 30,000 gas and reverted: no logs, no USDC moved.
+    const revertedBlock = 47150903n
+    const reverted: LandedTransaction = { status: 'reverted', blockNumber: revertedBlock, logs: [] }
+    const expected = { from: PROBE_ADDRESS, to: PROBE_ADDRESS, amount: 10_000n }
+
+    expect(paidVerdict(reverted, revertedBlock, expected)).toEqual({
+      outcome: 'reverted',
+      blockNumber: revertedBlock,
+      finalBlock: revertedBlock,
+    })
+    // A revert that is not final proves nothing yet: that block can still be replaced.
+    expect(paidVerdict(reverted, revertedBlock - 1n, expected)).toEqual({
+      outcome: 'not-final',
+      blockNumber: revertedBlock,
+      finalBlock: revertedBlock - 1n,
+    })
   })
 })

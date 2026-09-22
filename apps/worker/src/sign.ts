@@ -13,8 +13,9 @@ import {
 import { inTransaction, type PoolClient } from '@payments/db'
 import { AUDIT_ACTORS, AUDIT_SUBJECTS, PAYMENT_EVENTS, recordAudit } from '@payments/ledger'
 import { getAddress, keccak256 } from 'viem'
-import { FEE_CAP_MULTIPLIER, GAS_HEADROOM_PERCENT } from './config'
+import { FEE_CAP_MULTIPLIER, GAS_HEADROOM_PERCENT, REVERT_GAS_LIMIT } from './config'
 import { workerPool } from './db'
+import { claimRevertNextPayment } from './experiments'
 
 const chain = createChainClient()
 const signer = new SignerClient(readSignerUrl())
@@ -36,7 +37,7 @@ export interface SigningInput {
 
 export type SignOutcome =
   /** Signed now: hash, bytes and nonce are committed on the row. */
-  | { readonly kind: 'signed'; readonly txHash: string; readonly nonce: number }
+  | { readonly kind: 'signed'; readonly txHash: string; readonly nonce: number; readonly gasTooLowOnPurpose: boolean }
   /** Signed before: the signer was not asked, and this is the stored hash. */
   | { readonly kind: 'already-signed'; readonly txHash: string; readonly nonce: number }
   /** No longer RESERVED, so there is nothing to sign. */
@@ -101,6 +102,11 @@ export async function signPayment(
     const stored = await client.query<{ next: number | null }>('SELECT max(nonce) + 1 AS next FROM payments')
     const nonce = Math.max(input.pendingNonce, stored.rows[0]?.next ?? 0)
 
+    // Break it's revert flag, claimed in this transaction: a rollback (the signer down) leaves it
+    // armed, and two payments signing together cannot both take it.
+    const gasTooLowOnPurpose = await claimRevertNextPayment(client)
+    const gas = gasTooLowOnPurpose ? REVERT_GAS_LIMIT : input.gas
+
     // 4. The signer, inside the transaction. Not the "no network inside a transaction" case: a
     //    compose-internal call with a 5 s timeout, and holding the row lock across it is what
     //    keeps sign and cancel from interleaving (spec, Release rule).
@@ -108,7 +114,7 @@ export async function signPayment(
       to: getAddress(locked.destination),
       amount: BigInt(locked.amount_minor),
       nonce,
-      gas: input.gas,
+      gas,
       maxFeePerGas: input.maxFeePerGas,
       maxPriorityFeePerGas: input.maxPriorityFeePerGas,
     })
@@ -134,12 +140,14 @@ export async function signPayment(
       context: {
         txHash: signed.hash,
         nonce,
-        gas: input.gas,
+        gas,
+        // What the payout would have been signed with, next to the gas it was signed with.
+        ...(gasTooLowOnPurpose ? { failureInjection: 'revert_next_payment', estimatedGas: input.gas } : {}),
         maxFeePerGas: input.maxFeePerGas,
         maxPriorityFeePerGas: input.maxPriorityFeePerGas,
       },
     })
-    return { kind: 'signed', txHash: signed.hash, nonce }
+    return { kind: 'signed', txHash: signed.hash, nonce, gasTooLowOnPurpose }
   })
 }
 
@@ -194,6 +202,9 @@ function report(reference: string, outcome: SignOutcome): string {
   switch (outcome.kind) {
     case 'signed':
       line = `signed ${outcome.txHash} (nonce ${outcome.nonce})`
+      if (outcome.gasTooLowOnPurpose) {
+        line += `, with a gas limit of ${REVERT_GAS_LIMIT} set too low on purpose (Break it): it will be included and revert`
+      }
       break
     case 'already-signed':
       line = `already signed ${outcome.txHash} (nonce ${outcome.nonce})`
