@@ -181,6 +181,47 @@ See it: write an invoice for a partner on `/admin/receivables`, watch Partner re
 while Available, Reserved and Partner debt do not move, then open `/partner`, pick that partner
 and read the same invoice next to the address it pays at.
 
+## Paying from the other side (§8)
+
+One machine plays both parts here, so the partner's wallet is signed for in the api, with a second
+seed the signing service never sees. The hash goes on the invoice before the bytes are broadcast,
+which is what lets the company attribute the deposit by hash instead of by guesswork, and the
+company's books do not move at all: they move when its own watcher sees the money arrive.
+
+- `apps/api/src/demo-scaffolding/partner-payments.service.ts` — the flow in seven numbered steps:
+  one payment at a time (one wallet, one nonce), refuse before anything is signed, sign, store the
+  hash and turn the invoice PAYING, broadcast, then check the receipt against the official contract.
+- `apps/api/src/demo-scaffolding/demo-scaffolding.controller.ts` — `POST /demo/partner-payments`
+  `{ receivableId }`: 404 unknown, 409 while another payment is in flight, 422 refused with what
+  the chain said and the invoice open again.
+- `apps/api/src/demo-scaffolding/demo-scaffolding.module.ts` — the partner seed and this service,
+  wired to the pool and the chain client. The signer is not among its dependencies, on purpose.
+- `packages/chain/src/send.ts` — the two steps every broadcast in this repo takes, shared by the
+  treasury and the partner: send the bytes, check the network kept their name, wait for the receipt.
+- `apps/api/src/receivables/receivables.service.ts` — one SELECT for every read of an invoice, and
+  the deposit address on it: the address IS the attribution, so it travels with the row.
+- `packages/ledger/src/audit.ts` — `payment-refused` next to `payment-sent`: an invoice that goes
+  back to OPEN says in the log why, with the chain's own sentence.
+- `packages/domain/src/api.ts` — `PartnerPaymentReceipt`: the invoice, the transfer, the fee in the
+  network's own currency, and what the wallet holds after.
+- `apps/ui/src/partner/PartnerHome.tsx` — Pay on each open invoice, the confirmation that says what
+  a real partner would do instead, and the receipt with its explorer link.
+- `apps/ui/src/admin/ReceivablesScreen.tsx` — the company's side of the same invoice: PAYING, with
+  the transaction the partner recorded, before the watcher has seen anything.
+- `apps/ui/src/api/client.ts` — `payReceivable`, which waits out the transaction because the answer
+  is the evidence.
+
+See it (this sends real testnet USDC): on `/partner` pick a partner with an open invoice, press
+**Pay**, read the three steps and confirm. The row turns PAYING with its hash, the explorer shows one
+Transfer from the shared wallet to that partner's deposit address, and the Books on `/admin` are
+exactly where they were.
+
+```
+docker compose exec postgres psql -U payments -d payments \
+  -c "SELECT status, payment_tx_hash FROM receivables"        # PAYING, with the hash
+docker compose logs --tail=40 worker                          # seen at a deposit address, not posted
+```
+
 ## The payment API: one key, one payment (§4, §5, §9)
 
 A payment is created, checked and has its money set aside in one database transaction,
@@ -608,6 +649,6 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-Deposits and treasury fundings on the Transfers screen, with the partner side that pays a
-receivable (§8); the other two failures of §9, the double click and the race, as Run it cards of
-their own; and reconciliation (§10) arrive in later phases. Each will add its entry here when it lands.
+Deposits and treasury fundings on the Transfers screen, and the credit that turns a partner's
+transfer into money on the books (§8); the other two failures of §9, the double click and the race,
+as Run it cards of their own; and reconciliation (§10) arrive in later phases. Each will add its entry here when it lands.

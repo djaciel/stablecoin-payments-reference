@@ -74,6 +74,7 @@ function ReceivableTable({ receivables }: { readonly receivables: Receivables['r
               <th>Description</th>
               <th className="is-number">Amount</th>
               <th>State</th>
+              <th>Transaction</th>
             </tr>
           </thead>
           <tbody>
@@ -83,12 +84,27 @@ function ReceivableTable({ receivables }: { readonly receivables: Receivables['r
                 <td>{invoice.description}</td>
                 <td className="is-number">{invoice.amount} USDC</td>
                 <td>{invoice.status}</td>
+                <td>
+                  {/* The hash the partner stored before broadcasting: the company reads it here
+                      before its own watcher has seen a thing. Shortened because it shares a row
+                      with four other columns; /partner prints it in full, to paste. */}
+                  {invoice.transaction === null ? (
+                    '—'
+                  ) : (
+                    <a href={invoice.transaction.explorerUrl} target="_blank" rel="noreferrer">
+                      {shortHash(invoice.transaction.hash)}
+                    </a>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="card-note">There is no Pay button here: the partner pays these from its own side, on /partner.</p>
+      <p className="card-note">
+        There is no Pay button here: the partner pays these from its own side, on /partner. A PAYING invoice already
+        carries the hash the partner recorded before broadcasting; it is credited when the watcher sees the money.
+      </p>
     </section>
   )
 }
@@ -177,6 +193,11 @@ function CreateReceivable({
       )}
     </section>
   )
+}
+
+/** Enough of a hash to recognise it next to the explorer, without eating the row. */
+function shortHash(hash: string): string {
+  return `${hash.slice(0, 10)}…${hash.slice(-6)}`
 }
 
 /** One line of a figures list: the label a human reads, the value the api sent, unrounded. */

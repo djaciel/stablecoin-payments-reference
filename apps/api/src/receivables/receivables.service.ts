@@ -1,5 +1,6 @@
 import { BadRequestException, UnprocessableEntityException } from '@nestjs/common'
 import { explorerTransactionUrl } from '@payments/chain'
+import { getAddress, type Address } from 'viem'
 import { inTransaction, type Pool, type PoolClient } from '@payments/db'
 import type { ReceivableSummary } from '@payments/domain'
 import {
@@ -33,6 +34,8 @@ export interface Receivable {
   readonly status: ReceivableSummary['status']
   /** Stored before the partner broadcasts its transfer, which is what lets a deposit match back. */
   readonly paymentTxHash: string | null
+  /** Where this invoice is paid: the partner's deposit address, which is the attribution itself. */
+  readonly depositAddress: Address
 }
 
 /** Everything the Receivables screen shows. */
@@ -156,7 +159,14 @@ interface ReceivableRow {
   readonly description: string
   readonly status: ReceivableSummary['status']
   readonly payment_tx_hash: string | null
+  readonly deposit_address: string
 }
+
+/** One invoice, written once: every read of one goes through this SELECT and `toReceivable`. */
+const READ_RECEIVABLE = `SELECT r.id, partners.name AS partner_name, r.amount_minor, r.description, r.status,
+          r.payment_tx_hash, partners.deposit_address
+     FROM receivables r
+     JOIN partners ON partners.id = r.partner_id`
 
 /**
  * Newest first, for one partner or for all of them. Exported because the partner screen reads the
@@ -164,14 +174,17 @@ interface ReceivableRow {
  */
 export async function readReceivables(db: Pool | PoolClient, partnerId?: string): Promise<Receivable[]> {
   const result = await db.query<ReceivableRow>(
-    `SELECT r.id, partners.name AS partner_name, r.amount_minor, r.description, r.status, r.payment_tx_hash
-       FROM receivables r
-       JOIN partners ON partners.id = r.partner_id
-      WHERE $1::uuid IS NULL OR r.partner_id = $1
-      ORDER BY r.created_at DESC`,
+    `${READ_RECEIVABLE} WHERE $1::uuid IS NULL OR r.partner_id = $1 ORDER BY r.created_at DESC`,
     [partnerId ?? null],
   )
   return result.rows.map(toReceivable)
+}
+
+/** The one invoice a partner is about to pay (`demo-scaffolding/partner-payments.service.ts`). */
+export async function readReceivable(db: Pool | PoolClient, id: string): Promise<Receivable | undefined> {
+  const result = await db.query<ReceivableRow>(`${READ_RECEIVABLE} WHERE r.id = $1`, [id])
+  const row = result.rows[0]
+  return row === undefined ? undefined : toReceivable(row)
 }
 
 /** One invoice as both screens show it. Shared, so the two reads cannot describe it differently. */
@@ -197,5 +210,6 @@ function toReceivable(row: ReceivableRow): Receivable {
     description: row.description,
     status: row.status,
     paymentTxHash: row.payment_tx_hash,
+    depositAddress: getAddress(row.deposit_address),
   }
 }

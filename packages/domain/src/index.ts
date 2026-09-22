@@ -13,6 +13,7 @@ export type {
   GasSpent,
   Health,
   LedgerFigures,
+  PartnerPaymentReceipt,
   PartnerSummary,
   Partners,
   PartnerView,

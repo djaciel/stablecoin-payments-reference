@@ -1,15 +1,23 @@
 import { Logger, UnprocessableEntityException } from '@nestjs/common'
 import {
+  BroadcastRefused,
   ERC20_ABI,
+  GAS_AT_INCLUSION,
+  ReceiptMissing,
   USDC_ADDRESS,
   chainErrorMessage,
   explorerTransactionUrl,
   findSettlementLog,
   readUsdcBalance,
   rpcHost,
+  sendSigned,
+  transactionCost,
+  waitForReceipt,
   type ChainClient,
+  type Receipt,
   type SignedTransaction,
   type SignerClient,
+  type TransactionCost,
 } from '@payments/chain'
 import type { Pool, PoolClient } from '@payments/db'
 import type { FundingAmounts, FundingTransfer, GasSpent, PartnerWalletFunding } from '@payments/domain'
@@ -67,25 +75,9 @@ const REQUIRED_ETH = FUNDING_ETH + GAS_ALLOWANCE
 
 const FAUCET_DOC = 'docs/dev/faucets.md'
 
-/**
- * How the gas figure is qualified wherever it is published. Base serves `l1Fee` as soon as the
- * transaction is included, and that first answer can be an over-estimate the node later
- * revises — still the only honest source without re-reading the chain, so it is labelled.
- */
-const GAS_BASIS = 'as reported at inclusion; the explorer is the source'
-
-/** How long to wait for a receipt before giving up. Base Sepolia produces a block every ~2 s. */
-const RECEIPT_TIMEOUT_MS = 60_000
-
 /** How many times to ask for the balances at a block the answering node may not have yet. */
 const BALANCE_READ_ATTEMPTS = 3
 const BALANCE_READ_WAIT_MS = 1_500
-
-/**
- * The receipt as this chain formats it: Base is an L2, so a viem receipt from it carries the
- * cost of posting the transaction's data to Ethereum (`l1Fee`) next to the usual gas fields.
- */
-type Receipt = Awaited<ReturnType<ChainClient['waitForTransactionReceipt']>>
 
 /**
  * "Fund partner wallet": two transactions from the treasury and one entry in the books.
@@ -170,7 +162,7 @@ export class FundPartnerWalletService {
     this.verifyTransfer(usdcReceipt, { from: treasury, to: partnerWallet })
 
     // 6. The entry and its audit row, together.
-    const gasSpent = addCosts(costOf(usdcReceipt), costOf(gasReceipt))
+    const gasSpent = addCosts(transactionCost(usdcReceipt), transactionCost(gasReceipt))
     const posted = await this.postScaffolding({ usdcReceipt, gasReceipt, gasSpent })
 
     // 7. What the screen shows, with the balances pinned to the block the money landed in.
@@ -249,37 +241,28 @@ export class FundPartnerWalletService {
     }
   }
 
-  /**
-   * Sends the raw bytes and checks the network agreed about their name. Not ceremony: the
-   * explorer link, the ledger reference and the retry that must re-send these exact bytes are
-   * all that hash, so a node answering with another one would make all of them point at a
-   * transaction nobody has.
-   */
+  /** `sendSigned` does the sending and the hash check; what a refusal means here is this line. */
   private async broadcast(signed: SignedTransaction, what: string): Promise<Hex> {
-    let accepted: Hex
     try {
-      accepted = await this.chain.sendRawTransaction({ serializedTransaction: signed.signedTransaction })
+      return await sendSigned(this.chain, signed, what)
     } catch (error) {
-      throw new UnprocessableEntityException(
-        `the chain (RPC ${rpcHost()}) refused ${what}: ${chainErrorMessage(error)}. Nothing was posted to the books.`,
-      )
+      if (error instanceof BroadcastRefused) {
+        throw new UnprocessableEntityException(`${error.message}. Nothing was posted to the books.`)
+      }
+      throw error
     }
-
-    if (accepted !== signed.hash) {
-      throw new Error(
-        `the network accepted a different transaction than the one signed for ${what}: ${accepted} instead of ${signed.hash}. The stored hash would be worthless.`,
-      )
-    }
-    return accepted
   }
 
   private async awaitReceipt(hash: Hex, what: string): Promise<Receipt> {
     try {
-      return await this.chain.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS })
+      return await waitForReceipt(this.chain, hash, what)
     } catch (error) {
-      throw new UnprocessableEntityException(
-        `${what} was broadcast as ${hash} but no receipt arrived (RPC ${rpcHost()}): ${chainErrorMessage(error)}. Nothing was posted to the books; check ${explorerTransactionUrl(hash)} before sending again.`,
-      )
+      if (error instanceof ReceiptMissing) {
+        throw new UnprocessableEntityException(
+          `${error.message}. Nothing was posted to the books; check ${explorerTransactionUrl(hash)} before sending again.`,
+        )
+      }
+      throw error
     }
   }
 
@@ -312,7 +295,7 @@ export class FundPartnerWalletService {
   private async postScaffolding(landed: {
     usdcReceipt: Receipt
     gasReceipt: Receipt
-    gasSpent: GasCost
+    gasSpent: TransactionCost
   }): Promise<boolean> {
     const txHash = landed.usdcReceipt.transactionHash
     const reference = scaffoldingReference(txHash)
@@ -327,7 +310,7 @@ export class FundPartnerWalletService {
 
       // Everything the books deliberately refuse to hold. The gas comes from the receipts, not
       // from a balance read before and after, which two nodes at different heights could
-      // answer with zero. Its halves stay apart and dated: see `GAS_BASIS`.
+      // answer with zero. Its halves stay apart and dated: see `GAS_AT_INCLUSION`.
       await recordAudit(client, {
         actor: AUDIT_ACTORS.api,
         subjectType: AUDIT_SUBJECTS.demo,
@@ -343,7 +326,7 @@ export class FundPartnerWalletService {
           gasSpent: {
             l2FeeWei: landed.gasSpent.l2FeeWei,
             l1FeeWei: landed.gasSpent.l1FeeWei,
-            note: GAS_BASIS,
+            note: GAS_AT_INCLUSION,
           },
           currency: CURRENCY,
           ledgerTransactionId,
@@ -399,34 +382,18 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** The two halves of what running a transaction cost, in wei. Never added up silently. */
-interface GasCost {
-  /** Executing it on Base: settled as soon as the receipt exists. */
-  readonly l2FeeWei: bigint
-  /** Posting its bytes to Ethereum: the node's figure at inclusion — see `GAS_BASIS`. */
-  readonly l1FeeWei: bigint
-}
-
-/**
- * What running one transaction cost, from the receipt and never from the difference between
- * two balance reads (v1's lesson: a lagging node makes that subtraction report zero). Both
- * fees, because on a cheap L2 the one paid to store the bytes on Ethereum is the bigger half.
- */
-function costOf(receipt: Receipt): GasCost {
-  return { l2FeeWei: receipt.gasUsed * receipt.effectiveGasPrice, l1FeeWei: receipt.l1Fee ?? 0n }
-}
-
-function addCosts(first: GasCost, second: GasCost): GasCost {
+/** This button sends two transactions, so the two halves of their cost are added half by half. */
+function addCosts(first: TransactionCost, second: TransactionCost): TransactionCost {
   return { l2FeeWei: first.l2FeeWei + second.l2FeeWei, l1FeeWei: first.l1FeeWei + second.l1FeeWei }
 }
 
 /** The same figure the audit row keeps, in ether and with its caveat attached. */
-function gasSpentView(cost: GasCost): GasSpent {
+function gasSpentView(cost: TransactionCost): GasSpent {
   return {
     totalEth: formatEther(cost.l2FeeWei + cost.l1FeeWei),
     l2Eth: formatEther(cost.l2FeeWei),
     l1Eth: formatEther(cost.l1FeeWei),
-    basis: GAS_BASIS,
+    basis: GAS_AT_INCLUSION,
   }
 }
 

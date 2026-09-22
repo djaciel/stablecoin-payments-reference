@@ -11,7 +11,7 @@
  * variable.
  */
 
-import type { Experiments, Health, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, Receivables, Treasury } from '@payments/domain'
+import type { Experiments, Health, PartnerPaymentReceipt, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, Receivables, Treasury } from '@payments/domain'
 
 const API_BASE_PATH = '/api'
 
@@ -53,6 +53,16 @@ export function createReceivable(invoice: { partnerId: string; amount: string; d
 /** The whole partner screen in one read: the selector, what that partner owes, and its two addresses. */
 export function getPartnerView(partnerId: string | null): Promise<PartnerView> {
   return read<PartnerView>(partnerId === null ? '/partners/view' : `/partners/view?partnerId=${encodeURIComponent(partnerId)}`)
+}
+
+/**
+ * The partner pays one of its invoices from the shared wallet. It takes as long as one
+ * transaction takes to land (a few seconds on Base Sepolia) because the answer is the evidence:
+ * the hash, the block and what the wallet holds after. A 409 (another payment in flight) and a
+ * 422 (refused, and the invoice open again) both throw with the api's own sentence.
+ */
+export function payReceivable(receivableId: string): Promise<PartnerPaymentReceipt> {
+  return send<PartnerPaymentReceipt>('/demo/partner-payments', { receivableId })
 }
 
 /**

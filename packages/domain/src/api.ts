@@ -181,6 +181,30 @@ export interface Receivables {
 }
 
 /**
+ * What `POST /demo/partner-payments` answers once the transfer has landed: the invoice as both
+ * screens now list it, the transaction that paid it, and what the partner wallet holds after.
+ *
+ * Nothing about the company's books, because nothing there moved: the company credits the invoice
+ * when its own watcher sees the money, not when the partner clicks.
+ */
+export interface PartnerPaymentReceipt {
+  readonly receivable: ReceivableSummary
+  readonly transaction: { readonly hash: string; readonly explorerUrl: string; readonly blockNumber: string }
+  /** The shared partner wallet, and the deposit address of the partner that owed the invoice. */
+  readonly from: string
+  readonly to: string
+  readonly amount: string
+  /** What sending it cost, in the network's own currency: fees are never paid in stablecoin. */
+  readonly gasEth: string
+  /** Where that figure comes from, in a sentence a screen prints, like `GasSpent.basis`. */
+  readonly gasBasis: string
+  /** What the company has done about this money, which is nothing yet. Prose, and the point. */
+  readonly credit: string
+  /** Read at the block the transfer landed in, or null when that read failed. */
+  readonly partnerWallet: { readonly usdc: string; readonly eth: string } | null
+}
+
+/**
  * What `GET /partners/view` answers: the whole `/partner` screen in one read. `partners` is the
  * selector's list; everything else is about the selected one.
  */

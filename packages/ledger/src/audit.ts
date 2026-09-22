@@ -40,8 +40,17 @@ export const PAYMENT_EVENTS = {
  */
 export const PAYABLE_EVENTS = { created: 'created', paymentLinked: 'payment-linked', paid: 'paid', reopened: 'reopened' } as const
 
-/** A receivable's events: written, paid by the partner, then credited by the watcher. */
-export const RECEIVABLE_EVENTS = { created: 'created', paymentSent: 'payment-sent', paid: 'paid' } as const
+/**
+ * A receivable's events: written, paid by the partner, then credited by the watcher.
+ * `payment-refused` is the other end of `payment-sent` — the invoice went back to OPEN because
+ * the chain would not take the transfer, or took something else.
+ */
+export const RECEIVABLE_EVENTS = {
+  created: 'created',
+  paymentSent: 'payment-sent',
+  paymentRefused: 'payment-refused',
+  paid: 'paid',
+} as const
 
 /** The watcher's one event, and the demo scaffolding's. */
 export const TREASURY_EVENTS = { funded: 'funded' } as const

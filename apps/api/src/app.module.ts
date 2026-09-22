@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { DbModule } from './db/db.module'
+import { DemoScaffoldingModule } from './demo-scaffolding/demo-scaffolding.module'
 import { ExperimentsController } from './experiments/experiments.controller'
 import { HealthController } from './health/health.controller'
 import { PartnersModule } from './partners/partners.module'
@@ -22,7 +23,7 @@ import { TreasuryModule } from './treasury/treasury.module'
  * last funding, so it owns its controller and brings its own dependencies with it.
  */
 @Module({
-  imports: [DbModule, PartnersModule, PayablesModule, ReceivablesModule, TemporalModule, TreasuryModule],
+  imports: [DbModule, DemoScaffoldingModule, PartnersModule, PayablesModule, ReceivablesModule, TemporalModule, TreasuryModule],
   controllers: [ExperimentsController, HealthController, PaymentsController],
 })
 export class AppModule {}
