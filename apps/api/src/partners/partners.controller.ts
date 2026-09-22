@@ -1,9 +1,8 @@
 import { BadRequestException, Body, Controller, Get, Inject, Logger, Post, ServiceUnavailableException } from '@nestjs/common'
-import { chainErrorMessage, explorerAddressUrl, readUsdcBalance, rpcHost, type ChainClient } from '@payments/chain'
+import { SignerUnavailableError, chainErrorMessage, explorerAddressUrl, readUsdcBalance, rpcHost, type ChainClient } from '@payments/chain'
 import type { PartnerSummary, Partners } from '@payments/domain'
 import { formatMinor } from '@payments/ledger'
 import { CHAIN_CLIENT } from '../chain/chain.module'
-import { SignerUnavailableError } from '../signer/signer-client.service'
 import { PARTNERS_SERVICE, type Partner, type PartnersService } from './partners.service'
 
 /** The longest name the screen shows without wrapping into nonsense. */

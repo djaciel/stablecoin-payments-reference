@@ -1,4 +1,5 @@
 import { createHash, randomInt } from 'node:crypto'
+import { explorerTransactionUrl } from '@payments/chain'
 import { applyGuardedTransition, type Pool, type PoolClient } from '@payments/db'
 import type { PaymentFailureReason, PaymentView } from '@payments/domain'
 import { InsufficientFunds, LedgerRejected, formatMinor, recordAudit, reserve, toMinorFromDecimal } from '@payments/ledger'
@@ -14,7 +15,8 @@ import { screenPayment } from './compliance'
 const MIN_PAYMENT = toMinorFromDecimal(MIN_PAYMENT_USDC)
 const MAX_PAYMENT = toMinorFromDecimal(MAX_PAYMENT_USDC)
 const REFERENCE_ATTEMPTS = 5
-const COLUMNS = 'reference, status, payable_id, destination, amount_minor, currency, failure_reason, request_fingerprint, created_at'
+const COLUMNS =
+  'reference, status, payable_id, destination, amount_minor, currency, failure_reason, request_fingerprint, tx_hash, created_at'
 
 export interface PaymentRequest {
   readonly idempotencyKey: string
@@ -214,6 +216,7 @@ interface PaymentRow {
   readonly currency: string
   readonly failure_reason: PaymentFailureReason | null
   readonly request_fingerprint: string
+  readonly tx_hash: string | null
   readonly created_at: Date
 }
 
@@ -225,6 +228,12 @@ function toView(row: PaymentRow): PaymentView {
     destination: row.destination,
     payableId: row.payable_id,
     reason: row.failure_reason ?? undefined,
+    transaction: transactionView(row.tx_hash),
     createdAt: row.created_at.toISOString(),
   }
+}
+
+/** The hash and its explorer link, once `sign` has stored one. Shared with the Payables screen's read. */
+export function transactionView(txHash: string | null): PaymentView['transaction'] {
+  return txHash === null ? undefined : { hash: txHash, explorerUrl: explorerTransactionUrl(txHash) }
 }

@@ -2,7 +2,7 @@ import { Logger, type OnApplicationBootstrap } from '@nestjs/common'
 import { inTransaction, type Pool, type PoolClient } from '@payments/db'
 import { getAddress, type Address } from 'viem'
 import type { PartnerKeysService } from '../demo-scaffolding/partner-keys.service'
-import type { SignerClient } from '../signer/signer-client.service'
+import type { SignerClient } from '@payments/chain'
 
 /**
  * Here rather than in `partners.module.ts`, like the treasury's token: the module registers

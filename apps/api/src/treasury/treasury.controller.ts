@@ -1,10 +1,9 @@
 import { Controller, Get, HttpCode, HttpStatus, Inject, Logger, Post, ServiceUnavailableException } from '@nestjs/common'
-import { chainErrorMessage, explorerAddressUrl, readUsdcBalance, rpcHost, type ChainClient } from '@payments/chain'
+import { SignerUnavailableError, chainErrorMessage, explorerAddressUrl, readUsdcBalance, rpcHost, type ChainClient } from '@payments/chain'
 import type { PartnerWalletFunding, Treasury } from '@payments/domain'
 import { formatMinor } from '@payments/ledger'
 import { formatEther, type Address } from 'viem'
 import { CHAIN_CLIENT } from '../chain/chain.module'
-import { SignerUnavailableError } from '../signer/signer-client.service'
 import { FUND_PARTNER_WALLET_SERVICE, type FundPartnerWalletService } from './fund-partner-wallet.service'
 import { TREASURY_SERVICE, type TreasuryService } from './treasury.service'
 

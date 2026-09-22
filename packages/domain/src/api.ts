@@ -137,7 +137,7 @@ export interface PayableSummary {
    * The payment on this invoice: the one paying it, else its latest attempt (a FAILED one leaves
    * the invoice OPEN, to be paid again). Null until someone presses Pay.
    */
-  readonly payment: Pick<PaymentView, 'reference' | 'status' | 'reason'> | null
+  readonly payment: Pick<PaymentView, 'reference' | 'status' | 'reason' | 'transaction'> | null
 }
 
 /**
@@ -173,5 +173,7 @@ export interface PaymentView {
   /** The invoice it pays. Null only for a payment to an address, which has no invoice. */
   readonly payableId: string | null
   readonly reason?: PaymentFailureReason
+  /** Present once the payment is signed: the hash exists, and is stored, before anything is sent. */
+  readonly transaction?: { readonly hash: string; readonly explorerUrl: string }
   readonly createdAt: string
 }

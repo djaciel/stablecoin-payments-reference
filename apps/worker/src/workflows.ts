@@ -9,33 +9,30 @@ const { watchChain } = proxyActivities<typeof activities>({
   retry: { maximumAttempts: 3, initialInterval: '1 second', backoffCoefficient: 1 },
 })
 
-const { sign, execute, watch, settle } = proxyActivities<typeof activities>({
-  // Generous on purpose: the heartbeat timeout, not this one, is what detects a dead
-  // worker. Retries use the SDK defaults, which means unlimited attempts — acceptable
-  // while the steps only sleep. Phase 5 bounds them and escalates to REVIEW instead.
-  startToCloseTimeout: '1 minute',
-  heartbeatTimeout: '5 seconds',
+const { sign, execute } = proxyActivities<typeof activities>({
+  startToCloseTimeout: '30 seconds',
+  // No `maximumAttempts`, on purpose and unlike the watcher: a failing step waits, visibly in the
+  // Temporal UI, with the money still reserved. Phase 6 bounds it and escalates to REVIEW.
+  retry: { initialInterval: '1 second', backoffCoefficient: 2, maximumInterval: '30 seconds' },
 })
 
 /**
  * The chain-side half of a payment. The API owns everything before this — validations, the
- * ledger reserve, the CREATED → RESERVED transition — and starts this workflow only once
- * that is committed. The workflow id is the payment reference, which is what makes
- * dispatching twice a no-op.
+ * ledger reserve, the CREATED → RESERVED transition — and this workflow starts only once that is
+ * committed. The workflow id is the payment reference, and each step gets the reference and
+ * nothing else: it reads the row and skips what is already done.
  *
  * Everything awaited here is recorded in Temporal's history, so a worker that dies mid-run
  * replays from it: finished steps return their recorded result instead of running again.
  */
 export async function PaymentWorkflow(reference: string): Promise<string[]> {
-  const timeline: string[] = []
+  // Signed (§7): the hash exists, and is stored on the row, before anything is sent.
+  const signed = await sign(reference)
+  // Sent (§7): a node has the stored bytes. `execute` is §3's "Execution" box.
+  const sent = await execute(reference)
 
-  timeline.push(await sign(reference))
-  timeline.push(await execute(reference))
-  timeline.push(await watch(reference))
-  timeline.push(await settle(reference))
-
-  log.info(`${reference}: ${timeline.join(' → ')}`)
-  return timeline
+  log.info(`${reference}: ${signed} → ${sent}`)
+  return [signed, sent]
 }
 
 /** 11 history events per iteration (measured), so a run closes under 4,000 — an hour at 10s. */

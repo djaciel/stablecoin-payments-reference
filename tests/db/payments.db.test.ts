@@ -1,9 +1,9 @@
 import { inTransaction } from '@payments/db'
 import type { PaymentView } from '@payments/domain'
-import { ARTICLE_PARTNER_DEBT, seedArticle, withLedgerTransaction } from '@payments/ledger'
+import { seedArticle, withLedgerTransaction } from '@payments/ledger'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { createPayment, type PaymentOutcome, type PaymentRequest } from '../../apps/api/src/payments/create-payment'
-import { barrier, resetDatabase, testPool, withClient } from './helpers/database'
+import { barrier, resetDatabase, seedInvoices, testPool, withClient } from './helpers/database'
 
 /**
  * The article's idempotency key (§4) against real Postgres: one key is one payment, whatever the
@@ -11,7 +11,6 @@ import { barrier, resetDatabase, testPool, withClient } from './helpers/database
  * instant (§9's double click).
  */
 
-const PAYOUT_ADDRESS = '0x1111111111111111111111111111111111111111'
 const KEY = 'abc-123'
 
 const pool = testPool()
@@ -24,7 +23,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await resetDatabase(pool)
   await withLedgerTransaction(pool, (client) => seedArticle(client))
-  invoices = await seedInvoices()
+  invoices = await seedInvoices(pool)
 })
 
 describe('one idempotency key, one payment', () => {
@@ -83,29 +82,6 @@ function paymentOf(outcome: PaymentOutcome): PaymentView {
     throw new Error(`expected a payment, got ${outcome.kind}`)
   }
   return outcome.payment
-}
-
-/**
- * The first invoice is the Partner debt `seedArticle` put on the books (§7's 1,000); the second is
- * only there to be "a different body". Written straight to the table: these tests are about the
- * payment, not about how invoices are created.
- */
-async function seedInvoices(): Promise<{ first: string; second: string }> {
-  const partner = await pool.query<{ id: string }>(
-    `INSERT INTO partners (name, derivation_index, deposit_address, payout_address)
-     VALUES ('Bluefin Studio', 1, '0x2222222222222222222222222222222222222222', $1) RETURNING id`,
-    [PAYOUT_ADDRESS],
-  )
-  const payables = await pool.query<{ id: string }>(
-    `INSERT INTO payables (partner_id, destination, amount_minor, description)
-     VALUES ($1, $2, $3, 'March logistics'), ($1, $2, $3, 'April logistics') RETURNING id`,
-    [partner.rows[0]?.id, PAYOUT_ADDRESS, ARTICLE_PARTNER_DEBT.toString()],
-  )
-  const [first, second] = payables.rows
-  if (first === undefined || second === undefined) {
-    throw new Error('the two invoices were not written')
-  }
-  return { first: first.id, second: second.id }
 }
 
 /** Everything a payment can write. "Nothing new" means none of these moved. */

@@ -1,5 +1,9 @@
 # Restart survival: killing the worker mid-step
 
+> **Out of date.** The drill below was run on placeholder steps and `pnpm demo:workflow`, both
+> gone now that `sign` and `execute` are real. It is rewritten on a real payment's wait for
+> finality when that step lands; the restart facts in it (what Docker restarts, and why) still hold.
+
 The claim this repo has to back is that a payment in flight does not depend on a process
 staying alive. This is the drill that proves it, before there is any payment logic to get
 in the way: the payment workflow with all four of its steps stubbed out, a worker killed

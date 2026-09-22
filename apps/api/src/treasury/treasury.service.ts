@@ -10,7 +10,7 @@ import {
 } from '@payments/ledger'
 import { getAddress, type Address } from 'viem'
 import type { PartnerKeysService } from '../demo-scaffolding/partner-keys.service'
-import type { SignerClient } from '../signer/signer-client.service'
+import type { SignerClient } from '@payments/chain'
 
 /**
  * Here rather than in `treasury.module.ts`, unlike the other tokens in this api: the module

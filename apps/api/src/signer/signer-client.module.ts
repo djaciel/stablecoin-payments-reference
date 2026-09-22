@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common'
-import { readEnv } from '@payments/domain'
-import { SignerClient } from './signer-client.service'
+import { SignerClient, readSignerUrl } from '@payments/chain'
 
 /**
  * The injection token for the signer client, following the repo's rule: dependencies are
@@ -9,12 +8,7 @@ import { SignerClient } from './signer-client.service'
  */
 export const SIGNER_CLIENT = Symbol('SIGNER_CLIENT')
 
-const DEFAULT_SIGNER_URL = 'http://signer:3001'
-
-/**
- * One client for the process, built from the environment in one place. The signer has no
- * published port, so this URL is a compose-network address: `signer` is the service name.
- */
+/** One client for the process. The client itself lives in `@payments/chain`: the worker asks the signer too. */
 @Module({
   providers: [
     {
@@ -25,12 +19,3 @@ const DEFAULT_SIGNER_URL = 'http://signer:3001'
   exports: [SIGNER_CLIENT],
 })
 export class SignerClientModule {}
-
-/**
- * The only place that reads SIGNER_URL. The default is the address inside compose, which
- * is where this api normally runs; set the variable to point an api started on your
- * machine at a signer started the same way.
- */
-function readSignerUrl(): string {
-  return readEnv('SIGNER_URL', DEFAULT_SIGNER_URL).replace(/\/+$/, '')
-}

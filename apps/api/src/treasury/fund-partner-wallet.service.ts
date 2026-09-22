@@ -8,12 +8,13 @@ import {
   readUsdcBalance,
   rpcHost,
   type ChainClient,
+  type SignedTransaction,
+  type SignerClient,
 } from '@payments/chain'
 import type { Pool, PoolClient } from '@payments/db'
 import type { FundingAmounts, FundingTransfer, GasSpent, PartnerWalletFunding } from '@payments/domain'
 import { formatMinor, recordAudit, scaffolding, scaffoldingReference, toMinor, withLedgerTransaction } from '@payments/ledger'
 import { formatEther, parseEther, type Address, type Hex } from 'viem'
-import type { SignedTransaction, SignerClient } from '../signer/signer-client.service'
 import type { TreasuryService } from './treasury.service'
 
 /** Defined here and not in the module, for the same cycle reason as `TREASURY_SERVICE`. */

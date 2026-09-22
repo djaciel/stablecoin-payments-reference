@@ -92,6 +92,8 @@ services:
       # The chain endpoint, passed through EMPTY unless you set it, exactly as for the api:
       # the default is the public Base Sepolia RPC, so the demo needs no variable at all.
       RPC_URL: ${RPC_URL:-}
+      # The worker asks the signer to sign a payment; it never holds the seed.
+      SIGNER_URL: http://signer:3001
     # The only service with a restart policy, and it is a feature rather than resilience
     # theatre: the crash experiment kills this process on purpose and the payment has to
     # carry on, which only works if something brings the worker back.
@@ -110,6 +112,8 @@ services:
       postgres:
         condition: service_healthy
       temporal:
+        condition: service_healthy
+      signer:
         condition: service_healthy
 
   signer:

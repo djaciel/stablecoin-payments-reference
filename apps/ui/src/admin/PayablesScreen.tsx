@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import type { LedgerFigures, PayableSummary, Payables, PaymentFailureReason } from '@payments/domain'
+import type { LedgerFigures, PayableSummary, Payables, PaymentFailureReason, PaymentView } from '@payments/domain'
 import { createPayable, getPayables, payPayable } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine, CopyButton } from '../app/AddressLine'
@@ -15,6 +15,12 @@ const REASONS: Record<PaymentFailureReason, string> = {
   destination_not_allowlisted: 'The payout address was not on the allowlist.',
   amount_out_of_range: 'The amount was outside the payment limits.',
   compliance_rejected: 'The compliance check refused the destination.',
+}
+
+/** Where a signed payment stands, in the article's words (§7). */
+const SIGNED_MOMENTS: Partial<Record<PaymentView['status'], string>> = {
+  RESERVED: 'Signed, not sent yet.',
+  SENT: 'Sent, waiting for the network.',
 }
 
 /**
@@ -135,6 +141,14 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
           <p className="card-note">
             <code>{payment.reason}</code>
           </p>
+        </>
+      )}
+
+      {payment?.transaction !== undefined && (
+        <>
+          <p className="card-value">{SIGNED_MOMENTS[payment.status]}</p>
+          <p className="address-sub">The transaction (its hash is stored before anything is sent)</p>
+          <AddressLine address={payment.transaction.hash} explorerUrl={payment.transaction.explorerUrl} />
         </>
       )}
 

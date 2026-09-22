@@ -66,6 +66,15 @@ directly:
 | The same key with a different body is refused, and nothing is written | "refuses the same key with a different body…" | the request fingerprint stored next to the key |
 | Two calls with one key in parallel make one payment and one `reserve` | "makes one payment out of two parallel calls…" | the same index: the loser waits on it until the winner commits. A SELECT before the INSERT fails this test |
 
+And §7's Signed moment, in `signing.db.test.ts`, calling `signPayment` from
+`apps/worker/src/sign.ts` with a signer that really signs (the published test mnemonic; real
+bytes, no network):
+
+| Claim | Test | Enforced at |
+|---|---|---|
+| A payment is signed once: two calls at the same instant and one after ask the signer once, the stored hash is the hash of the stored bytes, the payment stays RESERVED, one `signed` audit row | "signs a payment once…" | the payment row lock (`SELECT … FOR UPDATE`) and the re-check under it; `UNIQUE (tx_hash)` in `0008`. Without the lock this test fails |
+| Two payments signed at the same instant get two nonces, though the chain's pending count told both 7 | "gives two payments signed at the same instant two nonces…" | the treasury's nonce lock (`pg_advisory_xact_lock`) and `max(pending, highest stored + 1)`; `UNIQUE (nonce)` in `0008`. Without the lock this test fails |
+
 Three notes on what a green suite does NOT say:
 
 - **Invariant 5 is proved as far as the books go.** The release cannot be written without its

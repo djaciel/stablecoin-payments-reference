@@ -13,7 +13,7 @@ Five libraries carry the whole demo; nothing is hand-rolled underneath them.
 
 - **viem** talks to the blockchain: it generates the seed phrase and derives addresses in
   the signer, creates the client to Base Sepolia, reads balances, decodes the USDC transfer
-  events and, later, signs and broadcasts transactions.
+  events, and signs and broadcasts transactions.
 - **Temporal** (server + TypeScript SDK) is the durable workflow engine: it runs the payment
   steps, retries them and resumes them after a crash, and runs the scheduled jobs.
 - **PostgreSQL** with **node-postgres** holds the books; the ledger rules are plain SQL
@@ -36,8 +36,8 @@ published.
   index 0 is the treasury, index n is the deposit address for partner n.
 - `packages/chain/src/derive.ts` — the derivation itself: seed + index → account, the path
   every wallet uses.
-- `apps/api/src/signer/signer-client.service.ts` — how the rest of the system asks the
-  signer for an address without ever seeing the seed.
+- `packages/chain/src/signer-client.ts` — how the api and the worker ask the signer for an
+  address or a signature without ever seeing the seed.
 
 See it: `curl localhost:3000/treasury` prints the treasury address; the same address is in
 `docker compose logs signer`. `docker compose down -v && docker compose up` keeps it, because
@@ -66,13 +66,18 @@ do not move, because crediting a deposit to a partner is the receivables flow, l
 
 ## The durable workflow engine (§3, and the crash in §9)
 
-- `apps/worker/src/workflows.ts` — `PaymentWorkflow`: the recipe, four steps in order
-  (`sign`, `execute`, `watch`, `settle`). Today the steps are placeholders that only sleep.
-- `apps/worker/src/activities.ts` — the steps themselves, each reporting its attempt number.
-- `docs/dev/restart-survival.md` — the drill: kill the worker mid-step, start it again, and
-  read in the log which step ran twice and which did not.
+- `apps/worker/src/workflows.ts` — `PaymentWorkflow`, the recipe: `sign`, then `execute`
+  (watching for finality and settling come later). Each step gets the payment's reference and
+  nothing else, and a worker that dies mid-run picks up from Temporal's history.
+- `apps/worker/src/activities.ts` — the list of steps the worker runs, one file per step.
+- `apps/worker/src/index.ts` — starts the worker. On shutdown an in-flight step is cancelled
+  and simply runs again as attempt 2: every step re-reads the row and skips what is done.
+- `docs/dev/restart-survival.md` — what Docker restarts and what it does not. The drill in it
+  ran on placeholder steps and is being rewritten on a real payment.
 
-See it: `pnpm demo:workflow`, then open `http://localhost:8080` and find the run.
+See it: start a payment's workflow (the command is under "Signed, then sent" below) and open
+`http://localhost:8080/namespaces/default/workflows/<its reference>`: `sign`, then `execute`,
+attempt 1 each. Start it again and the second run signs and sends nothing.
 
 ## The books: two entries before the money moves (§5, §6, §7)
 
@@ -234,6 +239,50 @@ See it: `curl -s -X POST localhost:3000/treasury/fund-partner-wallet`, or the bu
 LIMIT 1` and the audit row next to it, which carries the gas the books refuse to hold. The
 watcher posts nothing for it: it looks for money arriving, and this is money leaving.
 
+## Signed, then sent: the hash before the broadcast (§7)
+
+`sign` stores the hash, the signed bytes and the nonce on the payment row (still RESERVED)
+before anything leaves; `execute` asks the network for that hash and sends the same bytes only
+if it does not know them, so a retry or a crash (§9) can never pay twice.
+
+- `apps/worker/src/sign.ts` — the `sign` step, numbered: read the payment, read the nonce and
+  fees from the chain, lock the row and the treasury's nonce, ask the signer, store and commit.
+- `apps/worker/src/execute.ts` — the `execute` step: the bytes from the row, the network asked
+  by hash, the same bytes sent if it does not know them, then RESERVED → SENT.
+- `migrations/0008_payment_signing.sql` — the three columns, and the table refusing a SENT
+  payment without a hash, a hash without its bytes, and two payments on one nonce.
+- `apps/worker/src/workflows.ts` — `PaymentWorkflow` calls `sign` then `execute`, with the
+  reference and nothing else; the retries are explicit, and unbounded for now.
+- `apps/worker/src/config.ts` — the gas headroom and the fee cap a payout is signed with; the
+  signed bytes are never re-priced.
+- `packages/chain/src/signer-client.ts` — how the worker asks the signer to sign. It holds no key.
+- `docker-compose.yml` — the worker waits for the signer and knows its URL, and never holds the seed.
+- `tests/db/signing.db.test.ts` — two claims against a real Postgres, with a signer that really
+  signs: a payment is signed once however many ask at once, and two payments signed together
+  get two nonces.
+- `apps/api/src/payments/create-payment.ts` — `GET /payments/:reference` carries the hash and
+  its explorer link once the payment is signed.
+- `apps/api/src/payables/payables.service.ts` — the Payables read carries it too, for each
+  invoice's payment.
+- `packages/domain/src/api.ts` — `PaymentView.transaction`: the hash and its explorer link,
+  present once signed.
+- `apps/ui/src/admin/PayablesScreen.tsx` — the invoice row shows the hash with its explorer
+  link, and where the payment stands: "Signed, not sent yet." or "Sent, waiting for the network."
+
+See it (this sends real testnet USDC from the treasury), for a RESERVED payment:
+
+```
+docker compose exec temporal temporal workflow start --address temporal:7233 \
+  --task-queue payments --type PaymentWorkflow --workflow-id PAY-XXXX --input '"PAY-XXXX"'
+```
+
+Its row on `/admin/payables` turns SENT with the hash, and
+`SELECT at, event, context->>'txHash' FROM audit_log WHERE subject_id = 'PAY-XXXX' ORDER BY id`
+shows `signed` before `sent`, with the same hash. Start it again: `sign` answers "already
+signed", `execute` "the network already knew", and nothing is sent. Until the payment settles,
+the Start screen's onchain USDC is lower than Available + Reserved: the money has left, and the
+books wait for finality and the Transfer event.
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -252,6 +301,6 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-The real chain steps (§7), the four failures as buttons (§9), reconciliation (§10) and the
-partner side that pays a receivable (§8) arrive in later phases; each will add its entry here
-when it lands.
+The rest of §7 (waiting for finality and the Transfer event, then settling the books), the
+four failures as buttons (§9), reconciliation (§10) and the partner side that pays a
+receivable (§8) arrive in later phases; each will add its entry here when it lands.

@@ -5,7 +5,7 @@ import { DATABASE_POOL, DbModule } from '../db/db.module'
 import { DemoScaffoldingModule, PARTNER_KEYS } from '../demo-scaffolding/demo-scaffolding.module'
 import type { PartnerKeysService } from '../demo-scaffolding/partner-keys.service'
 import { SIGNER_CLIENT, SignerClientModule } from '../signer/signer-client.module'
-import type { SignerClient } from '../signer/signer-client.service'
+import type { SignerClient } from '@payments/chain'
 import { PartnersController } from './partners.controller'
 import { PARTNERS_SERVICE, PartnersService } from './partners.service'
 

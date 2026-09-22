@@ -2,6 +2,7 @@ import { BadRequestException, UnprocessableEntityException } from '@nestjs/commo
 import { inTransaction, type Pool, type PoolClient } from '@payments/db'
 import type { PayableSummary, PaymentFailureReason, PaymentView } from '@payments/domain'
 import { ACCOUNTS, getBalances, payable, recordAudit, type AccountCode, type MinorUnits } from '@payments/ledger'
+import { transactionView } from '../payments/create-payment'
 
 /** Defined here and not in the module, for the same cycle reason as `PARTNERS_SERVICE`. */
 export const PAYABLES_SERVICE = Symbol('PAYABLES_SERVICE')
@@ -12,7 +13,10 @@ const CURRENCY = 'USDC'
 /** Missing, malformed or nobody's: the same mistake, so the same sentence. */
 export const UNKNOWN_PARTNER = 'partnerId must be the id of a partner, as GET /payables lists them.'
 
-/** An invoice as the database holds it. Formatting and links are the controller's business. */
+/**
+ * An invoice as the database holds it. The controller formats the amount and links the address;
+ * the payment already comes as the api shows it.
+ */
 export interface Payable {
   readonly id: string
   readonly partnerName: string | null
@@ -55,11 +59,11 @@ export class PayablesService {
         const payables = await client.query<PayableRow>(
           `SELECT p.id, partners.name AS partner_name, p.destination, p.amount_minor, p.description, p.status,
                   attempt.reference AS attempt_reference, attempt.status AS attempt_status,
-                  attempt.failure_reason AS attempt_reason
+                  attempt.failure_reason AS attempt_reason, attempt.tx_hash AS attempt_tx_hash
              FROM payables p
              LEFT JOIN partners ON partners.id = p.partner_id
              LEFT JOIN LATERAL (
-                    SELECT reference, status, failure_reason FROM payments
+                    SELECT reference, status, failure_reason, tx_hash FROM payments
                      WHERE payments.payable_id = p.id
                      ORDER BY (payments.reference = p.payment_reference) IS TRUE DESC, payments.created_at DESC
                      LIMIT 1
@@ -163,6 +167,7 @@ interface PayableRow {
   readonly attempt_reference: string | null
   readonly attempt_status: PaymentView['status'] | null
   readonly attempt_reason: PaymentFailureReason | null
+  readonly attempt_tx_hash: string | null
 }
 
 function toPayable(row: PayableRow): Payable {
@@ -176,6 +181,11 @@ function toPayable(row: PayableRow): Payable {
     payment:
       row.attempt_reference === null || row.attempt_status === null
         ? null
-        : { reference: row.attempt_reference, status: row.attempt_status, reason: row.attempt_reason ?? undefined },
+        : {
+            reference: row.attempt_reference,
+            status: row.attempt_status,
+            reason: row.attempt_reason ?? undefined,
+            transaction: transactionView(row.attempt_tx_hash),
+          },
   }
 }

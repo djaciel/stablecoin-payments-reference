@@ -1,17 +1,22 @@
-/**
- * The api's view of the signing service: one typed method per thing it may ask for.
- *
- * Everything the api knows about the signer is in this file — the URL, the path, the
- * shape of the answer. A caller writes `await signer.treasuryAddress()` and never learns
- * that there is an HTTP hop at all, which is what keeps the boundary movable: the signer
- * is a separate process because it holds the seed, not because the api wants a network
- * call. Signing joins this file when the flow that needs it does.
- */
-
+import { readEnv } from '@payments/domain'
 import { isAddress, isHex, type Address, type Hex } from 'viem'
+
+/**
+ * How the api and the worker ask the signing service for something: one typed method per
+ * request. The signer is a separate process because it holds the seed; this client holds no
+ * key and reads no chain.
+ */
 
 /** Long enough for a container starting up, short enough that /treasury still answers. */
 const REQUEST_TIMEOUT_MS = 5000
+
+/** The compose-network address: the signer publishes no port, `signer` is its service name. */
+const DEFAULT_SIGNER_URL = 'http://signer:3001'
+
+/** The only place that reads SIGNER_URL. Set it to reach a signer started on your machine. */
+export function readSignerUrl(): string {
+  return readEnv('SIGNER_URL', DEFAULT_SIGNER_URL).replace(/\/+$/, '')
+}
 
 /** What the signer answers for an address lookup. */
 export interface SignerAddress {
@@ -29,7 +34,7 @@ export interface SignedTransaction {
   readonly signedTransaction: Hex
 }
 
-/** Everything the signer is told, because it reads no chain: the api brings the numbers. */
+/** Everything the signer is told, because it reads no chain: the caller brings the numbers. */
 export interface TransactionToSign {
   readonly to: Address
   /** USDC minor units for a transfer, wei for a native one. */
@@ -40,7 +45,7 @@ export interface TransactionToSign {
   readonly maxPriorityFeePerGas: bigint
 }
 
-/** The signer is unreachable or answered something unusable. Callers turn this into 503. */
+/** The signer is unreachable or answered something unusable. The api turns this into 503. */
 export class SignerUnavailableError extends Error {}
 
 export class SignerClient {
@@ -51,10 +56,7 @@ export class SignerClient {
     return this.askForAddress('/addresses/treasury', {}, 'the treasury address')
   }
 
-  /**
-   * The deposit address of the partner at `index` — where that partner pays what it owes.
-   * The api never derives it: the company seed is the signer's and nobody else's.
-   */
+  /** The deposit address of the partner at `index`. Only the signer can derive it. */
   depositAddress(index: number): Promise<SignerAddress> {
     return this.askForAddress(
       '/addresses/deposit',
@@ -97,7 +99,7 @@ export class SignerClient {
     )
 
     if (!isSignedTransaction(answer)) {
-      throw new SignerUnavailableError(`the signer at ${this.baseUrl} answered ${what} with a body this api cannot read`)
+      throw new SignerUnavailableError(`the signer at ${this.baseUrl} answered ${what} with a body this client cannot read`)
     }
     return answer
   }
@@ -105,7 +107,7 @@ export class SignerClient {
   private async askForAddress(path: string, init: RequestInit, what: string): Promise<SignerAddress> {
     const body = await this.ask(path, init, what)
     if (!isSignerAddress(body)) {
-      throw new SignerUnavailableError(`the signer at ${this.baseUrl} answered with a body this api cannot read`)
+      throw new SignerUnavailableError(`the signer at ${this.baseUrl} answered with a body this client cannot read`)
     }
     return body
   }
@@ -116,8 +118,8 @@ export class SignerClient {
 
     let response: Response
     try {
-      // Without a timeout a signer that accepts connections and never answers would hang
-      // this request until the client gives up, and /treasury would stop answering at all.
+      // Without a timeout a signer that accepts connections and never answers would hang the
+      // caller until it gave up.
       response = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
     } catch (error) {
       throw new SignerUnavailableError(`the signer at ${this.baseUrl} did not answer: ${messageOf(error)}`)
@@ -145,16 +147,15 @@ function isSignedTransaction(body: unknown): body is SignedTransaction {
   )
 }
 
-/** The answer comes off the network as `unknown`, so it is checked before it is trusted. */
+/**
+ * The shape, not just the type: an address is passed to viem and printed as an explorer link.
+ * Non-strict on purpose — the checksum is the signer's business.
+ */
 function isSignerAddress(body: unknown): body is SignerAddress {
   if (typeof body !== 'object' || body === null) {
     return false
   }
   const candidate = body as { index?: unknown; address?: unknown }
-  // The shape, not just the type: an address is what the rest of the api passes to viem
-  // and prints as an explorer link, so "some string" is not good enough to call it one.
-  // Non-strict on purpose — this checks `0x` + 40 hex characters, not the checksum, which
-  // is the signer's business and not a reason for the api to reject its own service.
   return (
     typeof candidate.index === 'number' &&
     typeof candidate.address === 'string' &&
