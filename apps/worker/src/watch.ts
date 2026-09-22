@@ -27,10 +27,18 @@ export interface SettlementEvidence {
   readonly logIndex: number
 }
 
+/** What `reverse` needs: the transaction that reverted, its block, and the final block that makes it proof. */
+export interface RevertEvidence {
+  readonly txHash: string
+  readonly blockNumber: number
+  readonly finalBlock: number
+}
+
 export type WatchResult =
   | { readonly outcome: 'not-landed' }
   | { readonly outcome: 'not-final'; readonly blockNumber: number; readonly finalBlock: number }
   | { readonly outcome: 'paid'; readonly evidence: SettlementEvidence }
+  | { readonly outcome: 'reverted'; readonly evidence: RevertEvidence }
 
 /** The `watch` activity: one short check, no writes. The workflow repeats it on a durable timer. */
 export async function watch(reference: string): Promise<WatchResult> {
@@ -68,7 +76,10 @@ export async function watch(reference: string): Promise<WatchResult> {
       case 'not-final':
         return report(reference, { outcome: 'not-final', blockNumber: Number(verdict.blockNumber), finalBlock: Number(finalBlock) })
       case 'reverted':
-        throw notPaid(`${hash} reverted in block ${verdict.blockNumber}, which is final`)
+        return report(reference, {
+          outcome: 'reverted',
+          evidence: { txHash: hash, blockNumber: Number(verdict.blockNumber), finalBlock: Number(finalBlock) },
+        })
       case 'paid':
         return report(reference, {
           outcome: 'paid',
@@ -88,14 +99,9 @@ export async function watch(reference: string): Promise<WatchResult> {
   }
 }
 
-/**
- * Retried, never released: the money stays reserved, which is the article's rule anyway. FAILED
- * (with the reversal this proof allows) and REVIEW arrive in Phase 6.
- */
+/** A final transaction without the expected event: not paid, and no proof it failed either, so nothing is released. */
 function notPaid(seen: string, cause?: unknown): Error {
-  return new Error(`${seen}. Not paid: the money stays reserved and this check retries (FAILED and REVIEW arrive in Phase 6)`, {
-    cause,
-  })
+  return new Error(`${seen}. Not paid: the money stays reserved and this check retries`, { cause })
 }
 
 /** A node that has not seen the transaction in a block answers null, which viem raises. */
@@ -153,6 +159,9 @@ function report(reference: string, result: WatchResult): WatchResult {
       line = `paid: final (block ${blockNumber}, final ${finalBlock}) and the official Transfer is log ${logIndex}`
       break
     }
+    case 'reverted':
+      line = `reverted in block ${result.evidence.blockNumber} (final ${result.evidence.finalBlock}): the transfer did not happen`
+      break
   }
   log.info(`${reference} watch: ${line}`)
   return result

@@ -112,7 +112,8 @@ onchain, and `cancel`, only before anything was signed. Both write their reason 
 log in the same database transaction as the entries.
 
 - `packages/ledger/src/movements.ts` — `reversal` (proof required by the type) and `cancel`
-  (a reason required), next to `reserve` and `settle`.
+  (a reason required), next to `reserve` and `settle`. `apps/worker/src/reverse.ts` is the
+  reversal's first caller, on a transfer that reverted onchain.
 - `migrations/0003_audit_log.sql` + `packages/ledger/src/audit.ts` — the append-only log
   every step writes to. An audit log you can edit is not an audit log; the trigger says so.
 - `packages/db/src/guarded-update.ts` — how a state changes: one `UPDATE … WHERE status =
@@ -297,11 +298,12 @@ payment and the invoice move in one transaction, which posts once however often 
 - `packages/chain/src/usdc.test.ts` — both conditions pinned with a real log: the right event
   above the final block is not paid yet; at the final block it is.
 - `apps/worker/src/watch.ts` — `watch`, one check and no writes: the receipt, the final block
-  (`safe`, never `latest`), the verdict. Reverted or wrong: it retries, the money stays reserved.
+  (`safe`, never `latest`), the verdict. Reverted in a final block: FAILED (the "FAILED with proof"
+  entry below). Wrong event: it retries, the money stays reserved.
 - `apps/worker/src/settle.ts` — the `settle` step: lock the invoice, then Dr Partner debt / Cr
   Reserved, SENT → SETTLED, the invoice PAID, and the evidence in the audit log, all or nothing.
 - `apps/worker/src/workflows.ts` — the loop: `watch`, a durable 10 s timer, `watch` again, until
-  paid; then `settle`.
+  paid (then `settle`) or reverted (then `reverse`).
 - `tests/db/settlement.db.test.ts` — §7's figures on a real payment row, settled twice: Available
   9,000, Reserved 0, Partner debt 0, one `settle` in the ledger. Indexed in `tests/db/README.md`.
 - `docs/dev/restart-survival.md` — the same wait, with the worker stopped in the middle of it.
@@ -383,7 +385,7 @@ finality, without a reload (keep the tab in front: a hidden tab pauses polling).
 
 §6: a transfer that reached the chain and reverted is the proof that nothing moved. One switch makes
 the next payment's transaction do exactly that, on the real network, for the price of its gas; until
-something reads that proof, the payment waits SENT with its money reserved.
+that revert is final, the payment waits SENT with its money reserved.
 
 - `migrations/0009_settings.sql` — the `settings` table: one row per failure-injection flag. An
   absent row is off.
@@ -410,7 +412,55 @@ something reads that proof, the payment waits SENT with its money reserved.
 
 See it (real testnet gas, no USDC moves): arm "Revert the next payment" on `/admin/break-it`, press
 Pay on a small invoice and open its story: Signed says the gas was set too low on purpose, the explorer
-shows it failed (out of gas, no Transfer), and it stays SENT with its amount in Reserved (`/treasury`).
+shows it failed (out of gas, no Transfer), and it waits SENT with its amount in Reserved (`/treasury`)
+until the revert is final. What happens then is the next entry.
+
+## When it fails: FAILED with proof, and the invoice payable again (§6)
+
+A transfer that reached the chain and reverted is the one failure the chain itself proves, once its
+block is final. Only then does the payment end FAILED, and in the same transaction the money goes back
+to Available with that proof next to the entries and the invoice opens again. Partner debt stays: the
+company still owes the invoice.
+
+- `apps/worker/src/watch.ts` — a reverted receipt in a final block is an answer now, `reverted`, with
+  the hash, its block and the final block. A final transaction without the expected event still retries.
+- `apps/worker/src/reverse.ts` — the `reverse` step, `settle`'s mirror: the invoice lock first, then
+  SENT → FAILED `reverted`, the `reversal` with its proof, the invoice OPEN with no payment on it. Posts once.
+- `apps/worker/src/workflows.ts` — the watch loop ends on `paid` or `reverted`: `paid` goes to `settle`,
+  `reverted` to `reverse`.
+- `apps/worker/src/activities.ts` — lists `reverse` with the other steps.
+- `packages/ledger/src/audit.ts` — the invoice's new `reopened` event.
+- `packages/domain/src/api.ts` — the `reverted` reason, and `failedAfterReserving`: the one rule that
+  tells a failure after the reserve from a refusal at the door, for the api and the screen alike.
+- `apps/api/src/payments/payments.controller.ts` — a replay answers the code of the request's first
+  outcome with the payment as it is now: a payment that reverted later replays 200 with FAILED `reverted`.
+- `apps/ui/src/admin/PayablesScreen.tsx` — a reverted payment's row says the money is back in Available;
+  the idempotency key ends with any answer, so Pay on the reopened invoice sends a new one.
+- `apps/ui/src/admin/TransfersScreen.tsx` — the story's Failed line (the block, and that it is final),
+  the Released line (Reserved back to Available, with the proof), and the invoice OPEN again.
+- `apps/ui/src/admin/BreakItScreen.tsx` — the revert card says where the money goes once the revert is final.
+- `tests/db/failure.db.test.ts` — §6's FAILED on a real payment row, reversed twice: Available 10,000,
+  Reserved 0, Partner debt 1,000, one `reversal` with its proof, the invoice payable again with a new
+  key. Indexed in `tests/db/README.md`.
+
+See it (real testnet gas, no USDC moves): after the previous entry's revert, wait for finality (minutes)
+and open the payment's story: Failed, then Released with the proof, and the invoice OPEN again;
+`curl localhost:3000/treasury` has Available back and Reserved at 0. In the worker's log:
+
+```
+docker compose logs worker | grep reverse   # PAY-XXXX reverse: reversed (ledger transaction …), the invoice is open again
+```
+
+The first request again, with the key on the story's Created line and the `payableId` from
+`curl localhost:3000/payments/<reference>`, answers 200 with `"status":"FAILED","reason":"reverted"` and
+writes nothing:
+
+```
+curl -i -X POST localhost:3000/payments -H 'content-type: application/json' \
+  -H 'idempotency-key: <that key>' -d '{"payableId":"<the invoice id>"}'
+```
+
+Then press Pay on the same invoice: a new key, a new reference, and this time it settles.
 
 ## The screens
 
@@ -434,7 +484,6 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-A reverted payment ending FAILED with its reversal, and REVIEW with the money held and its resume
-(§6); deposits and treasury fundings on the Transfers screen, with the partner side that pays a
-receivable (§8); the four failures as buttons (§9); and reconciliation (§10) arrive in later phases.
-Each will add its entry here when it lands.
+REVIEW with the money held and its resume (§6); deposits and treasury fundings on the Transfers
+screen, with the partner side that pays a receivable (§8); the four failures as buttons (§9); and
+reconciliation (§10) arrive in later phases. Each will add its entry here when it lands.

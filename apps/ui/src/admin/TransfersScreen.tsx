@@ -171,6 +171,7 @@ const WAITING: Partial<Record<(typeof STEPS)[number], string>> = {
 const INVOICE_NOTES: Record<string, string | undefined> = {
   'payment-linked': 'The invoice is PAYING.',
   paid: 'The invoice is PAID.',
+  reopened: 'The invoice is OPEN again: it can be paid with a new key.',
 }
 
 /**
@@ -229,17 +230,23 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
         )
         break
       case 'failed':
+        lines.push({ name: 'Failed', rows: [step], text: failedText(context, wasReserved) })
+        break
+      case 'released': {
+        const proof = proofOf(context)
         lines.push({
-          name: 'Failed',
+          name: 'Released',
           rows: [step],
           text: (
             <>
-              {reasonInWords(context.reason)}
-              {wasReserved ? '' : ' Nothing was reserved.'} <code>{context.reason}</code>
+              {payment.amount} USDC went from Reserved back to Available (Dr Available / Cr Reserved), with the proof: the
+              transaction{' '}
+              <Hash hash={proof.txHash} /> in block {proof.blockNumber}. Ledger transaction <code>{context.ledgerTransactionId}</code>.
             </>
           ),
         })
         break
+      }
       default:
         lines.push({ name: step.event, rows: [step], text: '' })
     }
@@ -271,8 +278,35 @@ function gasTooLowText(context: AuditStep['context']): string {
   return `The gas limit was set too low on purpose (Break it): ${context.gas} instead of ${context.estimatedGas ?? 'its estimate'}, so it runs out of gas and reverts onchain. `
 }
 
+/** A revert names its block and says it is final: a revert that is not final proves nothing yet (§6). */
+function failedText(context: AuditStep['context'], wasReserved: boolean): ReactNode {
+  if (context.reason === 'reverted') {
+    return (
+      <>
+        The transfer reached the chain and reverted in block {context.blockNumber}, final by block {context.finalBlock}: no USDC
+        moved. <code>{context.reason}</code>
+      </>
+    )
+  }
+  return (
+    <>
+      {reasonInWords(context.reason)}
+      {wasReserved ? '' : ' Nothing was reserved.'} <code>{context.reason}</code>
+    </>
+  )
+}
+
 function reasonInWords(code: string | undefined): string {
   return (REASONS as Record<string, string | undefined>)[code ?? ''] ?? ''
+}
+
+/** A reversal's proof is stored as an object, so its row carries it as JSON. */
+function proofOf(context: AuditStep['context']): { readonly txHash?: string; readonly blockNumber?: number } {
+  try {
+    return JSON.parse(context.proof ?? '{}') as { txHash?: string; blockNumber?: number }
+  } catch {
+    return {}
+  }
 }
 
 function Hash({ hash }: { readonly hash: string | undefined }) {

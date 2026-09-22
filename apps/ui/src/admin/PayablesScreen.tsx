@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import type { LedgerFigures, PayableSummary, Payables, PaymentFailureReason, PaymentView } from '@payments/domain'
+import { failedAfterReserving, type LedgerFigures, type PayableSummary, type Payables, type PaymentFailureReason, type PaymentView } from '@payments/domain'
 import { createPayable, getPayables, payPayable } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine, CopyButton } from '../app/AddressLine'
 
-/** Small on purpose: the books on this machine hold about 2 USDC. */
+/** Small on purpose: every invoice paid here spends real testnet USDC from the treasury. */
 const DEFAULT_AMOUNT = '0.50'
 
 /** Why a payment failed, in the article's words. The api's code stays on screen under it. */
@@ -16,6 +16,7 @@ export const REASONS: Record<PaymentFailureReason, string> = {
   destination_not_allowlisted: 'The payout address was not on the allowlist.',
   amount_out_of_range: 'The amount was outside the payment limits.',
   compliance_rejected: 'The compliance check refused the destination.',
+  reverted: 'The transfer reached the chain and reverted.',
 }
 
 /** Where a signed payment stands, in the article's words (§7). */
@@ -94,8 +95,9 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
   const [paying, setPaying] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
   // The attempt's idempotency key (§4): made on the first Pay and sent again on every Pay until
-  // the api answers, which is why a second click or a retry after a lost answer is the same
-  // payment, never a second one. A FAILED answer ends the attempt: its key would replay the refusal.
+  // the api answers, which is why a retry after a lost answer is the same payment, never a second
+  // one. Any answer ends the attempt: an invoice that reopens after a revert must be paid with a new
+  // key, because the old one would only replay the payment that reverted.
   const attemptKey = useRef<string | undefined>(undefined)
 
   const pay = (): void => {
@@ -103,10 +105,8 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
     setPaying(true)
     setFailure(undefined)
     payPayable(invoice.id, attemptKey.current)
-      .then(async (payment) => {
-        if (payment.status === 'FAILED') {
-          attemptKey.current = undefined
-        }
+      .then(async () => {
+        attemptKey.current = undefined
         await refresh()
         setAsking(false)
       })
@@ -139,7 +139,10 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
 
       {payment?.reason !== undefined && (
         <>
-          <p className="card-value is-bad">{REASONS[payment.reason]} Nothing was reserved.</p>
+          <p className="card-value is-bad">
+            {REASONS[payment.reason]}{' '}
+            {failedAfterReserving(payment.reason) ? 'Nothing moved onchain, and the money is back in Available.' : 'Nothing was reserved.'}
+          </p>
           <p className="card-note">
             <code>{payment.reason}</code>
           </p>
@@ -148,7 +151,7 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
 
       {payment?.transaction !== undefined && (
         <>
-          <p className="card-value">{SIGNED_MOMENTS[payment.status]}</p>
+          {SIGNED_MOMENTS[payment.status] !== undefined && <p className="card-value">{SIGNED_MOMENTS[payment.status]}</p>}
           <p className="address-sub">The transaction (its hash is stored before anything is sent)</p>
           <AddressLine address={payment.transaction.hash} explorerUrl={payment.transaction.explorerUrl} />
         </>

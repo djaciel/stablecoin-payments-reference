@@ -20,8 +20,8 @@ export const PAYMENT_EVENTS = {
   released: 'released',
 } as const
 
-/** An invoice's events. The last two name their payment in `context.reference`. */
-export const INVOICE_EVENTS = { created: 'created', paymentLinked: 'payment-linked', paid: 'paid' } as const
+/** An invoice's events. All but `created` name their payment in `context.reference`. */
+export const INVOICE_EVENTS = { created: 'created', paymentLinked: 'payment-linked', paid: 'paid', reopened: 'reopened' } as const
 
 /** The watcher's one event, and the demo scaffolding's. */
 export const TREASURY_EVENTS = { funded: 'funded' } as const

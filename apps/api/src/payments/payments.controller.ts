@@ -1,6 +1,6 @@
 import { BadRequestException, Body, ConflictException, Controller, Get, Headers, Inject, NotFoundException, Param, Post, Res } from '@nestjs/common'
 import { inTransaction, type Pool } from '@payments/db'
-import type { PaymentTimeline, PaymentView, Payments } from '@payments/domain'
+import { failedAfterReserving, type PaymentTimeline, type PaymentView, type Payments } from '@payments/domain'
 import type { Client } from '@temporalio/client'
 import { DATABASE_POOL } from '../db/db.module'
 import { TEMPORAL_CLIENT } from '../temporal/temporal.module'
@@ -83,12 +83,14 @@ export class PaymentsController {
 }
 
 /**
- * 201 for a new reservation, 200 for a replay of one, 422 for a refusal whether new or replayed: a
- * replay answers with the code its first attempt had (spec assumption 19), so a client that reads
- * only status codes can never take a rejected payment for an accepted one.
+ * 422 only for a payment the door refused, new or replayed; otherwise 201 recorded, 200 replayed,
+ * whatever its state now. Spec assumption 19, decided: the code answers the request's first outcome
+ * and the body the payment's current state, so a replay of a payment that later reverted is 200 with
+ * FAILED `reverted`, and a client that reads only codes never takes a refusal for an acceptance.
  */
 function statusCodeOf(outcome: { readonly kind: 'recorded' | 'replayed'; readonly payment: PaymentView }): number {
-  if (outcome.payment.status === 'FAILED') {
+  const { status, reason } = outcome.payment
+  if (status === 'FAILED' && !failedAfterReserving(reason)) {
     return 422
   }
   return outcome.kind === 'recorded' ? 201 : 200

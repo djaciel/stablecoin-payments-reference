@@ -49,8 +49,9 @@ export function BreakItScreen() {
         <p className="card-value">The next payment reaches the chain and reverts: nothing moves, and it costs only gas.</p>
         <p className="card-note">
           It is signed with a gas limit too low for the transfer, so the network includes it and it runs out of gas. Its
-          money stays reserved until the revert is final and read as proof. The switch turns itself off once a payment
-          has taken it. Arm it, then press Pay on a small invoice in <Link to="/admin/payables">Payables</Link>.
+          money stays reserved until the revert is final; then it goes back to Available and the invoice can be paid
+          again. The switch turns itself off once a payment has taken it. Arm it, then press Pay on a small invoice in{' '}
+          <Link to="/admin/payables">Payables</Link>.
         </p>
         {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
         <p className="card-actions">

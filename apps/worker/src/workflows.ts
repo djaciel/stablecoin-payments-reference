@@ -9,7 +9,7 @@ const { watchChain, dispatchPayments } = proxyActivities<typeof activities>({
   retry: { maximumAttempts: 3, initialInterval: '1 second', backoffCoefficient: 1 },
 })
 
-const { sign, execute, watch, settle } = proxyActivities<typeof activities>({
+const { sign, execute, watch, settle, reverse } = proxyActivities<typeof activities>({
   startToCloseTimeout: '30 seconds',
   // No `maximumAttempts`, on purpose and unlike the watcher: a failing step waits, visibly in the
   // Temporal UI, with the money still reserved. Phase 6 bounds it and escalates to REVIEW.
@@ -31,17 +31,24 @@ export async function PaymentWorkflow(reference: string): Promise<string[]> {
   // Sent (§7): a node has the stored bytes. `execute` is §3's "Execution" box.
   timeline.push(await execute(reference))
 
-  // Paid (§7): finality AND the event. One short check, then a durable timer, until both hold. No
-  // bound yet: Phase 6 caps it and escalates to REVIEW, with the money still reserved.
+  // Paid (§7): finality AND the event. One short check, then a durable timer, until the chain gives
+  // a final answer either way. No bound yet: Phase 6 caps it and escalates to REVIEW, with the money
+  // still reserved.
   let verdict = await watch(reference)
-  while (verdict.outcome !== 'paid') {
+  while (verdict.outcome !== 'paid' && verdict.outcome !== 'reverted') {
     await sleep('10 seconds')
     verdict = await watch(reference)
   }
-  timeline.push(`paid in block ${verdict.evidence.blockNumber} (final ${verdict.evidence.finalBlock})`)
 
-  // Only now do the books move: Reserved out, Partner debt cleared, the invoice PAID.
-  timeline.push(await settle(reference, verdict.evidence))
+  if (verdict.outcome === 'reverted') {
+    // §6, "reverted: proof it did not land, so it is reversed": Reserved back to Available, the invoice OPEN.
+    timeline.push(`reverted in block ${verdict.evidence.blockNumber} (final ${verdict.evidence.finalBlock})`)
+    timeline.push(await reverse(reference, verdict.evidence))
+  } else {
+    timeline.push(`paid in block ${verdict.evidence.blockNumber} (final ${verdict.evidence.finalBlock})`)
+    // Only now do the books move: Reserved out, Partner debt cleared, the invoice PAID.
+    timeline.push(await settle(reference, verdict.evidence))
+  }
 
   log.info(`${reference}: ${timeline.join(' → ')}`)
   return timeline

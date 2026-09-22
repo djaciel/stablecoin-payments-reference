@@ -151,7 +151,7 @@ export interface Payables {
   readonly ledger: LedgerFigures
 }
 
-/** Why a payment was refused: short codes a screen turns into a sentence and the article can quote. */
+/** Why a payment failed: short codes a screen turns into a sentence and the article can quote. */
 export type PaymentFailureReason =
   | 'payable_not_open'
   | 'partner_inactive'
@@ -159,10 +159,28 @@ export type PaymentFailureReason =
   | 'amount_out_of_range'
   | 'compliance_rejected'
   | 'insufficient_funds'
+  | 'reverted'
+
+/** Each reason, decided once: did it fail after the money was reserved (true), or at the door (false)? */
+const AFTER_RESERVING: Record<PaymentFailureReason, boolean> = {
+  payable_not_open: false,
+  partner_inactive: false,
+  destination_not_allowlisted: false,
+  amount_out_of_range: false,
+  compliance_rejected: false,
+  insufficient_funds: false,
+  reverted: true,
+}
+
+/** The one rule behind the api's replay code and the screen's "Nothing was reserved." */
+export function failedAfterReserving(reason: PaymentFailureReason | undefined): boolean {
+  return reason !== undefined && AFTER_RESERVING[reason]
+}
 
 /**
  * One payment, as `POST /payments` and `GET /payments/:reference` answer it. `reason` is present
- * only when the payment FAILED, and a replay answers exactly what the first attempt answered.
+ * only when the payment FAILED. A replay answers with the code of the first attempt's outcome and
+ * the payment as it is now (spec assumption 19).
  */
 export interface PaymentView {
   /** `PAY-XXXX`, the article's format. */

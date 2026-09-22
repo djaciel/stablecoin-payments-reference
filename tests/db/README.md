@@ -82,8 +82,16 @@ And §7's Paid moment, in `settlement.db.test.ts`, calling `settlePayment` from
 |---|---|---|
 | Settling is one transaction that posts once: run twice, it leaves Available 9,000, Reserved 0, Partner debt 0, the payment SETTLED, the invoice PAID, one `settle` and one `settled` audit row | "posts once however often it runs…" | the invoice lock, then the status read under it (SETTLED → nothing to do); the `(kind, reference)` unique index and the guarded SENT → SETTLED behind it |
 
-Whether the transfer is final and carries the official Transfer event is decided before this,
-by `paidVerdict` in `packages/chain/src/usdc.ts`, whose two tests run in `pnpm test`.
+And §6's FAILED, in `failure.db.test.ts`, calling `reversePayment` from
+`apps/worker/src/reverse.ts` on a payment the api reserved and the row then marked SENT:
+
+| Claim | Test | Enforced at |
+|---|---|---|
+| A final revert releases the money only with proof, reopens the invoice and posts once: run twice, it leaves Available 10,000, Reserved 0, Partner debt 1,000 (the invoice is still owed), the payment FAILED `reverted`, the invoice OPEN with no payment on it, one `reversal` whose proof names the hash and the block, one `failed` and one `released` row; a new key then reserves the same invoice again | "releases the money only with proof…" | the invoice lock, then the status read under it (FAILED → nothing to do); the guarded SENT → FAILED and PAYING → OPEN; `reversal`'s required proof and `ledger_reversal_needs_proof` |
+
+Whether the transfer is final and carries the official Transfer event, or reverted in a final
+block, is decided before this, by `paidVerdict` in `packages/chain/src/usdc.ts`, whose three
+tests run in `pnpm test`.
 
 Three notes on what a green suite does NOT say:
 
