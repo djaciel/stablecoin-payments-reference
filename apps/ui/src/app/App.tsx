@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { Link, NavLink, Navigate, Outlet, Route, Routes, useMatch } from 'react-router-dom'
 import type { Experiments } from '@payments/domain'
 import { BLACKHOLE_WHERE, BreakItScreen, type ExperimentsContext } from '../admin/BreakItScreen'
 import { PartnersScreen } from '../admin/PartnersScreen'
@@ -56,12 +56,14 @@ export function App() {
 
 /**
  * The company's screens, with their own row of tabs above whichever one is open, and the one poll
- * of the failure-injection flags: the banner on every screen and the Break it card both read it.
+ * of the failure-injection flags: the banner on the other screens and the Break it cards both read it.
  */
 function AdminScreens() {
   const polled = usePolling(getExperiments)
   // The poll and a switch on Break it both write here, so a change shows at once, banner included.
   const [experiments, showExperiments] = useState<Experiments | undefined>(undefined)
+  // On Break it the banner would repeat the cards' own badges and link to the page already open.
+  const onBreakIt = useMatch('/admin/break-it') !== null
 
   useEffect(() => {
     if (polled.data !== undefined) {
@@ -98,7 +100,7 @@ function AdminScreens() {
           {experiments === undefined ? '' : " The banner and Break it show the api's last answer."}
         </p>
       )}
-      {armed.length > 0 && (
+      {armed.length > 0 && !onBreakIt && (
         <p className="armed-banner">
           Failure injection armed: {armed.join('; ')}. <Link to="/admin/break-it">Break it</Link>
         </p>
