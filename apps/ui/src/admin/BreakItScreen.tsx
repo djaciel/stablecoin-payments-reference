@@ -19,7 +19,7 @@ export const BLACKHOLE_WHERE: Record<BlackholeStep, string> = {
 }
 
 /**
- * The failure-injection switches (§9). Each one makes a real failure happen, on the real network.
+ * The Break it switches (§9). Each one makes a real failure happen, on the real network.
  * The flags come from the shell's poll, so these cards and the banner never disagree.
  */
 export function BreakItScreen() {

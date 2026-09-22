@@ -56,7 +56,10 @@ export function App() {
 
 /**
  * The company's screens, with their own row of tabs above whichever one is open, and the one poll
- * of the failure-injection flags: the banner on the other screens and the Break it cards both read it.
+ * of the Break it flags: the banner on the other screens and the Break it cards both read it.
+ *
+ * Four tabs are the demo's flow, in order. Break it is not a fifth step, so it sits at the far end
+ * of the same bar, behind a rule: a switch for the demo, next to the screens it breaks.
  */
 function AdminScreens() {
   const polled = usePolling(getExperiments)
@@ -90,19 +93,22 @@ function AdminScreens() {
         <NavLink to="/admin/transfers" className={navClass}>
           Transfers
         </NavLink>
-        <NavLink to="/admin/break-it" className={navClass}>
-          Break it
-        </NavLink>
+        {/* Red while a switch is armed, so the demo control says so from wherever you are. */}
+        <span className={armed.length > 0 ? 'sub-nav-lab is-armed' : 'sub-nav-lab'}>
+          <NavLink to="/admin/break-it" className={navClass}>
+            Break it
+          </NavLink>
+        </span>
       </nav>
       {polled.error !== undefined && (
         <p className="card-value is-bad flags-unavailable">
-          The failure-injection flags are unavailable — {polled.error}.
+          The Break it switches are unavailable — {polled.error}.
           {experiments === undefined ? '' : " The banner and Break it show the api's last answer."}
         </p>
       )}
       {armed.length > 0 && !onBreakIt && (
         <p className="armed-banner">
-          Failure injection armed: {armed.join('; ')}. <Link to="/admin/break-it">Break it</Link>
+          <Link to="/admin/break-it">Break it</Link> is armed: {armed.join('; ')}.
         </p>
       )}
       <Outlet context={context} />

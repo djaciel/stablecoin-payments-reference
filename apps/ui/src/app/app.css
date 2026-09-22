@@ -183,6 +183,20 @@ a {
   font-size: 0.9rem;
 }
 
+/* Break it is a control of the demo, not the next step of the flow: it goes to the far end of the
+   tabs, behind a rule, so the four screens stay a group. `auto` only pushes while there is room,
+   so a narrow window closes the gap instead of overflowing. */
+.sub-nav-lab {
+  margin-left: auto;
+  padding-left: 1rem;
+  border-left: 1px solid var(--line);
+}
+
+/* Armed, the tab takes the badge's red. Not on the tab you are on: there the cards say it louder. */
+.sub-nav-lab.is-armed .app-nav-link:not(.is-active) {
+  color: var(--bad);
+}
+
 /* One of the two addresses on a partner card. The rule separates them without a box. */
 .address-block + .address-block {
   margin-top: 1rem;
@@ -416,7 +430,7 @@ a {
   overflow-wrap: anywhere;
 }
 
-/* Under the admin tabs while a failure-injection flag is armed, so nobody presses Pay without knowing. */
+/* Under the admin tabs while a Break it switch is armed, so nobody presses Pay without knowing. */
 .armed-banner {
   margin: 0 0 1rem;
   padding: 0.5rem 0.8rem;
