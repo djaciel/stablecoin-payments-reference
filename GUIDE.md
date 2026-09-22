@@ -262,7 +262,7 @@ if it does not know them, so a retry or a crash (§9) can never pay twice.
 - `tests/db/signing.db.test.ts` — two claims against a real Postgres, with a signer that really
   signs: a payment is signed once however many ask at once, and two payments signed together
   get two nonces.
-- `apps/api/src/payments/create-payment.ts` — `GET /payments/:reference` carries the hash and
+- `apps/api/src/payments/read-payments.ts` — `GET /payments/:reference` carries the hash and
   its explorer link once the payment is signed.
 - `apps/api/src/payables/payables.service.ts` — the Payables read carries it too, for each
   invoice's payment.
@@ -350,6 +350,35 @@ dispatcher: `docker compose stop temporal`, press Pay (still 201 RESERVED, and `
 api` has the warning), `docker compose start temporal`, and `docker compose logs worker` says
 `dispatcher: started PAY-XXXX (RESERVED, had no running workflow)`.
 
+## The payment's story: the audit log on screen (§3, §7)
+
+Every step writes its row to the audit log in the same transaction as what it did, so reading the
+rows back tells the payment's story as it happened, with nothing added. The Transfers screen does
+only that: Created, Reserved, Signed, Sent, Paid, Settled, each with the fact that proves it.
+
+- `packages/ledger/src/audit.ts` — everything the log can say, in one place: who acts, what a row
+  is about, each subject's events. Every writer names its rows with these; stored values never change.
+- `apps/api/src/payments/read-payments.ts` — the payment reads: one payment, the latest hundred for
+  the list, and one payment's audit rows plus its invoice's, in one snapshot. No chain reads.
+- `apps/api/src/payments/payments.controller.ts` — `GET /payments` and
+  `GET /payments/:reference/timeline` (404 for an unknown reference).
+- `packages/domain/src/api.ts` — `Payments`, `PaymentSummary`, `PaymentTimeline`, `AuditStep`: what
+  the list and the story answer.
+- `packages/domain/src/temporal.ts` — `workflowUrl`, the one place the link to a payment's runs in
+  the Temporal UI is built (by workflow id: a payment can have more than one run).
+- `docker-compose.yml` — the api gets `TEMPORAL_UI_PORT`, so that link uses the port your browser reaches.
+- `apps/ui/src/admin/TransfersScreen.tsx` — the list, and the story: each row in the article's
+  words with its raw event name under it; Paid and Settled are two lines from one `settled` row.
+- `apps/ui/src/app/App.tsx` — the Transfers tab, and `/admin/transfers/:reference`: each payment's
+  story has its own address, so an invoice row links straight to it.
+- `apps/ui/src/api/usePolling.ts` — the story stops asking once the payment is SETTLED or FAILED.
+- `apps/ui/src/admin/PayablesScreen.tsx` — an invoice's payment reference opens its story.
+
+See it (this sends real testnet USDC): press Pay on a small invoice on `/admin/payables` and click
+its reference. Reserved is there at once, Signed and Sent within seconds, Paid and Settled after
+finality, without a reload (keep the tab in front: a hidden tab pauses polling).
+`curl localhost:3000/payments/<its reference>/timeline` is the same story as data.
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -360,6 +389,8 @@ api` has the warning), `docker compose start temporal`, and `docker compose logs
 - `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses.
 - `apps/ui/src/admin/PayablesScreen.tsx` — the invoices the company owes, the books they move,
   and Pay, with each invoice's payment on its row.
+- `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, and each one's story
+  step by step.
 - `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint.
   The shapes of the answers are in `packages/domain/src/api.ts`, which the api writes with
   and the browser reads.
@@ -368,7 +399,7 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-The payment's story step by step on screen, what happens
-when a transfer fails (§6), the four failures as buttons (§9), reconciliation (§10) and the
-partner side that pays a receivable (§8) arrive in later phases; each will add its entry here
-when it lands.
+What happens when a transfer fails, and REVIEW with the money held and its resume (§6); deposits
+and treasury fundings on the Transfers screen, with the partner side that pays a receivable (§8);
+the four failures as buttons (§9); and reconciliation (§10) arrive in later phases. Each will add
+its entry here when it lands.

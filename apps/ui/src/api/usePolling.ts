@@ -23,10 +23,11 @@ export interface Polled<T> {
  * stuck on "checking…" until someone looks at it is a bug, not a saving.
  *
  * `read` must be a stable reference (a module-level function such as `getHealth`, or one
- * wrapped in `useCallback`): it is the effect's only dependency, so a new function on
- * every render would restart the timer on every render.
+ * wrapped in `useCallback`): it is the effect's dependency, so a new function on every
+ * render would restart the timer on every render. `isDone` too, when given: once an answer
+ * satisfies it, that answer stays on screen and the repeats stop.
  */
-export function usePolling<T>(read: () => Promise<T>): Polled<T> {
+export function usePolling<T>(read: () => Promise<T>, isDone?: (data: T) => boolean): Polled<T> {
   const [state, setState] = useState<Polled<T>>({ data: undefined, error: undefined })
 
   useEffect(() => {
@@ -39,6 +40,9 @@ export function usePolling<T>(read: () => Promise<T>): Polled<T> {
         .then((data) => {
           if (active) {
             setState({ data, error: undefined })
+            if (isDone?.(data) === true) {
+              stop()
+            }
           }
         })
         .catch((error: unknown) => {
@@ -54,16 +58,19 @@ export function usePolling<T>(read: () => Promise<T>): Polled<T> {
       }
     }
 
-    readNow()
     const timer = setInterval(readIfVisible, POLL_INTERVAL_MS)
     document.addEventListener('visibilitychange', readIfVisible)
-
-    return () => {
-      active = false
+    const stop = (): void => {
       clearInterval(timer)
       document.removeEventListener('visibilitychange', readIfVisible)
     }
-  }, [read])
+    readNow()
+
+    return () => {
+      active = false
+      stop()
+    }
+  }, [read, isDone])
 
   return state
 }

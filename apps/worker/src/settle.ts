@@ -1,6 +1,6 @@
 import { activityInfo, log } from '@temporalio/activity'
 import { applyGuardedTransition, inTransaction, type PoolClient } from '@payments/db'
-import { recordAudit, settle as settleLedger } from '@payments/ledger'
+import { AUDIT_ACTORS, AUDIT_SUBJECTS, INVOICE_EVENTS, PAYMENT_EVENTS, recordAudit, settle as settleLedger } from '@payments/ledger'
 import { workerPool } from './db'
 import type { SettlementEvidence } from './watch'
 
@@ -73,13 +73,19 @@ export async function settlePayment(client: PoolClient, reference: string, evide
 
     // 5. The evidence, next to the entries it justifies.
     await recordAudit(client, {
-      actor: 'worker',
-      subjectType: 'payment',
+      actor: AUDIT_ACTORS.worker,
+      subjectType: AUDIT_SUBJECTS.payment,
       subjectId: reference,
-      event: 'settled',
+      event: PAYMENT_EVENTS.settled,
       context: { ...evidence, amountMinor, ledgerTransactionId },
     })
-    await recordAudit(client, { actor: 'worker', subjectType: 'invoice', subjectId: invoiceId, event: 'paid', context: { reference } })
+    await recordAudit(client, {
+      actor: AUDIT_ACTORS.worker,
+      subjectType: AUDIT_SUBJECTS.invoice,
+      subjectId: invoiceId,
+      event: INVOICE_EVENTS.paid,
+      context: { reference },
+    })
     return { kind: 'settled', ledgerTransactionId }
   })
 }

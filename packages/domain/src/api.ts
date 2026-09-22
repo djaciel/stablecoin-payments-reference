@@ -177,3 +177,40 @@ export interface PaymentView {
   readonly transaction?: { readonly hash: string; readonly explorerUrl: string }
   readonly createdAt: string
 }
+
+/** One payment as the Transfers list shows it: its view, who it pays, and when its log last moved. */
+export interface PaymentSummary extends PaymentView {
+  /** Null only for a payment to an address, which has no partner. */
+  readonly partnerName: string | null
+  /** The time of its newest audit row. */
+  readonly lastChangeAt: string
+}
+
+/** What `GET /payments` answers: the latest payments, newest first. */
+export interface Payments {
+  readonly payments: readonly PaymentSummary[]
+}
+
+/** One row of the audit log, as it was written. Every value in `context` arrives as a string. */
+export interface AuditStep {
+  readonly at: string
+  readonly actor: string
+  /** `payment`, or `invoice` for the invoice's rows that name this payment. */
+  readonly subjectType: string
+  readonly event: string
+  readonly context: Readonly<Record<string, string>>
+}
+
+/**
+ * What `GET /payments/:reference/timeline` answers: the payment, and its audit rows in the order
+ * they were written, read in one snapshot so no step is ahead of the state above it.
+ */
+export interface PaymentTimeline {
+  readonly payment: PaymentSummary
+  readonly steps: readonly AuditStep[]
+  /**
+   * The payment's runs in the Temporal UI, found by workflow id: a payment can have more than one.
+   * Absent when it was refused before its money was reserved, because no workflow ever ran for it.
+   */
+  readonly workflowUrl?: string
+}

@@ -1,10 +1,10 @@
 import { createHash, randomInt } from 'node:crypto'
-import { explorerTransactionUrl } from '@payments/chain'
-import { applyGuardedTransition, type Pool, type PoolClient } from '@payments/db'
+import { applyGuardedTransition, type PoolClient } from '@payments/db'
 import type { PaymentFailureReason, PaymentView } from '@payments/domain'
-import { InsufficientFunds, LedgerRejected, formatMinor, recordAudit, reserve, toMinorFromDecimal } from '@payments/ledger'
+import { AUDIT_ACTORS, AUDIT_SUBJECTS, INVOICE_EVENTS, InsufficientFunds, LedgerRejected, PAYMENT_EVENTS, recordAudit, reserve, toMinorFromDecimal, type AuditEventName } from '@payments/ledger'
 import { MAX_PAYMENT_USDC, MIN_PAYMENT_USDC } from '../config'
 import { screenPayment } from './compliance'
+import { PAYMENT_COLUMNS, toView, type PaymentRow } from './read-payments'
 
 /**
  * `POST /payments` (§4, §5): record the intent, validate it and set the money aside, in six steps
@@ -15,8 +15,8 @@ import { screenPayment } from './compliance'
 const MIN_PAYMENT = toMinorFromDecimal(MIN_PAYMENT_USDC)
 const MAX_PAYMENT = toMinorFromDecimal(MAX_PAYMENT_USDC)
 const REFERENCE_ATTEMPTS = 5
-const COLUMNS =
-  'reference, status, payable_id, destination, amount_minor, currency, failure_reason, request_fingerprint, tx_hash, created_at'
+const COLUMNS = `${PAYMENT_COLUMNS}, request_fingerprint`
+type IntentRow = PaymentRow & { readonly request_fingerprint: string }
 
 export interface PaymentRequest {
   readonly idempotencyKey: string
@@ -46,7 +46,7 @@ export async function createPayment(client: PoolClient, request: PaymentRequest)
   }
   const { reference, destination, currency } = intent
   const amountMinor = BigInt(intent.amount_minor)
-  await audit(client, reference, 'created', { idempotencyKey: request.idempotencyKey, destination, amountMinor })
+  await audit(client, reference, PAYMENT_EVENTS.created, { idempotencyKey: request.idempotencyKey, destination, amountMinor })
 
   // 2. Lock the invoice so its status holds still until COMMIT. Taken BEFORE step 4's account
   //    locks, on every path, so two payments queue instead of deadlocking. NO KEY UPDATE, not
@@ -114,8 +114,8 @@ export async function createPayment(client: PoolClient, request: PaymentRequest)
     to: 'PAYING',
     extraSet: { payment_reference: reference },
   })
-  await audit(client, reference, 'reserved', { amountMinor, currency, ledgerTransactionId })
-  await recordAudit(client, { actor: 'api', subjectType: 'invoice', subjectId: locked.id, event: 'payment-linked', context: { reference } })
+  await audit(client, reference, PAYMENT_EVENTS.reserved, { amountMinor, currency, ledgerTransactionId })
+  await recordAudit(client, { actor: AUDIT_ACTORS.api, subjectType: AUDIT_SUBJECTS.invoice, subjectId: locked.id, event: INVOICE_EVENTS.paymentLinked, context: { reference } })
   return { kind: 'recorded', payment: toView({ ...intent, status: 'RESERVED' }) }
 }
 
@@ -124,10 +124,10 @@ export async function createPayment(client: PoolClient, request: PaymentRequest)
  * request again gets the same answer. The invoice was never touched and stays OPEN. The caller
  * COMMITs and answers 422.
  */
-async function fail(client: PoolClient, intent: PaymentRow, reason: PaymentFailureReason, context = {}): Promise<PaymentOutcome> {
+async function fail(client: PoolClient, intent: IntentRow, reason: PaymentFailureReason, context = {}): Promise<PaymentOutcome> {
   const { reference } = intent
   await applyGuardedTransition(client, { ...paymentStatusField(reference), from: 'CREATED', to: 'FAILED', extraSet: { failure_reason: reason } })
-  await audit(client, reference, 'failed', { reason, ...context })
+  await audit(client, reference, PAYMENT_EVENTS.failed, { reason, ...context })
   return { kind: 'recorded', payment: toView({ ...intent, status: 'FAILED', failure_reason: reason }) }
 }
 
@@ -137,11 +137,11 @@ async function fail(client: PoolClient, intent: PaymentRow, reason: PaymentFailu
  * with 23505. The savepoint keeps the caller's transaction usable after that failure (and exists
  * only inside a transaction, so outside one this refuses instead of committing on its own).
  */
-async function insertIntent(client: PoolClient, request: PaymentRequest, fingerprint: string): Promise<PaymentRow | 'key-taken' | undefined> {
+async function insertIntent(client: PoolClient, request: PaymentRequest, fingerprint: string): Promise<IntentRow | 'key-taken' | undefined> {
   for (let attempt = 1; attempt <= REFERENCE_ATTEMPTS; attempt += 1) {
     await client.query('SAVEPOINT payment_intent')
     try {
-      const inserted = await client.query<PaymentRow>(
+      const inserted = await client.query<IntentRow>(
         `INSERT INTO payments (reference, status, payable_id, destination, amount_minor, currency, idempotency_key, request_fingerprint)
          SELECT $1, 'CREATED', id, destination, amount_minor, currency, $2, $3 FROM payables WHERE id = $4
          RETURNING ${COLUMNS}`,
@@ -166,18 +166,12 @@ async function insertIntent(client: PoolClient, request: PaymentRequest, fingerp
 
 /** The key was taken, and under READ COMMITTED this statement sees the commit step 1 waited for. */
 async function replay(client: PoolClient, key: string, fingerprint: string): Promise<PaymentOutcome> {
-  const result = await client.query<PaymentRow>(`SELECT ${COLUMNS} FROM payments WHERE idempotency_key = $1`, [key])
+  const result = await client.query<IntentRow>(`SELECT ${COLUMNS} FROM payments WHERE idempotency_key = $1`, [key])
   const row = result.rows[0]
   if (row === undefined) {
     throw new Error(`idempotency key ${key} is taken, but no payment carries it`)
   }
   return row.request_fingerprint === fingerprint ? { kind: 'replayed', payment: toView(row) } : { kind: 'key-conflict' }
-}
-
-/** `GET /payments/:reference`. */
-export async function findPayment(db: Pool | PoolClient, reference: string): Promise<PaymentView | undefined> {
-  const result = await db.query<PaymentRow>(`SELECT ${COLUMNS} FROM payments WHERE reference = $1`, [reference])
-  return result.rows[0] === undefined ? undefined : toView(result.rows[0])
 }
 
 /**
@@ -203,37 +197,6 @@ function paymentStatusField(reference: string): { table: string; idColumn: strin
   return { table: 'payments', idColumn: 'reference', id: reference, statusColumn: 'status' }
 }
 
-function audit(client: PoolClient, reference: string, event: string, context: Record<string, unknown>): Promise<void> {
-  return recordAudit(client, { actor: 'api', subjectType: 'payment', subjectId: reference, event, context })
-}
-
-interface PaymentRow {
-  readonly reference: string
-  readonly status: PaymentView['status']
-  readonly payable_id: string | null
-  readonly destination: string
-  readonly amount_minor: string
-  readonly currency: string
-  readonly failure_reason: PaymentFailureReason | null
-  readonly request_fingerprint: string
-  readonly tx_hash: string | null
-  readonly created_at: Date
-}
-
-function toView(row: PaymentRow): PaymentView {
-  return {
-    reference: row.reference,
-    status: row.status,
-    amount: formatMinor(BigInt(row.amount_minor)),
-    destination: row.destination,
-    payableId: row.payable_id,
-    reason: row.failure_reason ?? undefined,
-    transaction: transactionView(row.tx_hash),
-    createdAt: row.created_at.toISOString(),
-  }
-}
-
-/** The hash and its explorer link, once `sign` has stored one. Shared with the Payables screen's read. */
-export function transactionView(txHash: string | null): PaymentView['transaction'] {
-  return txHash === null ? undefined : { hash: txHash, explorerUrl: explorerTransactionUrl(txHash) }
+function audit(client: PoolClient, reference: string, event: AuditEventName, context: Record<string, unknown>): Promise<void> {
+  return recordAudit(client, { actor: AUDIT_ACTORS.api, subjectType: AUDIT_SUBJECTS.payment, subjectId: reference, event, context })
 }

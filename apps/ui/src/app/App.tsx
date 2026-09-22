@@ -2,6 +2,7 @@ import { NavLink, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { PartnersScreen } from '../admin/PartnersScreen'
 import { PayablesScreen } from '../admin/PayablesScreen'
 import { StartScreen } from '../admin/StartScreen'
+import { TransfersScreen } from '../admin/TransfersScreen'
 import { PartnerHome } from '../partner/PartnerHome'
 
 /**
@@ -34,6 +35,9 @@ export function App() {
             <Route index element={<StartScreen />} />
             <Route path="partners" element={<PartnersScreen />} />
             <Route path="payables" element={<PayablesScreen />} />
+            <Route path="transfers" element={<TransfersScreen />} />
+            {/* A payment's story has its own address, so an invoice row can link straight to it. */}
+            <Route path="transfers/:reference" element={<TransfersScreen />} />
           </Route>
           <Route path="/partner" element={<PartnerHome />} />
           {/* No landing page: `/` and anything unknown go to the company's side, where the demo starts. */}
@@ -58,6 +62,9 @@ function AdminScreens() {
         </NavLink>
         <NavLink to="/admin/payables" className={navClass}>
           Payables
+        </NavLink>
+        <NavLink to="/admin/transfers" className={navClass}>
+          Transfers
         </NavLink>
       </nav>
       <Outlet />

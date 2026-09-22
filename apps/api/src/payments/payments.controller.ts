@@ -1,11 +1,12 @@
 import { BadRequestException, Body, ConflictException, Controller, Get, Headers, Inject, NotFoundException, Param, Post, Res } from '@nestjs/common'
 import { inTransaction, type Pool } from '@payments/db'
-import type { PaymentView } from '@payments/domain'
+import type { PaymentTimeline, PaymentView, Payments } from '@payments/domain'
 import type { Client } from '@temporalio/client'
 import { DATABASE_POOL } from '../db/db.module'
 import { TEMPORAL_CLIENT } from '../temporal/temporal.module'
-import { createPayment, findPayment, type PaymentOutcome, type PaymentRequest } from './create-payment'
+import { createPayment, type PaymentOutcome, type PaymentRequest } from './create-payment'
 import { dispatchPayment } from './dispatch'
+import { findPayment, listPayments, paymentTimeline } from './read-payments'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_KEY_LENGTH = 200
@@ -53,13 +54,21 @@ export class PaymentsController {
     return outcome.payment
   }
 
+  /** The Transfers list. */
+  @Get()
+  async list(): Promise<Payments> {
+    return { payments: await listPayments(this.pool) }
+  }
+
   @Get(':reference')
   async find(@Param('reference') reference: string): Promise<PaymentView> {
-    const payment = await findPayment(this.pool, reference)
-    if (payment === undefined) {
-      throw new NotFoundException(`no payment has the reference ${reference}.`)
-    }
-    return payment
+    return (await findPayment(this.pool, reference)) ?? notFound(reference)
+  }
+
+  /** One payment's story, read from the audit log: the step-by-step view polls this. */
+  @Get(':reference/timeline')
+  async timeline(@Param('reference') reference: string): Promise<PaymentTimeline> {
+    return (await paymentTimeline(this.pool, reference)) ?? notFound(reference)
   }
 
   /** The transaction is opened and committed here; `createPayment` runs inside it and never ends it. */
@@ -83,6 +92,10 @@ function statusCodeOf(outcome: { readonly kind: 'recorded' | 'replayed'; readonl
     return 422
   }
   return outcome.kind === 'recorded' ? 201 : 200
+}
+
+function notFound(reference: string): never {
+  throw new NotFoundException(`no payment has the reference ${reference}.`)
 }
 
 function readIdempotencyKey(header: unknown): string {

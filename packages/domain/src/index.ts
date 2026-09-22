@@ -6,6 +6,7 @@
 // or NestJS belongs in the package named after it.
 export type {
   AddressBalance,
+  AuditStep,
   FundingAmounts,
   FundingTransfer,
   GasSpent,
@@ -17,8 +18,11 @@ export type {
   PayableSummary,
   Payables,
   PaymentFailureReason,
+  PaymentSummary,
+  PaymentTimeline,
   PaymentView,
+  Payments,
   Treasury,
 } from './api'
 export { optionalEnv, readEnv, requireEnv } from './env'
-export { PAYMENT_WORKFLOW, paymentWorkflowStart, readTemporalConfig, type TemporalConfig } from './temporal'
+export { PAYMENT_WORKFLOW, paymentWorkflowStart, readTemporalConfig, workflowUrl, type TemporalConfig } from './temporal'

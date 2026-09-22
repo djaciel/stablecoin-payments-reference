@@ -1,8 +1,18 @@
 import { BadRequestException, UnprocessableEntityException } from '@nestjs/common'
 import { inTransaction, type Pool, type PoolClient } from '@payments/db'
 import type { PayableSummary, PaymentFailureReason, PaymentView } from '@payments/domain'
-import { ACCOUNTS, getBalances, payable, recordAudit, type AccountCode, type MinorUnits } from '@payments/ledger'
-import { transactionView } from '../payments/create-payment'
+import {
+  ACCOUNTS,
+  AUDIT_ACTORS,
+  AUDIT_SUBJECTS,
+  INVOICE_EVENTS,
+  getBalances,
+  payable,
+  recordAudit,
+  type AccountCode,
+  type MinorUnits,
+} from '@payments/ledger'
+import { transactionView } from '../payments/read-payments'
 
 /** Defined here and not in the module, for the same cycle reason as `PARTNERS_SERVICE`. */
 export const PAYABLES_SERVICE = Symbol('PAYABLES_SERVICE')
@@ -113,10 +123,10 @@ export class PayablesService {
         const ledgerTransactionId = await payable(client, { payableId: id, amount: input.amountMinor, currency: CURRENCY })
 
         await recordAudit(client, {
-          actor: 'admin',
-          subjectType: 'invoice',
+          actor: AUDIT_ACTORS.admin,
+          subjectType: AUDIT_SUBJECTS.invoice,
           subjectId: id,
-          event: 'created',
+          event: INVOICE_EVENTS.created,
           context: {
             amountMinor: input.amountMinor,
             currency: CURRENCY,

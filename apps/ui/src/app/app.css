@@ -310,3 +310,108 @@ a {
   padding-top: 0.8rem;
   border-top: 1px solid var(--line);
 }
+
+/* The Transfers list: a table, because the payments are compared down a column. */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.table th,
+.table td {
+  padding: 0.45rem 0.8rem 0.45rem 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.table th {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.table .is-number {
+  text-align: right;
+}
+
+.is-mono,
+.table .is-number {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* A FAILED row's reason, under its state. */
+.cell-note {
+  display: block;
+  color: var(--bad);
+  font-size: 0.8rem;
+  white-space: normal;
+}
+
+.back-link {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+}
+
+/* A payment's story: the step, when, and what proves it, one line each. */
+.story {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.story-line {
+  display: grid;
+  grid-template-columns: 5.5rem 11.5rem 1fr;
+  gap: 0.8rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.story-name {
+  font-weight: 600;
+}
+
+.story-time {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  padding-top: 0.15rem;
+}
+
+.story-text {
+  margin: 0;
+}
+
+/* An idempotency key or a ledger id is one long word: it wraps instead of pushing past the card. */
+.story-text code {
+  overflow-wrap: anywhere;
+}
+
+/* The raw audit rows behind the line, for the reader following the code. */
+.story-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* A step not reached yet: named, never invented. */
+.story-line.is-waiting .story-name,
+.story-line.is-waiting .story-text {
+  color: var(--muted);
+  font-weight: normal;
+}
+
+.is-hash {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}

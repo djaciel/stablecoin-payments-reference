@@ -11,7 +11,7 @@ import {
   type TransactionToSign,
 } from '@payments/chain'
 import { inTransaction, type PoolClient } from '@payments/db'
-import { recordAudit } from '@payments/ledger'
+import { AUDIT_ACTORS, AUDIT_SUBJECTS, PAYMENT_EVENTS, recordAudit } from '@payments/ledger'
 import { getAddress, keccak256 } from 'viem'
 import { FEE_CAP_MULTIPLIER, GAS_HEADROOM_PERCENT } from './config'
 import { workerPool } from './db'
@@ -127,10 +127,10 @@ export async function signPayment(
       throw new Error(`${input.reference} changed under its own row lock; nothing was stored`)
     }
     await recordAudit(client, {
-      actor: 'worker',
-      subjectType: 'payment',
+      actor: AUDIT_ACTORS.worker,
+      subjectType: AUDIT_SUBJECTS.payment,
       subjectId: input.reference,
-      event: 'signed',
+      event: PAYMENT_EVENTS.signed,
       context: {
         txHash: signed.hash,
         nonce,

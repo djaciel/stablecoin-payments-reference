@@ -1,5 +1,5 @@
 import type { PoolClient } from '@payments/db'
-import { recordAudit } from './audit'
+import { AUDIT_ACTORS, AUDIT_SUBJECTS, PAYMENT_EVENTS, TREASURY_EVENTS, recordAudit } from './audit'
 import { writeTransaction } from './engine'
 import { ACCOUNTS, type LedgerTransactionId, type MinorUnits, type ReversalProof } from './types'
 
@@ -89,10 +89,10 @@ export async function funding(client: PoolClient, input: FundingInput): Promise<
   // Same database transaction as the entries: the books say the balance went up, this says
   // which transaction on which chain put it there.
   await recordAudit(client, {
-    actor: 'watcher',
-    subjectType: 'treasury',
+    actor: AUDIT_ACTORS.watcher,
+    subjectType: AUDIT_SUBJECTS.treasury,
     subjectId: reference,
-    event: 'funded',
+    event: TREASURY_EVENTS.funded,
     context: {
       txHash: input.txHash,
       logIndex: input.logIndex,
@@ -204,10 +204,10 @@ export async function reversal(client: PoolClient, input: ReversalInput): Promis
 
   // Same transaction as the entries it justifies: the release and its reason land together.
   await recordAudit(client, {
-    actor: 'worker',
-    subjectType: 'payment',
+    actor: AUDIT_ACTORS.worker,
+    subjectType: AUDIT_SUBJECTS.payment,
     subjectId: input.reference,
-    event: 'released',
+    event: PAYMENT_EVENTS.released,
     context: {
       amountMinor: input.amount,
       currency: input.currency,
@@ -241,10 +241,10 @@ export async function cancel(client: PoolClient, input: CancelInput): Promise<Le
   // The same `released` event as a reversal — the same thing happened to the money. What
   // distinguishes the two doors is `proof`.
   await recordAudit(client, {
-    actor: 'admin',
-    subjectType: 'payment',
+    actor: AUDIT_ACTORS.admin,
+    subjectType: AUDIT_SUBJECTS.payment,
     subjectId: input.reference,
-    event: 'released',
+    event: PAYMENT_EVENTS.released,
     context: {
       amountMinor: input.amount,
       currency: input.currency,

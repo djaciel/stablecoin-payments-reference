@@ -34,7 +34,19 @@ export {
   type ScaffoldingInput,
   type TransferInput,
 } from './movements'
-export { recordAudit, type AuditActor, type AuditEvent } from './audit'
+export {
+  AUDIT_ACTORS,
+  AUDIT_SUBJECTS,
+  DEMO_EVENTS,
+  INVOICE_EVENTS,
+  PAYMENT_EVENTS,
+  TREASURY_EVENTS,
+  recordAudit,
+  type AuditActor,
+  type AuditEvent,
+  type AuditEventName,
+  type AuditSubject,
+} from './audit'
 export { ARTICLE_PARTNER_DEBT, ARTICLE_TREASURY, RACE_TREASURY, seedArticle, seedRace } from './seed'
 export { getBalances } from './balances'
 export { USDC_DECIMALS, formatMinor, toMinor, toMinorFromDecimal } from './money'

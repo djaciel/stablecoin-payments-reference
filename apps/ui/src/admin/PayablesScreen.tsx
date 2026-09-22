@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import type { LedgerFigures, PayableSummary, Payables, PaymentFailureReason, PaymentView } from '@payments/domain'
 import { createPayable, getPayables, payPayable } from '../api/client'
 import { usePolling } from '../api/usePolling'
@@ -8,7 +9,7 @@ import { AddressLine, CopyButton } from '../app/AddressLine'
 const DEFAULT_AMOUNT = '0.50'
 
 /** Why a payment failed, in the article's words. The api's code stays on screen under it. */
-const REASONS: Record<PaymentFailureReason, string> = {
+export const REASONS: Record<PaymentFailureReason, string> = {
   insufficient_funds: 'Available was less than this amount.',
   payable_not_open: 'The invoice was already being paid.',
   partner_inactive: 'The partner was not active.',
@@ -130,7 +131,7 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
           <>
             <Figure label="Payment">{payment.status}</Figure>
             <Figure label="Reference">
-              {payment.reference} <CopyButton text={payment.reference} />
+              <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link> <CopyButton text={payment.reference} />
             </Figure>
           </>
         )}

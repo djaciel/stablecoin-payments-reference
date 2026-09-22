@@ -13,7 +13,17 @@ import {
 } from '@payments/chain'
 import type { Pool, PoolClient } from '@payments/db'
 import type { FundingAmounts, FundingTransfer, GasSpent, PartnerWalletFunding } from '@payments/domain'
-import { formatMinor, recordAudit, scaffolding, scaffoldingReference, toMinor, withLedgerTransaction } from '@payments/ledger'
+import {
+  AUDIT_ACTORS,
+  AUDIT_SUBJECTS,
+  DEMO_EVENTS,
+  formatMinor,
+  recordAudit,
+  scaffolding,
+  scaffoldingReference,
+  toMinor,
+  withLedgerTransaction,
+} from '@payments/ledger'
 import { formatEther, parseEther, type Address, type Hex } from 'viem'
 import type { TreasuryService } from './treasury.service'
 
@@ -290,10 +300,10 @@ export class FundPartnerWalletService {
       // from a balance read before and after, which two nodes at different heights could
       // answer with zero. Its halves stay apart and dated: see `GAS_BASIS`.
       await recordAudit(client, {
-        actor: 'api',
-        subjectType: 'demo',
+        actor: AUDIT_ACTORS.api,
+        subjectType: AUDIT_SUBJECTS.demo,
         subjectId: reference,
-        event: 'partner-wallet-funded',
+        event: DEMO_EVENTS.partnerWalletFunded,
         context: {
           usdcTxHash: txHash,
           usdcAmountMinor: FUNDING_USDC,

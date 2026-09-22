@@ -177,6 +177,9 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
       TEMPORAL_TASK_QUEUE: payments
+      # The Transfers screen links each payment to its run in the Temporal UI. The link opens in
+      # your browser, so it uses the port temporal-ui is published on (empty means 8080).
+      TEMPORAL_UI_PORT: ${TEMPORAL_UI_PORT:-}
     ports:
       # Localhost only. Running this on a shared machine and wanting the API reachable is
       # a deliberate change, not a default.

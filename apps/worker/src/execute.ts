@@ -1,7 +1,7 @@
 import { ApplicationFailure, activityInfo, log } from '@temporalio/activity'
 import { chainErrorMessage, createChainClient, rpcHost } from '@payments/chain'
 import { applyGuardedTransition, inTransaction, type PoolClient } from '@payments/db'
-import { recordAudit } from '@payments/ledger'
+import { AUDIT_ACTORS, AUDIT_SUBJECTS, PAYMENT_EVENTS, recordAudit } from '@payments/ledger'
 import { BaseError, TransactionNotFoundError, type Hex } from 'viem'
 import { workerPool } from './db'
 
@@ -48,10 +48,10 @@ export async function execute(reference: string): Promise<string> {
           to: 'SENT',
         })
         await recordAudit(client, {
-          actor: 'worker',
-          subjectType: 'payment',
+          actor: AUDIT_ACTORS.worker,
+          subjectType: AUDIT_SUBJECTS.payment,
           subjectId: reference,
-          event: 'sent',
+          event: PAYMENT_EVENTS.sent,
           context: { txHash: hash, networkAlreadyKnew, attempt, rpcHost: rpcHost() },
         })
       })

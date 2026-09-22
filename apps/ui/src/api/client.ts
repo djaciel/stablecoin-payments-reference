@@ -11,7 +11,7 @@
  * variable.
  */
 
-import type { Health, Partners, PartnerWalletFunding, Payables, PaymentView, Treasury } from '@payments/domain'
+import type { Health, Partners, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, Treasury } from '@payments/domain'
 
 const API_BASE_PATH = '/api'
 
@@ -53,6 +53,15 @@ export async function payPayable(payableId: string, idempotencyKey: string): Pro
     throw new Error(await refusalMessage(response))
   }
   return (await response.json()) as PaymentView
+}
+
+export function getPayments(): Promise<Payments> {
+  return read<Payments>('/payments')
+}
+
+/** One payment's story, from the audit log. */
+export function getPaymentTimeline(reference: string): Promise<PaymentTimeline> {
+  return read<PaymentTimeline>(`/payments/${encodeURIComponent(reference)}/timeline`)
 }
 
 /**

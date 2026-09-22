@@ -26,6 +26,19 @@ export function readTemporalConfig(): TemporalConfig {
   }
 }
 
+const DEFAULT_UI_PORT = '8080'
+
+/**
+ * The payment's runs in the Temporal UI, the one place that link is built: the list filtered by
+ * workflow id, because a payment can have more than one run and `/workflows/<id>` opens only the
+ * newest. The browser that follows it is on the host, so it uses the port compose publishes.
+ */
+export function workflowUrl(reference: string): string {
+  const port = readEnv('TEMPORAL_UI_PORT', DEFAULT_UI_PORT)
+  const namespace = readEnv('TEMPORAL_NAMESPACE', DEFAULT_NAMESPACE)
+  return `http://localhost:${port}/namespaces/${namespace}/workflows?query=${encodeURIComponent(`WorkflowId="${reference}"`)}`
+}
+
 /** The payment workflow's type name. The api starts it by name, because it must not import worker code. */
 export const PAYMENT_WORKFLOW = 'PaymentWorkflow'
 
