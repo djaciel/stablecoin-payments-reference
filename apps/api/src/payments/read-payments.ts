@@ -1,6 +1,6 @@
 import { explorerTransactionUrl } from '@payments/chain'
 import { inTransaction, type Pool, type PoolClient } from '@payments/db'
-import { workflowUrl, type AuditStep, type PaymentFailureReason, type PaymentSummary, type PaymentTimeline, type PaymentView } from '@payments/domain'
+import { workflowUrl, type AuditStep, type PaymentFailureReason, type PaymentReview, type PaymentSummary, type PaymentTimeline, type PaymentView } from '@payments/domain'
 import { AUDIT_SUBJECTS, PAYMENT_EVENTS, formatMinor } from '@payments/ledger'
 
 /**
@@ -13,6 +13,13 @@ export const PAYMENT_COLUMNS = 'reference, status, payable_id, destination, amou
 
 /** The list shows the latest ones; the rest are still in the database. */
 const LIST_LIMIT = 100
+
+/**
+ * A payment signed and never sent: RESERVED with a hash, or REVIEW that came from there. It holds
+ * the treasury's next nonce (spec assumption 24); the REVIEW queue says so and "Fund partner
+ * wallet" refuses while one exists. `review_from_status` is set only in REVIEW (`0010`).
+ */
+export const HOLDS_NONCE = "tx_hash IS NOT NULL AND (status = 'RESERVED' OR review_from_status = 'RESERVED')"
 
 export interface PaymentRow {
   readonly reference: string
@@ -88,20 +95,48 @@ export function transactionView(txHash: string | null): PaymentView['transaction
 interface SummaryRow extends PaymentRow {
   readonly partner_name: string | null
   readonly last_change_at: Date
+  readonly review_from_status: PaymentReview['fromStatus'] | null
+  readonly nonce: number | null
+  readonly holds_nonce: boolean
+  /** The latest `escalated` row, joined only for a payment in REVIEW. */
+  readonly escalated_at: Date | null
+  readonly escalation: { readonly step?: string; readonly lastError?: string } | null
 }
 
 /** `$1` is taken by the audit subject; `filter` numbers its own parameters from `$2`. */
 async function selectSummaries(db: Pool | PoolClient, filter: string, params: readonly unknown[]): Promise<PaymentSummary[]> {
   const result = await db.query<SummaryRow>(
-    `SELECT ${PAYMENT_COLUMNS},
+    `SELECT ${PAYMENT_COLUMNS}, review_from_status, nonce, (${HOLDS_NONCE}) AS holds_nonce,
+            escalated.at AS escalated_at, escalated.context AS escalation,
             (SELECT partners.name FROM payables JOIN partners ON partners.id = payables.partner_id
               WHERE payables.id = payments.payable_id) AS partner_name,
             (SELECT coalesce(max(at), payments.created_at) FROM audit_log
               WHERE subject_type = $1 AND subject_id = payments.reference) AS last_change_at
-       FROM payments ${filter}`,
+       FROM payments
+       LEFT JOIN LATERAL (
+         SELECT at, context FROM audit_log
+          WHERE subject_type = $1 AND subject_id = payments.reference AND event = '${PAYMENT_EVENTS.escalated}'
+          ORDER BY id DESC LIMIT 1
+       ) escalated ON payments.status = 'REVIEW'
+       ${filter}`,
     [AUDIT_SUBJECTS.payment, ...params],
   )
-  return result.rows.map((row) => ({ ...toView(row), partnerName: row.partner_name, lastChangeAt: row.last_change_at.toISOString() }))
+  return result.rows.map((row) => ({
+    ...toView(row),
+    partnerName: row.partner_name,
+    lastChangeAt: row.last_change_at.toISOString(),
+    ...(row.review_from_status === null ? {} : { review: reviewOf(row, row.review_from_status) }),
+  }))
+}
+
+function reviewOf(row: SummaryRow, fromStatus: PaymentReview['fromStatus']): PaymentReview {
+  return {
+    fromStatus,
+    step: row.escalation?.step ?? '',
+    reason: row.escalation?.lastError ?? '',
+    at: (row.escalated_at ?? row.last_change_at).toISOString(),
+    ...(row.holds_nonce && row.nonce !== null ? { nonce: row.nonce } : {}),
+  }
 }
 
 interface AuditRow {

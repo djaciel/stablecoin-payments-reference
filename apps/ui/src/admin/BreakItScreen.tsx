@@ -101,10 +101,12 @@ function BlackholeCard({ blackhole, show }: { readonly blackhole: Experiments['b
         ))}
       </p>
       <p className="card-note">
-        Before the broadcast, the payment is signed and never sent, and it holds its nonce. After it, the transfer lands
-        while the workflow cannot see it, and Reserved still holds the money. While armed it affects every payment in
-        flight; the api and the watcher are not affected. Disarm it and the next attempt asks the node again. Arm it, then
-        press Pay on a small invoice in <Link to="/admin/payables">Payables</Link>.
+        Before the broadcast, the payment is signed and never sent, and it holds its nonce: every payout signed after it
+        waits until it is resumed, and Fund partner wallet is refused until then. After it, the transfer lands while the
+        workflow cannot see it, and Reserved still holds the money. While armed it affects every payment in flight; the
+        api and the watcher are not affected. Disarm it and the next attempt asks the node again; a payment already in
+        REVIEW waits for Resume on <Link to="/admin/transfers">Transfers</Link>. Arm it, then press Pay on a small invoice
+        in <Link to="/admin/payables">Payables</Link>.
       </p>
       {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
       <p className="card-actions">

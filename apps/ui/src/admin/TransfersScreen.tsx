@@ -1,7 +1,7 @@
-import { useCallback, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import type { AuditStep, PaymentTimeline } from '@payments/domain'
-import { getPaymentTimeline, getPayments } from '../api/client'
+import type { AuditStep, PaymentReview, PaymentSummary, PaymentTimeline } from '@payments/domain'
+import { getPaymentTimeline, getPayments, resumePayment } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { CopyButton } from '../app/AddressLine'
 import { REASONS } from './PayablesScreen'
@@ -24,7 +24,111 @@ function PaymentList() {
   if (data.payments.length === 0) {
     return <p className="card-note">No payments yet. Press Pay on an invoice in Payables.</p>
   }
+  // Oldest first by creation time (the list reversed), not by nonce: each held nonce is on its row.
+  const queue = data.payments.filter((payment) => payment.review !== undefined).reverse()
 
+  return (
+    <>
+      {queue.length > 0 && <ReviewQueue payments={queue} />}
+      <PaymentTable payments={data.payments} />
+    </>
+  )
+}
+
+/** Every payment in REVIEW: where it was, the step that gave up and why, since when, and Resume. */
+function ReviewQueue({ payments }: { readonly payments: readonly PaymentSummary[] }) {
+  return (
+    <section className="panel">
+      <h2 className="card-title">In REVIEW: no proof either way, so the money stays reserved</h2>
+      <p className="panel-lead">
+        Resume one once the cause is gone: it goes back to where it was, and its workflow looks for the proof again,
+        sending the same signed bytes if they never left.
+      </p>
+      <div className="table-scroll">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Reference</th>
+              <th className="is-number">Amount</th>
+              <th>Partner</th>
+              <th>Where it was</th>
+              <th>The step that gave up</th>
+              <th>Since</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {payments.map(({ reference, amount, partnerName, review }) =>
+              review === undefined ? null : (
+                <tr key={reference}>
+                  <td>
+                    <Link to={`/admin/transfers/${reference}`}>{reference}</Link>
+                  </td>
+                  <td className="is-number">{amount} USDC</td>
+                  <td>{partnerName ?? 'no partner'}</td>
+                  <td>{whereItWas(review)}</td>
+                  <td>
+                    <code>{review.step}</code>
+                    <span className="cell-note">{review.reason}</span>
+                  </td>
+                  <td>{MOMENT.format(new Date(review.at))}</td>
+                  <td>
+                    <ResumeButton reference={reference} />
+                  </td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+/** Where resume sends it back to. The nonce sentence only where the nonce is really held. */
+function whereItWas(review: PaymentReview): ReactNode {
+  if (review.fromStatus === 'SENT') {
+    return 'Was SENT: a node took the transfer.'
+  }
+  if (review.nonce === undefined) {
+    return 'Was RESERVED, never signed.'
+  }
+  return (
+    <>
+      Signed, never sent: <strong>holds nonce {review.nonce}</strong>. Payouts signed after it wait until it is resumed.
+    </>
+  )
+}
+
+/** `POST /payments/:reference/resume`; the next poll shows where the payment went. A refusal shows its sentence. */
+function ResumeButton({ reference }: { readonly reference: string }) {
+  const [state, setState] = useState<'ready' | 'resuming' | 'resumed'>('ready')
+  const [failure, setFailure] = useState<string | undefined>(undefined)
+
+  const resume = (): void => {
+    setState('resuming')
+    setFailure(undefined)
+    resumePayment(reference)
+      .then(() => {
+        setState('resumed')
+      })
+      .catch((refused: unknown) => {
+        setFailure(refused instanceof Error ? refused.message : String(refused))
+        setState('ready')
+      })
+  }
+
+  return (
+    <>
+      <button type="button" className="button" disabled={state !== 'ready'} onClick={resume}>
+        {state === 'ready' ? 'Resume' : state === 'resuming' ? 'resuming…' : 'resumed'}
+      </button>
+      {failure !== undefined && <span className="cell-note">{failure}</span>}
+    </>
+  )
+}
+
+function PaymentTable({ payments }: { readonly payments: readonly PaymentSummary[] }) {
   return (
     <section className="panel">
       <h2 className="card-title">Payments, newest first</h2>
@@ -41,7 +145,7 @@ function PaymentList() {
             </tr>
           </thead>
           <tbody>
-            {data.payments.map((payment) => (
+            {payments.map((payment) => (
               <tr key={payment.reference}>
                 <td>
                   <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link>
@@ -113,6 +217,17 @@ function Story({ timeline }: { readonly timeline: PaymentTimeline }) {
           <dd>{payment.amount} USDC</dd>
         </div>
       </dl>
+      {payment.review !== undefined && (
+        <>
+          <p className="card-value">
+            In REVIEW since {MOMENT.format(new Date(payment.review.at))}. {whereItWas(payment.review)} No proof either way, so
+            the money stays reserved.
+          </p>
+          <p className="card-actions">
+            <ResumeButton reference={payment.reference} />
+          </p>
+        </>
+      )}
       {timeline.workflowUrl !== undefined && (
         <p className="card-actions">
           {payment.transaction !== undefined && (
@@ -251,6 +366,9 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
       case 'escalated':
         lines.push({ name: 'Escalated', rows: [step], text: escalatedText(context) })
         break
+      case 'resumed':
+        lines.push({ name: 'Resumed', rows: [step], text: `Resumed by an operator: back to ${context.to ?? 'where it was'}; its workflow runs again.` })
+        break
       default:
         lines.push({ name: step.event, rows: [step], text: '' })
     }
@@ -268,6 +386,9 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
 
 function sentText(context: AuditStep['context'], signedHash: string | undefined): ReactNode {
   const sameHash = context.txHash === signedHash
+  if (context.resent === 'true') {
+    return sameHash ? 'The network did not have it: the same bytes, sent again, the same hash.' : <>The network did not have it: the same bytes, sent again as <Hash hash={context.txHash} /></>
+  }
   if (context.networkAlreadyKnew === 'true') {
     return sameHash ? 'The network already had it, the same hash, so nothing was sent again.' : <>The network already had <Hash hash={context.txHash} /></>
   }

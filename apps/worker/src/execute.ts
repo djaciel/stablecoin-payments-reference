@@ -38,23 +38,27 @@ export async function execute(reference: string): Promise<string> {
       line = nodeError === undefined ? `sent ${hash}` : `sent ${hash}; accepted after the node answered "${nodeError}"`
     }
 
-    // 4. A node has them: RESERVED → SENT, once.
-    if (payment.status === 'RESERVED') {
+    // 4. A node has them: RESERVED → SENT, once. A SENT payment whose bytes had to go out again (a
+    //    resume, a dropped transaction) gets its own `sent` row, so the story shows every send.
+    const resent = payment.status === 'SENT' && !networkAlreadyKnew
+    if (payment.status === 'RESERVED' || resent) {
       await inTransaction(client, async () => {
-        await applyGuardedTransition(client, {
-          table: 'payments',
-          idColumn: 'reference',
-          id: reference,
-          statusColumn: 'status',
-          from: 'RESERVED',
-          to: 'SENT',
-        })
+        if (payment.status === 'RESERVED') {
+          await applyGuardedTransition(client, {
+            table: 'payments',
+            idColumn: 'reference',
+            id: reference,
+            statusColumn: 'status',
+            from: 'RESERVED',
+            to: 'SENT',
+          })
+        }
         await recordAudit(client, {
           actor: AUDIT_ACTORS.worker,
           subjectType: AUDIT_SUBJECTS.payment,
           subjectId: reference,
           event: PAYMENT_EVENTS.sent,
-          context: { txHash: hash, networkAlreadyKnew, attempt, rpcHost: rpcHost() },
+          context: { txHash: hash, networkAlreadyKnew, ...(resent ? { resent } : {}), attempt, rpcHost: rpcHost() },
         })
       })
     }

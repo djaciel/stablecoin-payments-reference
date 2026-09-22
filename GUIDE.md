@@ -232,9 +232,10 @@ that says what it is. Gas never reaches the books at all; it goes to the audit l
 - `apps/signer/src/sign/sign.controller.ts` — the signer learns to sign: an ERC-20 transfer
   and a plain ether one. It is told the nonce and the gas fields because it talks to no node,
   and it answers with the raw bytes plus the hash, which exists before anything is broadcast.
-- `apps/api/src/treasury/fund-partner-wallet.service.ts` — the seven steps, in order: read the balances,
-  refuse if short, fetch nonce and fees, sign both and broadcast both, check the USDC receipt
-  against the official contract, post one entry, answer with both hashes.
+- `apps/api/src/treasury/fund-partner-wallet.service.ts` — the steps, in order: refuse while a payment
+  is signed and not sent (it would take that payment's nonce), read the balances, refuse if short,
+  fetch nonce and fees, sign both and broadcast both, check the USDC receipt against the official
+  contract, post one entry, answer with both hashes.
 - `packages/ledger/src/movements.ts` — `scaffolding`: Dr `demo:partner-funding` / Cr
   `treasury:available`, named by the transaction hash so the same one cannot post twice.
 
@@ -510,6 +511,45 @@ docker compose logs worker | grep -E 'watch: attempt|escalate'   # attempt 1…5
 
 Disarm it: the payment stays in REVIEW, and the dispatcher leaves it there for a human.
 
+## Resume: back from REVIEW with the same bytes (§7, §9)
+
+§9: "the $1,000 stay reserved until there is proof". Resume is how an operator hands a payment in
+REVIEW back once the cause is gone: it returns to where it was, with its money untouched, and its
+workflow looks for the proof again. If the bytes never left, it sends the SAME signed bytes (§7), never
+a new signature.
+
+- `apps/api/src/payments/resume-payment.ts` — `resumePayment`: under the row lock, REVIEW → where it
+  was (`review_from_status`, then cleared) and a `resumed` row. No ledger call: the money stays reserved.
+- `apps/api/src/payments/payments.controller.ts` — `POST /payments/:reference/resume`: 404 unknown,
+  409 not in REVIEW, 200 with the payment; committed first, then dispatched exactly as Pay.
+- `apps/worker/src/execute.ts` — the resumed run asks the network for the stored hash; a SENT payment
+  whose bytes it did not have gets the same bytes again and its own `sent` row (`resent: true`).
+- `apps/api/src/payments/read-payments.ts` — what the queue shows for each payment in REVIEW (where it
+  was, the step, its last error, since when), and `HOLDS_NONCE`: signed and never sent.
+- `apps/api/src/treasury/fund-partner-wallet.service.ts` — refuses (422) first, before the signer or
+  the chain is asked, while a payment holds a nonce: its pending-nonce read would take it and strand it.
+- `packages/domain/src/api.ts` — `PaymentReview`, with `nonce` only where it is really held.
+- `packages/ledger/src/audit.ts` — the payment's new `resumed` event.
+- `apps/ui/src/admin/TransfersScreen.tsx` — the REVIEW queue above the list, oldest first, with Resume;
+  the story's Resume, its Resumed line, and a re-send's Sent line.
+- `apps/ui/src/api/client.ts` — `resumePayment` (a POST; a 409 shows its sentence).
+- `apps/ui/src/admin/BreakItScreen.tsx` — "Node not responding" before the broadcast says what a held
+  nonce holds up, and where Resume is.
+- `tests/db/failure.db.test.ts` — §6's REVIEW continues through resume: SENT again, `review_from_status`
+  cleared, Reserved still 1,000, one `resumed` row; a second resume writes nothing. Indexed in
+  `tests/db/README.md`.
+
+See it (this sends real testnet USDC): on `/admin/break-it` arm "Node not responding" before the
+broadcast and press Pay on a small invoice. About 15 s later it is in the REVIEW queue on
+`/admin/transfers`, "holds nonce N"; the explorer does not know its hash, and "Fund partner wallet" on
+Start is refused and names it. Disarm, press Resume: Sent carries the same hash as Signed, then Paid
+and Settled after finality.
+
+```
+docker compose logs worker | grep -E 'sign:|execute:'   # already signed 0x… (nonce N), then sent 0x… (the same hash)
+curl -i -X POST localhost:3000/payments/<its reference>/resume   # once settled: 409, only a payment in REVIEW can be resumed
+```
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -520,8 +560,8 @@ Disarm it: the payment stays in REVIEW, and the dispatcher leaves it there for a
 - `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses.
 - `apps/ui/src/admin/PayablesScreen.tsx` — the invoices the company owes, the books they move,
   and Pay, with each invoice's payment on its row.
-- `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, and each one's story
-  step by step.
+- `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
+  Resume, and each one's story step by step.
 - `apps/ui/src/admin/BreakItScreen.tsx` — the failure-injection switches; a red banner on every
   admin screen while one is armed.
 - `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint.
@@ -532,6 +572,6 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-Resuming a payment from REVIEW (§6); deposits and treasury fundings on the Transfers
-screen, with the partner side that pays a receivable (§8); the four failures as buttons (§9); and
+Deposits and treasury fundings on the Transfers screen, with the partner side that pays a
+receivable (§8); the four failures as buttons (§9); and
 reconciliation (§10) arrive in later phases. Each will add its entry here when it lands.

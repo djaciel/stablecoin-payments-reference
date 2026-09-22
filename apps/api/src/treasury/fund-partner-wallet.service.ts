@@ -25,6 +25,7 @@ import {
   withLedgerTransaction,
 } from '@payments/ledger'
 import { formatEther, parseEther, type Address, type Hex } from 'viem'
+import { HOLDS_NONCE } from '../payments/read-payments'
 import type { TreasuryService } from './treasury.service'
 
 /** Defined here and not in the module, for the same cycle reason as `TREASURY_SERVICE`. */
@@ -115,6 +116,9 @@ export class FundPartnerWalletService {
   }
 
   async fundPartnerWallet(): Promise<PartnerWalletFunding> {
+    // 0. First, before the signer or the chain is asked anything: no payment may be holding a nonce.
+    await this.refuseIfNonceHeld()
+
     // 1. Who, and what each side holds right now.
     const treasury = await this.treasury.address()
     const partnerWallet = this.treasury.partnerWalletAddress()
@@ -177,6 +181,31 @@ export class FundPartnerWalletService {
       ledger: { reference: scaffoldingReference(usdcReceipt.transactionHash), posted },
       balances: await this.readBalancesAt(landedBlock(usdcReceipt, gasReceipt), treasury, partnerWallet),
     }
+  }
+
+  /**
+   * One condition, one 422: a payment signed and not sent. Step 3 asks the chain for the pending
+   * nonce, which does not know that payment, so these two transactions would take its nonce and it
+   * could never land (spec assumption 24).
+   */
+  private async refuseIfNonceHeld(): Promise<void> {
+    const held = await this.pool.query<{ reference: string; status: string; nonce: number }>(
+      `SELECT reference, status, nonce FROM payments WHERE ${HOLDS_NONCE} ORDER BY nonce LIMIT 1`,
+    )
+    const payment = held.rows[0]
+    if (payment === undefined) {
+      return
+    }
+    throw new UnprocessableEntityException(
+      [
+        `${payment.reference} is signed and not sent, and it holds the treasury's nonce ${String(payment.nonce)}.`,
+        `This button asks the chain for the next nonce, which does not know ${payment.reference}: it would take nonce ${String(payment.nonce)} and that payment could never land.`,
+        payment.status === 'REVIEW'
+          ? `Resume ${payment.reference} first, from the REVIEW queue on Transfers.`
+          : `${payment.reference} is being sent now; try again in a few seconds.`,
+        'Nothing was signed and nothing was sent.',
+      ].join(' '),
+    )
   }
 
   /** One condition, one 422: enough USDC on chain AND in the books, enough ether for both. */

@@ -7,7 +7,7 @@ import { workerPool } from './db'
  * The dispatcher's one rule: every RESERVED or SENT payment has a running workflow. The api starts
  * it right after COMMIT; this finds the ones it could not (Temporal down, a process that died in
  * between) and runs that ended without finishing. REVIEW is left alone on purpose: a human resumes
- * it (Phase 6). Scheduled payments add `execute_at <= now()` here (Phase 9).
+ * it (`POST /payments/:reference/resume`). Scheduled payments add `execute_at <= now()` here (Phase 9).
  */
 const IN_FLIGHT = "SELECT reference, status FROM payments WHERE status IN ('RESERVED', 'SENT') ORDER BY created_at"
 

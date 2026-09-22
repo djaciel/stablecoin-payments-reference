@@ -64,6 +64,11 @@ export function getPaymentTimeline(reference: string): Promise<PaymentTimeline> 
   return read<PaymentTimeline>(`/payments/${encodeURIComponent(reference)}/timeline`)
 }
 
+/** A payment in REVIEW back to where it was, and its workflow started again. A 409 throws with its sentence. */
+export function resumePayment(reference: string): Promise<PaymentView> {
+  return send<PaymentView>(`/payments/${encodeURIComponent(reference)}/resume`, undefined)
+}
+
 /**
  * Sends USDC and gas from the treasury to the partner wallet. It takes as long as two
  * transactions take to land (a few seconds on Base Sepolia) because the answer is the

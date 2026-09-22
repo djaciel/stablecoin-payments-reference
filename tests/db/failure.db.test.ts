@@ -2,6 +2,7 @@ import { inTransaction } from '@payments/db'
 import { ACCOUNTS, seedArticle, toMinor, withLedgerTransaction } from '@payments/ledger'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { createPayment } from '../../apps/api/src/payments/create-payment'
+import { resumePayment } from '../../apps/api/src/payments/resume-payment'
 import { escalatePayment } from '../../apps/worker/src/escalate'
 import { reversePayment } from '../../apps/worker/src/reverse'
 import { balanceOf, resetDatabase, seedInvoices, testPool, withClient } from './helpers/database'
@@ -9,7 +10,7 @@ import { balanceOf, resetDatabase, seedInvoices, testPool, withClient } from './
 /**
  * §6 on the books, against real Postgres: what happens to the money when a payment fails after it
  * was reserved. A final revert is proof it did not land, so the money comes back and the invoice
- * reopens. Without proof either way the payment goes to REVIEW, and nothing moves.
+ * reopens. Without proof either way the payment goes to REVIEW, and nothing moves, there or back.
  */
 
 /** What `watch` hands `reverse`: the demo's first real revert (out of gas, no Transfer event). */
@@ -76,7 +77,7 @@ describe('a payment that reverted onchain', () => {
 })
 
 describe('a payment with no proof either way', () => {
-  it('goes to REVIEW and leaves Reserved untouched', async () => {
+  it('goes to REVIEW and back on resume, and leaves Reserved untouched', async () => {
     const escalation = {
       step: 'watch',
       retryState: 'MAXIMUM_ATTEMPTS_REACHED',
@@ -112,6 +113,27 @@ describe('a payment with no proof either way', () => {
       // "Escalates to manual review with all the context" (§9).
       context: { fromStatus: 'SENT', step: 'watch', attempts: 5, lastError: escalation.lastError, txHash: EVIDENCE.txHash, nonce: 11 },
     })
+
+    // Resumed (§9): back to where it was, for its workflow to look for the proof again. Once only.
+    const resumed = await withClient(pool, (client) => inTransaction(client, () => resumePayment(client, reference)))
+    const resumedAgain = await withClient(pool, (client) => inTransaction(client, () => resumePayment(client, reference)))
+
+    expect(resumed.kind === 'resumed' && resumed.payment.status).toBe('SENT')
+    expect(resumedAgain).toEqual({ kind: 'not-in-review', status: 'SENT' })
+    expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(toMinor(9_000))
+    expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(toMinor(1_000))
+    expect(await balanceOf(pool, ACCOUNTS.partnerPayable)).toBe(toMinor(1_000))
+
+    const back = await pool.query(
+      `SELECT pm.status, pm.review_from_status,
+              (SELECT array_agg(kind ORDER BY kind) FROM ledger_transactions WHERE kind <> 'seed') AS postings,
+              (SELECT count(*) FROM audit_log WHERE subject_id = pm.reference AND event = 'resumed') AS resumed,
+              (SELECT context FROM audit_log WHERE subject_id = pm.reference AND event = 'resumed') AS context
+         FROM payments pm
+        WHERE pm.reference = $1`,
+      [reference],
+    )
+    expect(back.rows[0]).toMatchObject({ status: 'SENT', review_from_status: null, postings: ['reserve'], resumed: '1', context: { to: 'SENT' } })
   })
 })
 

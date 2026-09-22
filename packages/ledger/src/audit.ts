@@ -11,7 +11,8 @@ export const AUDIT_SUBJECTS = { payment: 'payment', invoice: 'invoice', treasury
 
 /**
  * A payment's events, in the order its life can produce them. `released` is money back to Available;
- * `escalated` is a move to REVIEW, where the money stays reserved.
+ * `escalated` is a move to REVIEW, where the money stays reserved; `resumed` is an operator sending
+ * it back to where it was.
  */
 export const PAYMENT_EVENTS = {
   created: 'created',
@@ -22,6 +23,7 @@ export const PAYMENT_EVENTS = {
   failed: 'failed',
   released: 'released',
   escalated: 'escalated',
+  resumed: 'resumed',
 } as const
 
 /** An invoice's events. All but `created` name their payment in `context.reference`. */

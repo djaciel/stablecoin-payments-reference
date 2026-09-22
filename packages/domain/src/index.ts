@@ -19,6 +19,7 @@ export type {
   PayableSummary,
   Payables,
   PaymentFailureReason,
+  PaymentReview,
   PaymentSummary,
   PaymentTimeline,
   PaymentView,

@@ -202,6 +202,24 @@ export interface PaymentSummary extends PaymentView {
   readonly partnerName: string | null
   /** The time of its newest audit row. */
   readonly lastChangeAt: string
+  /** Present only in REVIEW: what the REVIEW queue shows, from the row and its latest `escalated` row. */
+  readonly review?: PaymentReview
+}
+
+/** Why a payment is in REVIEW, and where resume sends it back to. */
+export interface PaymentReview {
+  readonly fromStatus: 'RESERVED' | 'SENT'
+  /** The step that gave up: `sign`, `execute`, `watch`, `settle` or `reverse`. */
+  readonly step: string
+  /** Its last error, or the finality wait's last verdict. */
+  readonly reason: string
+  /** When it went to REVIEW. */
+  readonly at: string
+  /**
+   * Only for a payment signed and never sent: it holds this treasury nonce, and every payout signed
+   * after it waits until it goes out (spec assumption 24).
+   */
+  readonly nonce?: number
 }
 
 /** What `GET /payments` answers: the latest payments, newest first. */

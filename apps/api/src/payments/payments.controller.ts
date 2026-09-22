@@ -1,12 +1,13 @@
-import { BadRequestException, Body, ConflictException, Controller, Get, Headers, Inject, NotFoundException, Param, Post, Res } from '@nestjs/common'
-import { inTransaction, type Pool } from '@payments/db'
+import { BadRequestException, Body, ConflictException, Controller, Get, Headers, HttpCode, HttpStatus, Inject, NotFoundException, Param, Post, Res } from '@nestjs/common'
+import { inTransaction, type Pool, type PoolClient } from '@payments/db'
 import { failedAfterReserving, type PaymentTimeline, type PaymentView, type Payments } from '@payments/domain'
 import type { Client } from '@temporalio/client'
 import { DATABASE_POOL } from '../db/db.module'
 import { TEMPORAL_CLIENT } from '../temporal/temporal.module'
-import { createPayment, type PaymentOutcome, type PaymentRequest } from './create-payment'
+import { createPayment } from './create-payment'
 import { dispatchPayment } from './dispatch'
 import { findPayment, listPayments, paymentTimeline } from './read-payments'
+import { resumePayment } from './resume-payment'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_KEY_LENGTH = 200
@@ -34,7 +35,7 @@ export class PaymentsController {
     // `ValidationPipe` would check nothing here (spec assumption 18).
     const request = { idempotencyKey: readIdempotencyKey(header), payableId: readPayableId(body) }
 
-    const outcome = await this.inOneTransaction(request)
+    const outcome = await this.inOneTransaction((client) => createPayment(client, request))
     if (outcome.kind === 'key-conflict') {
       throw new ConflictException(
         `idempotency-key "${request.idempotencyKey}" was already used for a different request: one key cannot be two payments.`,
@@ -51,6 +52,24 @@ export class PaymentsController {
     }
 
     response.status(statusCodeOf(outcome))
+    return outcome.payment
+  }
+
+  /**
+   * Back from REVIEW to where it was, with its money untouched (§9), then dispatched exactly as Pay
+   * does: committed first, so the run that looks for the proof again reads the resumed state.
+   */
+  @Post(':reference/resume')
+  @HttpCode(HttpStatus.OK)
+  async resume(@Param('reference') reference: string): Promise<PaymentView> {
+    const outcome = await this.inOneTransaction((client) => resumePayment(client, reference))
+    if (outcome.kind === 'unknown') {
+      notFound(reference)
+    }
+    if (outcome.kind === 'not-in-review') {
+      throw new ConflictException(`${reference} is ${outcome.status}: only a payment in REVIEW can be resumed.`)
+    }
+    await dispatchPayment(this.temporal, reference)
     return outcome.payment
   }
 
@@ -71,11 +90,11 @@ export class PaymentsController {
     return (await paymentTimeline(this.pool, reference)) ?? notFound(reference)
   }
 
-  /** The transaction is opened and committed here; `createPayment` runs inside it and never ends it. */
-  private async inOneTransaction(request: PaymentRequest): Promise<PaymentOutcome> {
+  /** The transaction is opened and committed here; `createPayment` and `resumePayment` run inside it and never end it. */
+  private async inOneTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect()
     try {
-      return await inTransaction(client, () => createPayment(client, request))
+      return await inTransaction(client, () => work(client))
     } finally {
       client.release()
     }
