@@ -68,6 +68,9 @@ importers:
       '@payments/ledger':
         specifier: workspace:*
         version: link:../../packages/ledger
+      '@temporalio/client':
+        specifier: 1.22.0
+        version: 1.22.0
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2

@@ -2,8 +2,8 @@ import { continueAsNew, log, proxyActivities, rootCause, sleep } from '@temporal
 // Type-only: activity code must never be bundled into the workflow sandbox.
 import type * as activities from './activities'
 
-const { watchChain } = proxyActivities<typeof activities>({
-  // Bounded on purpose: a tick that cannot finish must not hold the loop. Three quick attempts,
+const { watchChain, dispatchPayments } = proxyActivities<typeof activities>({
+  // Bounded on purpose: a tick that cannot finish must not hold its loop. Three quick attempts,
   // then the failure comes back to the loop below, which logs it and waits for the next tick.
   startToCloseTimeout: '10 seconds',
   retry: { maximumAttempts: 3, initialInterval: '1 second', backoffCoefficient: 1 },
@@ -51,27 +51,37 @@ export async function PaymentWorkflow(reference: string): Promise<string[]> {
 const TICKS_PER_RUN = 360
 
 /**
- * The watcher: tick, wait ten seconds, tick again, and start a fresh run after an hour. One
- * workflow that never ends, not one workflow per tick.
- *
- * Nothing is returned or accumulated: the tick writes its own line and keeps its cursor in the
- * database, so a loop that runs for an hour holds nothing but its counter.
+ * The watcher: tick, wait ten seconds, tick again. The tick writes its own line and keeps its
+ * cursor in the database, so the loop holds nothing but its counter.
  */
 export async function WatcherWorkflow(): Promise<void> {
-  for (let tick = 0; tick < TICKS_PER_RUN; tick += 1) {
+  await everyTenSeconds('watcher', watchChain)
+}
+
+/**
+ * The dispatcher: every ten seconds, any RESERVED or SENT payment without a running
+ * `PaymentWorkflow` gets one. The rule and its query are in `dispatcher.ts`.
+ */
+export async function DispatcherWorkflow(): Promise<void> {
+  await everyTenSeconds('dispatcher', dispatchPayments)
+}
+
+/** The loop both share: one workflow that never ends, not one workflow per tick. */
+async function everyTenSeconds(name: string, tick: () => Promise<string>): Promise<void> {
+  for (let count = 0; count < TICKS_PER_RUN; count += 1) {
     try {
-      await watchChain()
+      await tick()
     } catch (error) {
-      // The activity already said which attempt failed and against which RPC host; this line
-      // is the one that matters at 2 a.m. — the watcher is still alive.
-      log.error(`watcher: tick failed after its attempts, next one in 10s — ${rootCause(error)}`)
+      // Each failed attempt is already in the worker's log; this line is the one that matters
+      // at 2 a.m. — the loop is still alive.
+      log.error(`${name}: tick failed after its attempts, next one in 10s — ${rootCause(error)}`)
     }
 
     // Durable: the timer lives in Temporal, so a worker that dies mid-wait resumes it.
     await sleep('10 seconds')
   }
 
-  // Outside the try, because `continueAsNew` works by throwing. It takes no arguments here —
-  // there is no state to carry into the next run, which is what makes this safe to do forever.
-  await continueAsNew<typeof WatcherWorkflow>()
+  // Outside the try, because `continueAsNew` works by throwing. It continues as the same workflow
+  // type and takes no arguments: there is no state to carry, which is what makes this safe forever.
+  await continueAsNew()
 }

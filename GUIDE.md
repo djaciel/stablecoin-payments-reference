@@ -76,11 +76,10 @@ do not move, because crediting a deposit to a partner is the receivables flow, l
   payment waits for finality, started again, and the history showing `sign` and `execute` ran
   once. Also what Docker restarts on its own and what it does not.
 
-See it: follow the drill in `docs/dev/restart-survival.md`, or start a payment's workflow (the
-command is under "Signed, then sent" below) and open
-`http://localhost:8080/namespaces/default/workflows/<its reference>`: `sign`, `execute`, the
-`watch` checks with a 10 s timer between them, then `settle`. Start it again and the new run signs
-and sends nothing.
+See it: follow the drill in `docs/dev/restart-survival.md`, or press Pay on a small invoice and
+open `http://localhost:8080/namespaces/default/workflows/<its reference>`: `sign`, `execute`, the
+`watch` checks with a 10 s timer between them, then `settle`. Start it again once it has settled
+(the command is under "Signed, then sent" below) and the new run signs and sends nothing.
 
 ## The books: two entries before the money moves (§5, §6, §7)
 
@@ -176,10 +175,10 @@ lost answer safe: the same key always gets the same payment back.
   per attempt and keeps it across clicks, so a double click cannot pay twice; after a
   refusal, the next attempt gets a new key.
 
-See it: press Pay on `/admin/payables` and Reserved goes up while nothing is signed; pay an
-invoice larger than Available and read the refusal on its row. From the shell, send the same
-key twice and read the same reference back (it sets aside treasury money, so pick a small
-invoice):
+See it: press Pay on `/admin/payables` and Reserved goes up in the api's answer, before
+anything is signed; only then is the payment signed, sent and settled. Pay an invoice larger
+than Available and read the refusal on its row. From the shell, send the same key twice and
+read the same reference back (it pays the invoice with real testnet USDC, so pick a small one):
 
 ```
 curl -s -X POST localhost:3000/payments -H 'idempotency-key: try-1' \
@@ -272,18 +271,18 @@ if it does not know them, so a retry or a crash (§9) can never pay twice.
 - `apps/ui/src/admin/PayablesScreen.tsx` — the invoice row shows the hash with its explorer
   link, and where the payment stands: "Signed, not sent yet." or "Sent, waiting for the network."
 
-See it (this sends real testnet USDC from the treasury), for a RESERVED payment:
+See it (this sends real testnet USDC from the treasury): press Pay on a small invoice on
+`/admin/payables`; its workflow runs on to SETTLED ("Paid" below). While it waits for finality,
+its row shows SENT with the hash, and
+`SELECT at, event, context->>'txHash' FROM audit_log WHERE subject_id = 'PAY-XXXX' ORDER BY id`
+shows `signed` before `sent`, with the same hash. Start it again once it has settled:
 
 ```
 docker compose exec temporal temporal workflow start --address temporal:7233 \
   --task-queue payments --type PaymentWorkflow --workflow-id PAY-XXXX --input '"PAY-XXXX"'
 ```
 
-The same command runs on to SETTLED ("Paid" below). While it waits for finality, its row on
-`/admin/payables` shows SENT with the hash, and
-`SELECT at, event, context->>'txHash' FROM audit_log WHERE subject_id = 'PAY-XXXX' ORDER BY id`
-shows `signed` before `sent`, with the same hash. Start it again once it has settled: `sign`
-answers "already signed", `execute` "nothing to send: SETTLED", and nothing is sent. Until the
+`sign` answers "already signed", `execute` "nothing to send: SETTLED", and nothing is sent. Until the
 payment settles, the Start screen's onchain USDC is lower than Available + Reserved: the money
 has left, and the books wait for finality and the Transfer event.
 
@@ -308,17 +307,48 @@ payment and the invoice move in one transaction, which posts once however often 
 - `docs/dev/restart-survival.md` — the same wait, with the worker stopped in the middle of it.
 - `apps/ui/src/admin/PayablesScreen.tsx` — a settled payment's row says it is paid, with its hash.
 
-See it (this sends real testnet USDC), for a RESERVED payment:
+See it (this sends real testnet USDC): press Pay on a small invoice on `/admin/payables`, then
 
 ```
-docker compose exec temporal temporal workflow start --address temporal:7233 \
-  --task-queue payments --type PaymentWorkflow --workflow-id PAY-XXXX --input '"PAY-XXXX"'
 docker compose logs -f worker   # watch: not final … → watch: paid → settle: settled
 ```
 
 The Start screen and `curl localhost:3000/treasury` then agree again: onchain USDC equals
 Available plus Reserved, Reserved and Partner debt are down by the payment, and Available did not
 move. The invoice on `/admin/payables` is PAID.
+
+## From the click to the chain: dispatch after COMMIT (§3, §4)
+
+Pay commits the payment with its money reserved, and only then starts its workflow: a refusal is
+always in the api's answer, and no workflow exists for a payment that rolled back. A start that
+fails is picked up within ten seconds by a second loop, and the workflow id is the reference, so
+starting twice is harmless.
+
+- `apps/api/src/payments/payments.controller.ts` — `POST /payments`: the transaction commits,
+  then a RESERVED payment is dispatched, on a 201 and on a replay. The answer does not change.
+- `apps/api/src/payments/dispatch.ts` — `dispatchPayment`: the start, with a 3 s deadline; a
+  failure is one warning naming the reference, and the payment stays committed.
+- `apps/api/src/temporal/temporal.module.ts` — the api's Temporal client, connected lazily so the
+  api takes payments while Temporal is down; closed on shutdown.
+- `packages/domain/src/temporal.ts` — what the api and the worker share: where Temporal is, the
+  workflow's name, and how it is started (id = reference; a running one is attached to).
+- `apps/worker/src/dispatcher.ts` — the dispatcher's tick, with its rule and query at the top:
+  every RESERVED or SENT payment has a running workflow. REVIEW is left for a human.
+- `apps/worker/src/workflows.ts` — `DispatcherWorkflow`: the watcher's loop with another tick
+  (tick, a durable 10 s timer, a fresh run after an hour).
+- `apps/worker/src/index.ts` — starts both loops at boot, or attaches to them if they are running.
+- `docker-compose.yml` — the api knows Temporal's address and waits for it at startup.
+- `apps/ui/src/admin/PayablesScreen.tsx` — the Pay dialog says what happens now: reserved first,
+  then signed and sent, and the row follows it.
+- `docs/dev/restart-survival.md` — the drill now starts by pressing Pay.
+
+See it (this sends real testnet USDC): press Pay on a small invoice on `/admin/payables` and its
+row goes RESERVED → SENT with the hash → SETTLED; finality takes minutes. In
+`http://localhost:8080/namespaces/default/workflows` there are two workflows that never end,
+`watcher` and `dispatcher`, and one `PaymentWorkflow` per payment, named by its reference. For the
+dispatcher: `docker compose stop temporal`, press Pay (still 201 RESERVED, and `docker compose logs
+api` has the warning), `docker compose start temporal`, and `docker compose logs worker` says
+`dispatcher: started PAY-XXXX (RESERVED, had no running workflow)`.
 
 ## The screens
 
@@ -338,7 +368,7 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-Pay starting the workflow by itself, the payment's story step by step on screen, what happens
+The payment's story step by step on screen, what happens
 when a transfer fails (§6), the four failures as buttons (§9), reconciliation (§10) and the
 partner side that pays a receivable (§8) arrive in later phases; each will add its entry here
 when it lands.

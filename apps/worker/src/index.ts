@@ -1,11 +1,14 @@
 import { Client, Connection } from '@temporalio/client'
 import { NativeConnection, Runtime, Worker } from '@temporalio/worker'
+import { readTemporalConfig, type TemporalConfig } from '@payments/domain'
 import * as activities from './activities'
-import { readTemporalConfig, type TemporalConfig } from './config'
 import { closeWorkerPool } from './db'
 
-/** The watcher's workflow id: one name, one watcher, whoever starts the worker. */
-const WATCHER_WORKFLOW_ID = 'watcher'
+/** The two workflows that never end. One id each: one watcher and one dispatcher, whoever starts the worker. */
+const LOOPS = [
+  { workflowType: 'WatcherWorkflow', workflowId: 'watcher' },
+  { workflowType: 'DispatcherWorkflow', workflowId: 'dispatcher' },
+] as const
 
 async function main(): Promise<void> {
   const config = readTemporalConfig()
@@ -31,10 +34,9 @@ async function main(): Promise<void> {
 
     stopOnSignal(worker)
 
-    // Before the first poll, so the watcher is up by the time the queue is being served. It
-    // is also the only thing that revives a watcher somebody terminated: nothing else watches
-    // the watcher.
-    await startWatcher(config)
+    // Before the first poll, so both loops are up by the time the queue is being served. It is
+    // also the only thing that revives one somebody terminated: nothing else watches the watchers.
+    await startLoops(config)
 
     console.log(`worker: polling task queue "${taskQueue}" on ${address} (namespace ${namespace})`)
 
@@ -75,30 +77,32 @@ function stopOnSignal(worker: Worker): void {
 }
 
 /**
- * Starts the watcher unless it is already running. The connection is the CLIENT's, not the
+ * Starts each loop unless it is already running. The connection is the CLIENT's, not the
  * worker's `NativeConnection`: different objects with different jobs, and this one is opened
  * for the errand and closed straight after.
  */
-async function startWatcher({ address, namespace, taskQueue }: TemporalConfig): Promise<void> {
+async function startLoops({ address, namespace, taskQueue }: TemporalConfig): Promise<void> {
   const connection = await Connection.connect({ address })
 
   try {
     const client = new Client({ connection, namespace })
 
-    const handle = await client.workflow.start('WatcherWorkflow', {
-      workflowId: WATCHER_WORKFLOW_ID,
-      taskQueue,
-      // Start if absent, attach if present. Without it a worker restarting next to a live
-      // watcher would either fail here or — worse — leave two watchers scanning the chain.
-      workflowIdConflictPolicy: 'USE_EXISTING',
-      // No `workflowExecutionTimeout` and no `workflowRunTimeout`, on purpose: this workflow
-      // is meant never to end, and a deadline on it is a bug with a clock in it.
-    })
+    for (const { workflowType, workflowId } of LOOPS) {
+      const handle = await client.workflow.start(workflowType, {
+        workflowId,
+        taskQueue,
+        // Start if absent, attach if present. Without it a worker restarting next to a live
+        // loop would either fail here or — worse — leave two of them doing the same job.
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        // No `workflowExecutionTimeout` and no `workflowRunTimeout`, on purpose: these workflows
+        // are meant never to end, and a deadline on them is a bug with a clock in it.
+      })
 
-    // "since" is what tells the two cases apart in the log: a time a second old means this
-    // worker started it, an older one means it found it already running and left it alone.
-    const { startTime } = await handle.describe()
-    console.log(`worker: watcher workflow "${WATCHER_WORKFLOW_ID}" running since ${startTime.toISOString()}, run ${handle.firstExecutionRunId}`)
+      // "since" is what tells the two cases apart in the log: a time a second old means this
+      // worker started it, an older one means it found it already running and left it alone.
+      const { startTime } = await handle.describe()
+      console.log(`worker: ${workflowId} workflow "${workflowId}" running since ${startTime.toISOString()}, run ${handle.firstExecutionRunId}`)
+    }
   } finally {
     await connection.close()
   }

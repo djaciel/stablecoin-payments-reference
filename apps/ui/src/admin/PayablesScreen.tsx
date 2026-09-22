@@ -26,7 +26,7 @@ const SIGNED_MOMENTS: Partial<Record<PaymentView['status'], string>> = {
 
 /**
  * The invoices the company owes, the books they move, and Pay: paying one records the payment
- * and reserves its amount, and nothing is signed at that point.
+ * and reserves its amount, and only then does its workflow have it signed and send it.
  */
 export function PayablesScreen() {
   const polled = usePolling(getPayables)
@@ -206,7 +206,8 @@ function PayDialog({
         <h2 className="card-title">Pay invoice</h2>
         <p className="panel-lead">
           Paying reserves <strong>{invoice.amount} USDC</strong> now: the amount moves from Available to Reserved, so
-          no other payment can spend it. Nothing is signed or sent yet; the transfer comes after.
+          no other payment can spend it. Then the payment's workflow has it signed and sends it, and this row follows
+          it until it is paid.
         </p>
         <p className="card-note">
           To {invoice.partnerName ?? 'this address'}, for “{invoice.description}”:

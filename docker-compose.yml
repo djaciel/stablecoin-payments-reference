@@ -172,6 +172,11 @@ services:
       # the public Base Sepolia RPC, which is what makes "no environment variable to run"
       # true; set RPC_URL only to point the demo at a provider endpoint of your own.
       RPC_URL: ${RPC_URL:-}
+      # Where the api starts a payment's workflow right after COMMIT. The same three values as
+      # the worker, read by the same function (packages/domain/src/temporal.ts).
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TASK_QUEUE: payments
     ports:
       # Localhost only. Running this on a shared machine and wanting the API reachable is
       # a deliberate change, not a default.
@@ -189,11 +194,11 @@ services:
       # wallet is funded from the treasury, and `docker compose down -v` would take a named
       # volume with it. Docker creates ./.keys/partner on your machine the first time.
       - ./.keys/partner:/partner-keys
-    # No `depends_on: temporal` here on purpose: the api does not dispatch a workflow
-    # until Phase 5. Adding it now would only make the api wait for a service it never
-    # talks to. It joins when the dispatch does.
     depends_on:
       postgres:
+        condition: service_healthy
+      # Pay starts the payment's workflow right after COMMIT, so the first Pay should find Temporal up.
+      temporal:
         condition: service_healthy
       # Waits for the seed to be loaded, not merely for the container to exist: the first
       # thing the demo shows is the treasury address, and a `GET /treasury` that answers

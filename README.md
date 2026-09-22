@@ -76,18 +76,13 @@ treasury address by hand from a faucet, so `docker compose down -v` has to be sa
 the stack, keep the money. Delete `.keys/` and you start over with a new, unfunded
 treasury.
 
-The workflow is the part worth watching. Until the Pay button starts it, you start it by hand
-for a RESERVED payment (the workflow id is the payment's reference), and it sends real testnet
-USDC from the treasury:
-
-```sh
-docker compose exec temporal temporal workflow start --address temporal:7233 \
-  --task-queue payments --type PaymentWorkflow --workflow-id PAY-1234 --input '"PAY-1234"'
-```
+The workflow is the part worth watching. Press Pay on a small invoice on `/admin/payables`:
+the api commits the payment with its money reserved, then starts the workflow (its id is the
+payment's reference, PAY-1234 below), and it sends real testnet USDC from the treasury.
 
 Then open `http://localhost:8080/namespaces/default/workflows/PAY-1234`: `sign` stores the
-hash before anything is sent, `execute` sends those bytes. [`GUIDE.md`](GUIDE.md) says what
-to look at.
+hash before anything is sent, `execute` sends those bytes, `watch` waits for finality and the
+Transfer event, `settle` moves the books. [`GUIDE.md`](GUIDE.md) says what to look at.
 
 ## Checks
 

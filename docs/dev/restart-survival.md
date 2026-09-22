@@ -6,14 +6,13 @@ you should see: **the payment finishes, and nothing that was already done runs a
 
 ## The drill
 
-It sends real testnet USDC. You need the stack up and a RESERVED payment (press Pay on
-`/admin/payables`; the reference is on its row). The wait for finality is minutes long on Base
-Sepolia, enough to do this by hand:
+It sends real testnet USDC. You need the stack up. Press Pay on a small invoice on
+`/admin/payables`: the payment's workflow starts by itself, and its reference is on the row. The
+wait for finality is minutes long on Base Sepolia, enough to do this by hand:
 
 ```
-docker compose exec temporal temporal workflow start --address temporal:7233 \
-  --task-queue payments --type PaymentWorkflow --workflow-id PAY-XXXX --input '"PAY-XXXX"'
-docker compose logs -f worker      # wait for "watch: not final"
+# 1. press Pay on a small invoice on /admin/payables; its reference is PAY-XXXX
+docker compose logs -f worker      # wait for "PAY-XXXX watch: not final"
 docker compose stop worker         # then wait a minute
 docker compose start worker
 docker compose exec temporal temporal workflow show --address temporal:7233 -w PAY-XXXX

@@ -1,8 +1,11 @@
 import { BadRequestException, Body, ConflictException, Controller, Get, Headers, Inject, NotFoundException, Param, Post, Res } from '@nestjs/common'
 import { inTransaction, type Pool } from '@payments/db'
 import type { PaymentView } from '@payments/domain'
+import type { Client } from '@temporalio/client'
 import { DATABASE_POOL } from '../db/db.module'
+import { TEMPORAL_CLIENT } from '../temporal/temporal.module'
 import { createPayment, findPayment, type PaymentOutcome, type PaymentRequest } from './create-payment'
+import { dispatchPayment } from './dispatch'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_KEY_LENGTH = 200
@@ -15,7 +18,10 @@ interface StatusCodeSetter {
 
 @Controller('payments')
 export class PaymentsController {
-  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(DATABASE_POOL) private readonly pool: Pool,
+    @Inject(TEMPORAL_CLIENT) private readonly temporal: Client,
+  ) {}
 
   @Post()
   async create(
@@ -35,6 +41,12 @@ export class PaymentsController {
     }
     if (outcome.kind === 'unknown-payable') {
       throw new BadRequestException(UNKNOWN_PAYABLE)
+    }
+
+    // Committed first, dispatched after: the money is reserved before any workflow exists. A replay
+    // of a payment still RESERVED dispatches again, since its first start may have failed.
+    if (outcome.payment.status === 'RESERVED') {
+      await dispatchPayment(this.temporal, outcome.payment.reference)
     }
 
     response.status(statusCodeOf(outcome))
