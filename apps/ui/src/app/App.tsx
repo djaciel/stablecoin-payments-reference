@@ -4,6 +4,7 @@ import type { Experiments } from '@payments/domain'
 import { BLACKHOLE_WHERE, BreakItScreen, type ExperimentsContext } from '../admin/BreakItScreen'
 import { PartnersScreen } from '../admin/PartnersScreen'
 import { PayablesScreen } from '../admin/PayablesScreen'
+import { ReceivablesScreen } from '../admin/ReceivablesScreen'
 import { StartScreen } from '../admin/StartScreen'
 import { TransfersScreen } from '../admin/TransfersScreen'
 import { getExperiments } from '../api/client'
@@ -40,12 +41,13 @@ export function App() {
             <Route index element={<StartScreen />} />
             <Route path="partners" element={<PartnersScreen />} />
             <Route path="payables" element={<PayablesScreen />} />
+            <Route path="receivables" element={<ReceivablesScreen />} />
             <Route path="transfers" element={<TransfersScreen />} />
             {/* A payment's story has its own address, so an invoice row can link straight to it. */}
             <Route path="transfers/:reference" element={<TransfersScreen />} />
             <Route path="break-it" element={<BreakItScreen />} />
           </Route>
-          <Route path="/partner" element={<PartnerHome />} />
+          <Route path="/partner" element={<PartnerSide />} />
           {/* No landing page: `/` and anything unknown go to the company's side, where the demo starts. */}
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
@@ -58,8 +60,8 @@ export function App() {
  * The company's screens, with their own row of tabs above whichever one is open, and the one poll
  * of the Break it flags: the banner on the other screens and the Break it cards both read it.
  *
- * Four tabs are the demo's flow, in order. Break it is not a fifth step, so it sits at the far end
- * of the same bar, behind a rule: a switch for the demo, next to the screens it breaks.
+ * The first tabs are the demo's flow, in order. Break it is not one of its steps, so it sits at the
+ * far end of the same bar, behind a rule: a switch for the demo, next to the screens it breaks.
  */
 function AdminScreens() {
   const polled = usePolling(getExperiments)
@@ -90,6 +92,9 @@ function AdminScreens() {
         <NavLink to="/admin/payables" className={navClass}>
           Payables
         </NavLink>
+        <NavLink to="/admin/receivables" className={navClass}>
+          Receivables
+        </NavLink>
         <NavLink to="/admin/transfers" className={navClass}>
           Transfers
         </NavLink>
@@ -112,6 +117,22 @@ function AdminScreens() {
         </p>
       )}
       <Outlet context={context} />
+    </>
+  )
+}
+
+/**
+ * The partner's side, with the one line that says what it stands for. Its own banner because the
+ * screen below it shows a wallet whose keys this demo holds, which a real partner's never would be.
+ */
+function PartnerSide() {
+  return (
+    <>
+      <p className="app-banner">
+        This side stands in for the partner's own system: its wallet's keys live in this demo, so one machine can play
+        both parts.
+      </p>
+      <PartnerHome />
     </>
   )
 }

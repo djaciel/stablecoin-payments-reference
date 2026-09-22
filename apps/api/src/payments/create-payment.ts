@@ -1,7 +1,7 @@
 import { createHash, randomInt } from 'node:crypto'
 import { applyGuardedTransition, type PoolClient } from '@payments/db'
 import type { PaymentFailureReason, PaymentView } from '@payments/domain'
-import { AUDIT_ACTORS, AUDIT_SUBJECTS, INVOICE_EVENTS, InsufficientFunds, LedgerRejected, PAYMENT_EVENTS, recordAudit, reserve, toMinorFromDecimal, type AuditEventName } from '@payments/ledger'
+import { AUDIT_ACTORS, AUDIT_SUBJECTS, PAYABLE_EVENTS, InsufficientFunds, LedgerRejected, PAYMENT_EVENTS, recordAudit, reserve, toMinorFromDecimal, type AuditEventName } from '@payments/ledger'
 import { MAX_PAYMENT_USDC, MIN_PAYMENT_USDC } from '../config'
 import { screenPayment } from './compliance'
 import { PAYMENT_COLUMNS, toView, type PaymentRow } from './read-payments'
@@ -115,7 +115,7 @@ export async function createPayment(client: PoolClient, request: PaymentRequest)
     extraSet: { payment_reference: reference },
   })
   await audit(client, reference, PAYMENT_EVENTS.reserved, { amountMinor, currency, ledgerTransactionId })
-  await recordAudit(client, { actor: AUDIT_ACTORS.api, subjectType: AUDIT_SUBJECTS.invoice, subjectId: locked.id, event: INVOICE_EVENTS.paymentLinked, context: { reference } })
+  await recordAudit(client, { actor: AUDIT_ACTORS.api, subjectType: AUDIT_SUBJECTS.invoice, subjectId: locked.id, event: PAYABLE_EVENTS.paymentLinked, context: { reference } })
   return { kind: 'recorded', payment: toView({ ...intent, status: 'RESERVED' }) }
 }
 

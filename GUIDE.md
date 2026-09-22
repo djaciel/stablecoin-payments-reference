@@ -153,6 +153,34 @@ Cr `partner:payable`, the article's Partner debt. Either both exist or neither d
 See it: create an invoice on `/admin/payables` and watch Partner debt go up there and on the
 Start screen, while Available and Reserved do not move.
 
+### The invoice a partner owes you (§8)
+
+Money coming in starts before any money moves: somebody has to say which invoice a payment
+will settle. Writing one puts the accrual on the books in the same transaction (Dr
+`partner:receivable` / Cr `revenue:services`), and the partner sees it next to the one address
+it pays at, which is what will say the money is its own.
+
+- `migrations/0011_receivables.sql` — the invoices a partner owes. `partner_id` is never null
+  (the attribution needs it) and `payment_tx_hash` is unique: one transaction pays one invoice.
+- `apps/api/src/receivables/receivables.service.ts` — creating one in a single transaction (the
+  row, the accrual, the audit line with the deposit address), and the one read the screen needs.
+- `apps/api/src/receivables/receivables.controller.ts` — `GET /receivables` and
+  `POST /receivables`, with the checks on what a person typed.
+- `apps/api/src/receivables/receivables.module.ts` — the three of them wired to the pool, the
+  same shape as `payables/`.
+- `packages/ledger/src/movements.ts` — `receivable`, the mirror image of `payable`: the books'
+  first credit to revenue, named by the invoice so it can only be posted once.
+- `packages/ledger/src/audit.ts` — `receivable` joins the subjects and gets its own events. The
+  comment says why the company's own invoices keep the older name `invoice`.
+- `apps/api/src/partners/partners.controller.ts` — `GET /partners/view`: the whole partner screen
+  in one read (the selector's list, the selected partner, what it owes, both addresses).
+- `apps/api/src/body.ts` — the checks both invoice screens run on what a person typed, in one
+  place: an id, an amount in whole USDC, a description. Hand-written, and the file says why.
+
+See it: write an invoice for a partner on `/admin/receivables`, watch Partner receivables go up
+while Available, Reserved and Partner debt do not move, then open `/partner`, pick that partner
+and read the same invoice next to the address it pays at.
+
 ## The payment API: one key, one payment (§4, §5, §9)
 
 A payment is created, checked and has its money set aside in one database transaction,
@@ -563,6 +591,11 @@ curl -i -X POST localhost:3000/payments/<its reference>/resume   # once settled:
 - `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses.
 - `apps/ui/src/admin/PayablesScreen.tsx` — the invoices the company owes, the books they move,
   and Pay, with each invoice's payment on its row.
+- `apps/ui/src/admin/ReceivablesScreen.tsx` — the invoices partners owe, the two figures they
+  move, and no Pay button: these are paid from the other side.
+- `apps/ui/src/partner/PartnerHome.tsx` — the partner's side: what it owes, the address it pays
+  at, and the shared wallet it pays from, labelled demo scaffolding. The chosen partner lives in
+  the address bar, so a reload keeps it.
 - `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
   Resume, and each one's story step by step.
 - `apps/ui/src/admin/BreakItScreen.tsx` — the failures you can cause on purpose: one Run it per

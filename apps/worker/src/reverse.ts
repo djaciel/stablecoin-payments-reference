@@ -1,6 +1,6 @@
 import { ApplicationFailure, activityInfo, log } from '@temporalio/activity'
 import { applyGuardedTransition, inTransaction, type PoolClient } from '@payments/db'
-import { AUDIT_ACTORS, AUDIT_SUBJECTS, INVOICE_EVENTS, PAYMENT_EVENTS, recordAudit, reversal } from '@payments/ledger'
+import { AUDIT_ACTORS, AUDIT_SUBJECTS, PAYABLE_EVENTS, PAYMENT_EVENTS, recordAudit, reversal } from '@payments/ledger'
 import { workerPool } from './db'
 import type { RevertEvidence } from './watch'
 
@@ -103,7 +103,7 @@ export async function reversePayment(client: PoolClient, reference: string, evid
       actor: AUDIT_ACTORS.worker,
       subjectType: AUDIT_SUBJECTS.invoice,
       subjectId: invoiceId,
-      event: INVOICE_EVENTS.reopened,
+      event: PAYABLE_EVENTS.reopened,
       context: { reference, reason: 'reverted' },
     })
     return { kind: 'reversed', ledgerTransactionId }

@@ -6,8 +6,16 @@ import type { PoolClient } from '@payments/db'
 /** Who acted: a synchronous request path, a Temporal activity, the chain watcher, an operator, fixtures. */
 export const AUDIT_ACTORS = { api: 'api', worker: 'worker', watcher: 'watcher', admin: 'admin', seed: 'seed' } as const
 
-/** What a row is about. `invoice` is an invoice the company owes (receivables will need their own word). */
-export const AUDIT_SUBJECTS = { payment: 'payment', invoice: 'invoice', treasury: 'treasury', demo: 'demo' } as const
+// `invoice` is the company's side (a payable) and `receivable` is the partner's side. The two names
+// look uneven because this log is append-only by a trigger: renaming the `invoice` rows already
+// written would take a migration that disables the guard.
+export const AUDIT_SUBJECTS = {
+  payment: 'payment',
+  invoice: 'invoice',
+  receivable: 'receivable',
+  treasury: 'treasury',
+  demo: 'demo',
+} as const
 
 /**
  * A payment's events, in the order its life can produce them. `released` is money back to Available;
@@ -26,8 +34,14 @@ export const PAYMENT_EVENTS = {
   resumed: 'resumed',
 } as const
 
-/** An invoice's events. All but `created` name their payment in `context.reference`. */
-export const INVOICE_EVENTS = { created: 'created', paymentLinked: 'payment-linked', paid: 'paid', reopened: 'reopened' } as const
+/**
+ * A payable's events (the company's own invoices; they are stored under the subject `invoice`).
+ * All but `created` name their payment in `context.reference`.
+ */
+export const PAYABLE_EVENTS = { created: 'created', paymentLinked: 'payment-linked', paid: 'paid', reopened: 'reopened' } as const
+
+/** A receivable's events: written, paid by the partner, then credited by the watcher. */
+export const RECEIVABLE_EVENTS = { created: 'created', paymentSent: 'payment-sent', paid: 'paid' } as const
 
 /** The watcher's one event, and the demo scaffolding's. */
 export const TREASURY_EVENTS = { funded: 'funded' } as const
@@ -38,7 +52,8 @@ export type AuditActor = ValueOf<typeof AUDIT_ACTORS>
 export type AuditSubject = ValueOf<typeof AUDIT_SUBJECTS>
 export type AuditEventName =
   | ValueOf<typeof PAYMENT_EVENTS>
-  | ValueOf<typeof INVOICE_EVENTS>
+  | ValueOf<typeof PAYABLE_EVENTS>
+  | ValueOf<typeof RECEIVABLE_EVENTS>
   | ValueOf<typeof TREASURY_EVENTS>
   | ValueOf<typeof DEMO_EVENTS>
 

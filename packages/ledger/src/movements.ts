@@ -47,6 +47,13 @@ export interface PayableInput {
   readonly currency: string
 }
 
+export interface ReceivableInput {
+  /** The invoice a partner owes. Its id names the ledger transaction. */
+  readonly receivableId: string
+  readonly amount: MinorUnits
+  readonly currency: string
+}
+
 export interface FundingInput {
   readonly txHash: string
   /** Position of the Transfer event inside that transaction. */
@@ -145,6 +152,23 @@ export function payable(client: PoolClient, input: PayableInput): Promise<Ledger
     entries: [
       { account: ACCOUNTS.expenseServices, direction: 'debit', amount: input.amount },
       { account: ACCOUNTS.partnerPayable, direction: 'credit', amount: input.amount },
+    ],
+  })
+}
+
+/**
+ * An invoice a partner owes: Dr `partner:receivable` / Cr `revenue:services`, the books' first
+ * credit to revenue. The mirror image of `payable`, and like it no money has moved yet: what
+ * moves it is a deposit the watcher sees. The audit row is the caller's.
+ */
+export function receivable(client: PoolClient, input: ReceivableInput): Promise<LedgerTransactionId> {
+  return writeTransaction(client, {
+    kind: 'receivable',
+    reference: input.receivableId,
+    currency: input.currency,
+    entries: [
+      { account: ACCOUNTS.partnerReceivable, direction: 'debit', amount: input.amount },
+      { account: ACCOUNTS.revenueServices, direction: 'credit', amount: input.amount },
     ],
   })
 }

@@ -1,6 +1,6 @@
 import { activityInfo, log } from '@temporalio/activity'
 import { applyGuardedTransition, inTransaction, type PoolClient } from '@payments/db'
-import { AUDIT_ACTORS, AUDIT_SUBJECTS, INVOICE_EVENTS, PAYMENT_EVENTS, recordAudit, settle as settleLedger } from '@payments/ledger'
+import { AUDIT_ACTORS, AUDIT_SUBJECTS, PAYABLE_EVENTS, PAYMENT_EVENTS, recordAudit, settle as settleLedger } from '@payments/ledger'
 import { workerPool } from './db'
 import type { SettlementEvidence } from './watch'
 
@@ -83,7 +83,7 @@ export async function settlePayment(client: PoolClient, reference: string, evide
       actor: AUDIT_ACTORS.worker,
       subjectType: AUDIT_SUBJECTS.invoice,
       subjectId: invoiceId,
-      event: INVOICE_EVENTS.paid,
+      event: PAYABLE_EVENTS.paid,
       context: { reference },
     })
     return { kind: 'settled', ledgerTransactionId }

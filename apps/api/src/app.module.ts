@@ -5,6 +5,7 @@ import { HealthController } from './health/health.controller'
 import { PartnersModule } from './partners/partners.module'
 import { PayablesModule } from './payables/payables.module'
 import { PaymentsController } from './payments/payments.controller'
+import { ReceivablesModule } from './receivables/receivables.module'
 import { TemporalModule } from './temporal/temporal.module'
 import { TreasuryModule } from './treasury/treasury.module'
 
@@ -21,7 +22,7 @@ import { TreasuryModule } from './treasury/treasury.module'
  * last funding, so it owns its controller and brings its own dependencies with it.
  */
 @Module({
-  imports: [DbModule, PartnersModule, PayablesModule, TemporalModule, TreasuryModule],
+  imports: [DbModule, PartnersModule, PayablesModule, ReceivablesModule, TemporalModule, TreasuryModule],
   controllers: [ExperimentsController, HealthController, PaymentsController],
 })
 export class AppModule {}

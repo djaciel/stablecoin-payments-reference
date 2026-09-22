@@ -2,6 +2,7 @@ import { Logger, type OnApplicationBootstrap } from '@nestjs/common'
 import { inTransaction, type Pool, type PoolClient } from '@payments/db'
 import { getAddress, type Address } from 'viem'
 import type { PartnerKeysService } from '../demo-scaffolding/partner-keys.service'
+import { readReceivables, type Receivable } from '../receivables/receivables.service'
 import type { SignerClient } from '@payments/chain'
 
 /**
@@ -59,6 +60,19 @@ export class PartnersService implements OnApplicationBootstrap {
         `the demo's first partners could not be created, so /admin/partners is empty until the api restarts: ${messageOf(error)}`,
       )
     }
+  }
+
+  /**
+   * The shared wallet every partner pays from: demo scaffolding, from the partner seed. Here
+   * because the partner screen shows it next to the address it pays at, in one read.
+   */
+  partnerWalletAddress(): Address {
+    return this.partnerKeys.partnerWallet().address
+  }
+
+  /** What one partner owes, newest first. The rows live in `receivables/`; this is the pool they need. */
+  receivablesOf(partnerId: string): Promise<Receivable[]> {
+    return readReceivables(this.pool, partnerId)
   }
 
   async list(): Promise<Partner[]> {

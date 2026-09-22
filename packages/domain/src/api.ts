@@ -151,6 +151,63 @@ export interface Payables {
   readonly ledger: LedgerFigures
 }
 
+/** One invoice a partner owes the company, as both sides list it. */
+export interface ReceivableSummary {
+  readonly id: string
+  readonly partnerName: string
+  readonly amount: string
+  readonly description: string
+  readonly status: 'OPEN' | 'PAYING' | 'PAID'
+  /** The hash the partner recorded before broadcasting its transfer. Null until it pays. */
+  readonly transaction: { readonly hash: string; readonly explorerUrl: string } | null
+}
+
+/** The two figures a receivable and its deposit move. Neither is the treasury's money yet. */
+export interface ReceivableFigures {
+  /** `partner:receivable`: what partners owe, invoiced and not yet credited. */
+  readonly receivable: string
+  /** `deposits:onchain`: what has arrived at the deposit addresses and been credited. */
+  readonly deposits: string
+}
+
+/**
+ * What `GET /receivables` and `POST /receivables` answer: the invoices newest first, the partners one
+ * can be written to (the form's select), and the figures, read in the same snapshot as the invoices.
+ */
+export interface Receivables {
+  readonly receivables: readonly ReceivableSummary[]
+  readonly partners: readonly { readonly id: string; readonly name: string }[]
+  readonly ledger: ReceivableFigures
+}
+
+/**
+ * What `GET /partners/view` answers: the whole `/partner` screen in one read. `partners` is the
+ * selector's list; everything else is about the selected one.
+ */
+export interface PartnerView {
+  readonly partners: readonly { readonly id: string; readonly name: string }[]
+  /**
+   * The partner the screen is showing, with the address it pays at. Null when there is no partner
+   * yet. No balance on it: what sits there is the company's money, shown on the admin's side.
+   */
+  readonly partner: {
+    readonly id: string
+    readonly name: string
+    readonly deposit: { readonly address: string; readonly explorerUrl: string }
+  } | null
+  readonly receivables: readonly ReceivableSummary[]
+  /** The shared wallet the partners pay from: demo scaffolding, and labelled so on the screen. */
+  readonly partnerWallet: {
+    readonly address: string
+    readonly explorerUrl: string
+    readonly usdc: string | null
+    readonly eth: string | null
+  }
+  readonly blockNumber: string | null
+  /** Set only when `blockNumber` is null: one sentence a screen can print. */
+  readonly chainError?: string
+}
+
 /** Why a payment failed: short codes a screen turns into a sentence and the article can quote. */
 export type PaymentFailureReason =
   | 'payable_not_open'

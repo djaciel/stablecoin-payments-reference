@@ -5,7 +5,7 @@ import {
   ACCOUNTS,
   AUDIT_ACTORS,
   AUDIT_SUBJECTS,
-  INVOICE_EVENTS,
+  PAYABLE_EVENTS,
   getBalances,
   payable,
   recordAudit,
@@ -126,7 +126,7 @@ export class PayablesService {
           actor: AUDIT_ACTORS.admin,
           subjectType: AUDIT_SUBJECTS.invoice,
           subjectId: id,
-          event: INVOICE_EVENTS.created,
+          event: PAYABLE_EVENTS.created,
           context: {
             amountMinor: input.amountMinor,
             currency: CURRENCY,

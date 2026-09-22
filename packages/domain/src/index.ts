@@ -15,6 +15,7 @@ export type {
   LedgerFigures,
   PartnerSummary,
   Partners,
+  PartnerView,
   PartnerWalletFunding,
   PayableSummary,
   Payables,
@@ -24,6 +25,9 @@ export type {
   PaymentTimeline,
   PaymentView,
   Payments,
+  ReceivableFigures,
+  ReceivableSummary,
+  Receivables,
   Treasury,
 } from './api'
 export { failedAfterReserving } from './api'

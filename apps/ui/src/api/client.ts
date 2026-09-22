@@ -11,7 +11,7 @@
  * variable.
  */
 
-import type { Experiments, Health, Partners, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, Treasury } from '@payments/domain'
+import type { Experiments, Health, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, Receivables, Treasury } from '@payments/domain'
 
 const API_BASE_PATH = '/api'
 
@@ -39,6 +39,20 @@ export function getPayables(): Promise<Payables> {
 /** Answers with the whole screen, so the new invoice and the higher Partner debt show at once. */
 export function createPayable(invoice: { partnerId: string; amount: string; description: string }): Promise<Payables> {
   return send<Payables>('/payables', invoice)
+}
+
+export function getReceivables(): Promise<Receivables> {
+  return read<Receivables>('/receivables')
+}
+
+/** Answers with the whole screen, so the new invoice and the higher Partner receivables show at once. */
+export function createReceivable(invoice: { partnerId: string; amount: string; description: string }): Promise<Receivables> {
+  return send<Receivables>('/receivables', invoice)
+}
+
+/** The whole partner screen in one read: the selector, what that partner owes, and its two addresses. */
+export function getPartnerView(partnerId: string | null): Promise<PartnerView> {
+  return read<PartnerView>(partnerId === null ? '/partners/view' : `/partners/view?partnerId=${encodeURIComponent(partnerId)}`)
 }
 
 /**
