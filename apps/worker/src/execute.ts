@@ -4,6 +4,7 @@ import { applyGuardedTransition, inTransaction, type PoolClient } from '@payment
 import { AUDIT_ACTORS, AUDIT_SUBJECTS, PAYMENT_EVENTS, recordAudit } from '@payments/ledger'
 import { BaseError, TransactionNotFoundError, type Hex } from 'viem'
 import { workerPool } from './db'
+import { failIfNodeBlackholed } from './experiments'
 
 const chain = createChainClient()
 
@@ -17,13 +18,14 @@ export async function execute(reference: string): Promise<string> {
     if (payment === undefined) {
       throw ApplicationFailure.nonRetryable(`${reference}: no payment has this reference`)
     }
-    if (payment.status === 'SETTLED' || payment.status === 'FAILED') {
-      return report(reference, `nothing to send: ${payment.status}`)
+    if (payment.status !== 'RESERVED' && payment.status !== 'SENT') {
+      return report(reference, payment.status === 'REVIEW' ? 'nothing to send: REVIEW, a human resumes it' : `nothing to send: ${payment.status}`)
     }
     if (payment.tx_hash === null || payment.signed_tx === null) {
       throw ApplicationFailure.nonRetryable(`${reference}: execute before sign, no signed bytes are stored`)
     }
     const hash = payment.tx_hash as Hex
+    await failIfNodeBlackholed(client, 'execute')
 
     // 2. Ask first. Found means a previous attempt sent these bytes and died before it could
     //    record SENT: nothing is sent again. Only this answer sets `networkAlreadyKnew`.

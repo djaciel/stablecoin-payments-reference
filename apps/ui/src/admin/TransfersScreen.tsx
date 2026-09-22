@@ -49,6 +49,7 @@ function PaymentList() {
                 <td>
                   {payment.status}
                   {payment.reason !== undefined && <span className="cell-note">{REASONS[payment.reason]}</span>}
+                  {payment.status === 'REVIEW' && <span className="cell-note">No proof either way, so the money stays reserved.</span>}
                 </td>
                 <td className="is-number">{payment.amount} USDC</td>
                 <td>{payment.partnerName ?? 'no partner'}</td>
@@ -247,6 +248,9 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
         })
         break
       }
+      case 'escalated':
+        lines.push({ name: 'Escalated', rows: [step], text: escalatedText(context) })
+        break
       default:
         lines.push({ name: step.event, rows: [step], text: '' })
     }
@@ -276,6 +280,23 @@ function gasTooLowText(context: AuditStep['context']): string {
     return ''
   }
   return `The gas limit was set too low on purpose (Break it): ${context.gas} instead of ${context.estimatedGas ?? 'its estimate'}, so it runs out of gas and reverts onchain. `
+}
+
+/** Why the run gave up, in one sentence: out of attempts, out of time, or not worth retrying. */
+function escalatedText(context: AuditStep['context']): ReactNode {
+  const step = <code>{context.step}</code>
+  let why: ReactNode
+  if (context.retryState === 'MAXIMUM_ATTEMPTS_REACHED') {
+    why = <>To REVIEW because {step} ran out of its {context.attempts} attempts: {context.lastError}.</>
+  } else if (context.retryState === 'null') {
+    // No retry state: the wait for finality ran out of time (a stored null arrives as the string "null").
+    // The last verdict is what `workflows.ts` wrote after its "no final answer after 30 minutes: ".
+    const lastVerdict = (context.lastError ?? '').replace(/^no final answer after 30 minutes: /, '')
+    why = <>To REVIEW: {step} got no final answer in 30 minutes ({context.attempts} checks): {lastVerdict}.</>
+  } else {
+    why = <>To REVIEW because {step} failed in a way retrying cannot help: {context.lastError}.</>
+  }
+  return <>{why} No proof either way, so the money stays reserved.</>
 }
 
 /** A revert names its block and says it is final: a revert that is not final proves nothing yet (§6). */

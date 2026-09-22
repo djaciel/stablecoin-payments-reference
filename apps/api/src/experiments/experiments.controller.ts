@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Inject, Put } from '@nestjs/common'
 import type { Pool } from '@payments/db'
-import { EXPERIMENT_KEYS, type Experiments } from '@payments/domain'
+import { BLACKHOLE_STEPS, EXPERIMENT_KEYS, type BlackholeStep, type Experiments } from '@payments/domain'
 import { DATABASE_POOL } from '../db/db.module'
 
 /**
@@ -16,25 +16,67 @@ export class ExperimentsController {
     return readExperiments(this.pool)
   }
 
+  /**
+   * Changes only the flags it is sent. A screen's copy of the flags can be a poll old, so sending
+   * them all back could re-arm the one-shot revert right after a payment took it.
+   */
   @Put()
   async write(@Body() body: unknown): Promise<Experiments> {
-    const revertNextPayment: unknown =
-      typeof body === 'object' && body !== null && 'revertNextPayment' in body ? body.revertNextPayment : undefined
-    if (typeof revertNextPayment !== 'boolean') {
-      throw new BadRequestException('revertNextPayment must be true or false.')
+    const changes = changesIn(body)
+    if (changes === undefined) {
+      throw new BadRequestException(
+        'Send revertNextPayment (true or false), blackholeRpc ({ "enabled": true or false, "step": "execute" or "watch" }), or both, and nothing else.',
+      )
     }
-    await writeFlag(this.pool, EXPERIMENT_KEYS.revertNextPayment, revertNextPayment)
+    if (changes.revertNextPayment !== undefined) {
+      await writeFlag(this.pool, EXPERIMENT_KEYS.revertNextPayment, changes.revertNextPayment)
+    }
+    if (changes.blackholeRpc !== undefined) {
+      await writeFlag(this.pool, EXPERIMENT_KEYS.blackholeRpc, changes.blackholeRpc)
+    }
     return readExperiments(this.pool)
   }
 }
 
-/** An absent row is off. */
-async function readExperiments(pool: Pool): Promise<Experiments> {
-  const result = await pool.query<{ value: unknown }>('SELECT value FROM settings WHERE key = $1', [EXPERIMENT_KEYS.revertNextPayment])
-  return { revertNextPayment: result.rows[0]?.value === true }
+/** The fields sent, each one known and well-formed; undefined otherwise. */
+function changesIn(body: unknown): Partial<Experiments> | undefined {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return undefined
+  }
+  const { revertNextPayment, blackholeRpc, ...unknownFields } = body as Record<string, unknown>
+  if (Object.keys(unknownFields).length > 0) {
+    return undefined
+  }
+  if (revertNextPayment !== undefined && typeof revertNextPayment !== 'boolean') {
+    return undefined
+  }
+  if (blackholeRpc !== undefined && !isBlackhole(blackholeRpc)) {
+    return undefined
+  }
+  return { revertNextPayment, blackholeRpc }
 }
 
-async function writeFlag(pool: Pool, key: string, value: boolean): Promise<void> {
+function isBlackhole(value: unknown): value is Experiments['blackholeRpc'] {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const { enabled, step, ...unknownFields } = value as Record<string, unknown>
+  return typeof enabled === 'boolean' && BLACKHOLE_STEPS.includes(step as BlackholeStep) && Object.keys(unknownFields).length === 0
+}
+
+/** An absent row is off; "Node not responding" defaults to after the broadcast. */
+async function readExperiments(pool: Pool): Promise<Experiments> {
+  const result = await pool.query<{ key: string; value: unknown }>('SELECT key, value FROM settings WHERE key = ANY($1)', [
+    Object.values(EXPERIMENT_KEYS),
+  ])
+  const stored = new Map(result.rows.map((row) => [row.key, row.value]))
+  return {
+    revertNextPayment: stored.get(EXPERIMENT_KEYS.revertNextPayment) === true,
+    blackholeRpc: (stored.get(EXPERIMENT_KEYS.blackholeRpc) as Experiments['blackholeRpc'] | undefined) ?? { enabled: false, step: 'watch' },
+  }
+}
+
+async function writeFlag(pool: Pool, key: string, value: unknown): Promise<void> {
   await pool.query(
     `INSERT INTO settings (key, value) VALUES ($1, $2)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,

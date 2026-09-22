@@ -149,6 +149,9 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
         </>
       )}
 
+      {/* Signed or not: a REVIEW before the broadcast may have no hash yet, and still holds the money. */}
+      {payment?.status === 'REVIEW' && <p className="card-value">In REVIEW: no proof either way, so the money stays reserved.</p>}
+
       {payment?.transaction !== undefined && (
         <>
           {SIGNED_MOMENTS[payment.status] !== undefined && <p className="card-value">{SIGNED_MOMENTS[payment.status]}</p>}

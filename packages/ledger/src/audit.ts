@@ -9,7 +9,10 @@ export const AUDIT_ACTORS = { api: 'api', worker: 'worker', watcher: 'watcher', 
 /** What a row is about. `invoice` is an invoice the company owes (receivables will need their own word). */
 export const AUDIT_SUBJECTS = { payment: 'payment', invoice: 'invoice', treasury: 'treasury', demo: 'demo' } as const
 
-/** A payment's events, in the order its life can produce them. `released` is money back to Available. */
+/**
+ * A payment's events, in the order its life can produce them. `released` is money back to Available;
+ * `escalated` is a move to REVIEW, where the money stays reserved.
+ */
 export const PAYMENT_EVENTS = {
   created: 'created',
   reserved: 'reserved',
@@ -18,6 +21,7 @@ export const PAYMENT_EVENTS = {
   settled: 'settled',
   failed: 'failed',
   released: 'released',
+  escalated: 'escalated',
 } as const
 
 /** An invoice's events. All but `created` name their payment in `context.reference`. */

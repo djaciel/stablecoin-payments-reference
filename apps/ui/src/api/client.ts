@@ -78,9 +78,9 @@ export function getExperiments(): Promise<Experiments> {
   return read<Experiments>('/settings/experiments')
 }
 
-/** Answers the flags as stored, so the screen shows what the api holds, not what it sent. */
-export function setExperiments(experiments: Experiments): Promise<Experiments> {
-  return send<Experiments>('/settings/experiments', experiments, 'PUT')
+/** Changes only the flags it is given, and answers all of them as stored, so the screen shows what the api holds. */
+export function setExperiments(flags: Partial<Experiments>): Promise<Experiments> {
+  return send<Experiments>('/settings/experiments', flags, 'PUT')
 }
 
 /**

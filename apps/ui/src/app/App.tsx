@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import type { Experiments } from '@payments/domain'
-import { BreakItScreen, type ExperimentsContext } from '../admin/BreakItScreen'
+import { BLACKHOLE_WHERE, BreakItScreen, type ExperimentsContext } from '../admin/BreakItScreen'
 import { PartnersScreen } from '../admin/PartnersScreen'
 import { PayablesScreen } from '../admin/PayablesScreen'
 import { StartScreen } from '../admin/StartScreen'
@@ -70,6 +70,7 @@ function AdminScreens() {
   }, [polled.data])
 
   const context: ExperimentsContext = { experiments, show: showExperiments }
+  const armed = experiments === undefined ? [] : armedFlags(experiments)
 
   return (
     <>
@@ -97,14 +98,22 @@ function AdminScreens() {
           {experiments === undefined ? '' : " The banner and Break it show the api's last answer."}
         </p>
       )}
-      {experiments?.revertNextPayment === true && (
+      {armed.length > 0 && (
         <p className="armed-banner">
-          Failure injection armed: the next payment will revert. <Link to="/admin/break-it">Break it</Link>
+          Failure injection armed: {armed.join('; ')}. <Link to="/admin/break-it">Break it</Link>
         </p>
       )}
       <Outlet context={context} />
     </>
   )
+}
+
+/** What the banner says for each flag that is armed. */
+function armedFlags({ revertNextPayment, blackholeRpc }: Experiments): string[] {
+  return [
+    ...(revertNextPayment ? ['the next payment will revert'] : []),
+    ...(blackholeRpc.enabled ? [`the node does not answer ${BLACKHOLE_WHERE[blackholeRpc.step]} (${blackholeRpc.step}), for every payment in flight`] : []),
+  ]
 }
 
 function navClass({ isActive }: { isActive: boolean }): string {

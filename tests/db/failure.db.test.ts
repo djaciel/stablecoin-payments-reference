@@ -2,13 +2,14 @@ import { inTransaction } from '@payments/db'
 import { ACCOUNTS, seedArticle, toMinor, withLedgerTransaction } from '@payments/ledger'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { createPayment } from '../../apps/api/src/payments/create-payment'
+import { escalatePayment } from '../../apps/worker/src/escalate'
 import { reversePayment } from '../../apps/worker/src/reverse'
 import { balanceOf, resetDatabase, seedInvoices, testPool, withClient } from './helpers/database'
 
 /**
  * §6 on the books, against real Postgres: what happens to the money when a payment fails after it
  * was reserved. A final revert is proof it did not land, so the money comes back and the invoice
- * reopens.
+ * reopens. Without proof either way the payment goes to REVIEW, and nothing moves.
  */
 
 /** What `watch` hands `reverse`: the demo's first real revert (out of gas, no Transfer event). */
@@ -71,6 +72,46 @@ describe('a payment that reverted onchain', () => {
     // Payable again: a new key on the same invoice reserves its money once more.
     const retry = await withClient(pool, (client) => inTransaction(client, () => createPayment(client, { idempotencyKey: 'key-2', payableId: invoiceId })))
     expect(retry.kind === 'recorded' && retry.payment.status).toBe('RESERVED')
+  })
+})
+
+describe('a payment with no proof either way', () => {
+  it('goes to REVIEW and leaves Reserved untouched', async () => {
+    const escalation = {
+      step: 'watch',
+      retryState: 'MAXIMUM_ATTEMPTS_REACHED',
+      attempts: 5,
+      lastError: 'the node did not answer (failure injection: node not responding is armed for watch)',
+    }
+    const first = await withClient(pool, (client) => escalatePayment(client, reference, escalation))
+    const again = await withClient(pool, (client) => escalatePayment(client, reference, escalation))
+
+    expect(first).toEqual({ kind: 'escalated', fromStatus: 'SENT' })
+    expect(again).toEqual({ kind: 'nothing-to-escalate', status: 'REVIEW' })
+    // §6's REVIEW row: 9,000 / 1,000, as after the reserve. The invoice is still owed.
+    expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(toMinor(9_000))
+    expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(toMinor(1_000))
+    expect(await balanceOf(pool, ACCOUNTS.partnerPayable)).toBe(toMinor(1_000))
+
+    const state = await pool.query(
+      `SELECT pm.status, pm.review_from_status, p.status AS invoice, p.payment_reference,
+              (SELECT array_agg(kind ORDER BY kind) FROM ledger_transactions WHERE kind <> 'seed') AS postings,
+              (SELECT count(*) FROM audit_log WHERE subject_id = pm.reference AND event = 'escalated') AS escalated,
+              (SELECT context FROM audit_log WHERE subject_id = pm.reference AND event = 'escalated') AS context
+         FROM payments pm JOIN payables p ON p.id = pm.payable_id
+        WHERE pm.reference = $1`,
+      [reference],
+    )
+    expect(state.rows[0]).toMatchObject({
+      status: 'REVIEW',
+      review_from_status: 'SENT',
+      invoice: 'PAYING',
+      payment_reference: reference,
+      postings: ['reserve'],
+      escalated: '1',
+      // "Escalates to manual review with all the context" (§9).
+      context: { fromStatus: 'SENT', step: 'watch', attempts: 5, lastError: escalation.lastError, txHash: EVIDENCE.txHash, nonce: 11 },
+    })
   })
 })
 

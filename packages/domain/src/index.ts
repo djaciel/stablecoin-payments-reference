@@ -27,5 +27,5 @@ export type {
 } from './api'
 export { failedAfterReserving } from './api'
 export { optionalEnv, readEnv, requireEnv } from './env'
-export { EXPERIMENT_KEYS, type Experiments } from './experiments'
+export { BLACKHOLE_STEPS, EXPERIMENT_KEYS, type BlackholeStep, type Experiments } from './experiments'
 export { PAYMENT_WORKFLOW, paymentWorkflowStart, readTemporalConfig, workflowUrl, type TemporalConfig } from './temporal'

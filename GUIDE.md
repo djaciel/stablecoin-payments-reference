@@ -69,6 +69,7 @@ do not move, because crediting a deposit to a partner is the receivables flow, l
 - `apps/worker/src/workflows.ts` — `PaymentWorkflow`, the recipe: `sign`, `execute`, `watch`
   on a durable timer until the payment is paid, then `settle`. Each step gets the payment's
   reference and nothing else, and a worker that dies mid-run picks up from Temporal's history.
+  Every step has 5 attempts; one that gives up sends the payment to REVIEW ("No proof either way" below).
 - `apps/worker/src/activities.ts` — the list of steps the worker runs, one file per step.
 - `apps/worker/src/index.ts` — starts the worker. On shutdown an in-flight step is cancelled
   and simply runs again as attempt 2: every step re-reads the row and skips what is done.
@@ -255,7 +256,7 @@ if it does not know them, so a retry or a crash (§9) can never pay twice.
 - `migrations/0008_payment_signing.sql` — the three columns, and the table refusing a SENT
   payment without a hash, a hash without its bytes, and two payments on one nonce.
 - `apps/worker/src/workflows.ts` — `PaymentWorkflow` calls `sign` then `execute`, with the
-  reference and nothing else; the retries are explicit, and unbounded for now.
+  reference and nothing else; 5 attempts each, then REVIEW with the money still reserved.
 - `apps/worker/src/config.ts` — the gas headroom and the fee cap a payout is signed with; the
   signed bytes are never re-priced.
 - `packages/chain/src/signer-client.ts` — how the worker asks the signer to sign. It holds no key.
@@ -299,11 +300,11 @@ payment and the invoice move in one transaction, which posts once however often 
   above the final block is not paid yet; at the final block it is.
 - `apps/worker/src/watch.ts` — `watch`, one check and no writes: the receipt, the final block
   (`safe`, never `latest`), the verdict. Reverted in a final block: FAILED (the "FAILED with proof"
-  entry below). Wrong event: it retries, the money stays reserved.
+  entry below). Final with the wrong event: REVIEW, the money stays reserved.
 - `apps/worker/src/settle.ts` — the `settle` step: lock the invoice, then Dr Partner debt / Cr
   Reserved, SENT → SETTLED, the invoice PAID, and the evidence in the audit log, all or nothing.
 - `apps/worker/src/workflows.ts` — the loop: `watch`, a durable 10 s timer, `watch` again, until
-  paid (then `settle`) or reverted (then `reverse`).
+  paid (then `settle`), reverted (then `reverse`), or 30 minutes without a final answer (then REVIEW).
 - `tests/db/settlement.db.test.ts` — §7's figures on a real payment row, settled twice: Available
   9,000, Reserved 0, Partner debt 0, one `settle` in the ledger. Indexed in `tests/db/README.md`.
 - `docs/dev/restart-survival.md` — the same wait, with the worker stopped in the middle of it.
@@ -390,7 +391,7 @@ that revert is final, the payment waits SENT with its money reserved.
 - `migrations/0009_settings.sql` — the `settings` table: one row per failure-injection flag. An
   absent row is off.
 - `packages/domain/src/experiments.ts` — every flag in one place: its key, what it does, and the
-  `Experiments` shape the api answers and the screen sends.
+  `Experiments` shape the api answers; the screen sends only the flag it switches.
 - `apps/api/src/experiments/experiments.controller.ts` — `GET` and `PUT /settings/experiments`; the
   api stores the flags and never acts on one, so Pay and the Start screen work the same while one is armed.
 - `apps/api/src/app.module.ts` — registers that controller (it has no service, so no module).
@@ -423,7 +424,7 @@ to Available with that proof next to the entries and the invoice opens again. Pa
 company still owes the invoice.
 
 - `apps/worker/src/watch.ts` — a reverted receipt in a final block is an answer now, `reverted`, with
-  the hash, its block and the final block. A final transaction without the expected event still retries.
+  the hash, its block and the final block. A final transaction without the expected event goes to REVIEW.
 - `apps/worker/src/reverse.ts` — the `reverse` step, `settle`'s mirror: the invoice lock first, then
   SENT → FAILED `reverted`, the `reversal` with its proof, the invoice OPEN with no payment on it. Posts once.
 - `apps/worker/src/workflows.ts` — the watch loop ends on `paid` or `reverted`: `paid` goes to `settle`,
@@ -462,6 +463,53 @@ curl -i -X POST localhost:3000/payments -H 'content-type: application/json' \
 
 Then press Pay on the same invoice: a new key, a new reference, and this time it settles.
 
+## No proof either way: REVIEW, with the money held (§6, §9)
+
+§9's stuck one: "the retries run out, the payment escalates to manual review with all the context".
+A step out of attempts, a step failing in a way retrying cannot help, or 30 minutes of checks with no
+final answer all end in `escalate`: the payment goes to REVIEW with the reason written down, and no
+money moves, because nothing proves the transfer can no longer land.
+
+- `apps/worker/src/workflows.ts` — the bounds (5 attempts a step, 180 checks of finality), the one
+  `catch` that sends a step that gave up to `escalate`, and the three endings: settle, reverse, escalate.
+- `apps/worker/src/escalate.ts` — the `escalate` step: RESERVED or SENT → REVIEW under the row lock,
+  with an `escalated` audit row (step, attempts, last error, hash, nonce). No ledger call, on purpose.
+- `migrations/0010_payment_review.sql` — `review_from_status`: a REVIEW always knows where it came
+  from (resume goes back there), and only a REVIEW has one.
+- `apps/worker/src/watch.ts` — a final transaction without the expected event will never be paid, so
+  it is not retried; and "Node not responding" is checked right before the chain is asked.
+- `apps/worker/src/execute.ts` — a payment in REVIEW is left alone ("a human resumes it"); the same
+  check before the network is asked.
+- `apps/worker/src/experiments.ts` — `failIfNodeBlackholed`: read on every attempt, so disarming it
+  lets the very next attempt through.
+- `apps/worker/src/activities.ts` — lists `escalate` with the other steps.
+- `packages/domain/src/experiments.ts` — the `experiment.blackhole_rpc` flag, `{ enabled, step }`,
+  `execute` (before the broadcast) or `watch` (after it).
+- `apps/api/src/experiments/experiments.controller.ts` — `PUT /settings/experiments` now changes
+  only the flags it is sent, so switching one never re-arms the other.
+- `apps/ui/src/admin/BreakItScreen.tsx` — the "Node not responding" card: where it bites, Arm and
+  Disarm. Each card sends its own flag and nothing else.
+- `apps/ui/src/api/client.ts` — `setExperiments` takes only the flags that change.
+- `apps/ui/src/app/App.tsx` — the banner names whichever flag is armed.
+- `packages/ledger/src/audit.ts` — the payment's new `escalated` event.
+- `apps/ui/src/admin/TransfersScreen.tsx` — the story's Escalated line (which step gave up and why);
+  REVIEW in the list says the money stays reserved.
+- `apps/ui/src/admin/PayablesScreen.tsx` — the invoice row of a payment in REVIEW says why the money
+  is still held, signed or not.
+- `tests/db/failure.db.test.ts` — §6's REVIEW next to its FAILED: escalated twice, Available 9,000,
+  Reserved 1,000, the invoice PAYING, nothing posted but the reserve. Indexed in `tests/db/README.md`.
+
+See it (this sends real testnet USDC): on `/admin/break-it` arm "Node not responding" after the
+broadcast, press Pay on a small invoice and open its story. About 15 s after Sent it is REVIEW, and
+Escalated says `watch` ran out of its 5 attempts. The explorer shows the transfer landed, while
+`curl localhost:3000/treasury` still has it in Reserved (onchain is below Available + Reserved).
+
+```
+docker compose logs worker | grep -E 'watch: attempt|escalate'   # attempt 1…5 FAILED, then SENT → REVIEW
+```
+
+Disarm it: the payment stays in REVIEW, and the dispatcher leaves it there for a human.
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -484,6 +532,6 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-REVIEW with the money held and its resume (§6); deposits and treasury fundings on the Transfers
+Resuming a payment from REVIEW (§6); deposits and treasury fundings on the Transfers
 screen, with the partner side that pays a receivable (§8); the four failures as buttons (§9); and
 reconciliation (§10) arrive in later phases. Each will add its entry here when it lands.

@@ -12,6 +12,7 @@ import {
 import type { PoolClient } from '@payments/db'
 import { TransactionReceiptNotFoundError, getAddress, type Hex, type TransactionReceipt } from 'viem'
 import { workerPool } from './db'
+import { failIfNodeBlackholed } from './experiments'
 
 const chain = createChainClient()
 const signer = new SignerClient(readSignerUrl())
@@ -58,16 +59,18 @@ export async function watch(reference: string): Promise<WatchResult> {
     const hash = payment.tx_hash as Hex
 
     // 2. The receipt by the stored hash, the final block, and who must have sent it.
+    await failIfNodeBlackholed(client, 'watch')
     const receipt = await readReceipt(hash)
     const finalBlock = await finalBlockNumber(chain)
     const { address: treasury } = await signer.treasuryAddress()
 
-    // 3. The verdict. A final transaction without the expected event throws, with what it held instead.
+    // 3. The verdict. A final transaction without the expected event will never be paid, and it is
+    //    no proof of a failure either: not worth retrying, so the payment goes to REVIEW, money held.
     let verdict: PaidVerdict
     try {
       verdict = paidVerdict(receipt, finalBlock, { from: treasury, to: getAddress(payment.destination), amount: BigInt(payment.amount_minor) })
     } catch (mismatch) {
-      throw notPaid(`${hash} is final, but ${chainErrorMessage(mismatch)}`, mismatch)
+      throw ApplicationFailure.nonRetryable(`${hash} is final, but ${chainErrorMessage(mismatch)}: it will never be paid`)
     }
 
     switch (verdict.outcome) {
@@ -97,11 +100,6 @@ export async function watch(reference: string): Promise<WatchResult> {
   } finally {
     client.release()
   }
-}
-
-/** A final transaction without the expected event: not paid, and no proof it failed either, so nothing is released. */
-function notPaid(seen: string, cause?: unknown): Error {
-  return new Error(`${seen}. Not paid: the money stays reserved and this check retries`, { cause })
 }
 
 /** A node that has not seen the transaction in a block answers null, which viem raises. */

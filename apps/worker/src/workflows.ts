@@ -1,6 +1,7 @@
-import { continueAsNew, log, proxyActivities, rootCause, sleep } from '@temporalio/workflow'
+import { ActivityFailure, continueAsNew, isCancellation, log, proxyActivities, rootCause, sleep } from '@temporalio/workflow'
 // Type-only: activity code must never be bundled into the workflow sandbox.
 import type * as activities from './activities'
+import type { Escalation } from './escalate'
 
 const { watchChain, dispatchPayments } = proxyActivities<typeof activities>({
   // Bounded on purpose: a tick that cannot finish must not hold its loop. Three quick attempts,
@@ -9,12 +10,25 @@ const { watchChain, dispatchPayments } = proxyActivities<typeof activities>({
   retry: { maximumAttempts: 3, initialInterval: '1 second', backoffCoefficient: 1 },
 })
 
+/** Attempts per step, 1 → 2 → 4 → 8 s apart: about 15 s from the first failure to the last. */
+const STEP_ATTEMPTS = 5
+
 const { sign, execute, watch, settle, reverse } = proxyActivities<typeof activities>({
   startToCloseTimeout: '30 seconds',
-  // No `maximumAttempts`, on purpose and unlike the watcher: a failing step waits, visibly in the
-  // Temporal UI, with the money still reserved. Phase 6 bounds it and escalates to REVIEW.
-  retry: { initialInterval: '1 second', backoffCoefficient: 2, maximumInterval: '30 seconds' },
+  // A step out of attempts, or failing in a way retrying cannot help, sends the payment to REVIEW
+  // (the `catch` below), with the money still reserved.
+  retry: { maximumAttempts: STEP_ATTEMPTS, initialInterval: '1 second', backoffCoefficient: 2 },
 })
+
+const { escalate } = proxyActivities<typeof activities>({
+  startToCloseTimeout: '30 seconds',
+  // Unbounded, the one step that is: it writes only to our own database, and until it does the
+  // payment stays where it is, with its money reserved.
+  retry: { initialInterval: '1 second', backoffCoefficient: 2, maximumInterval: '1 minute' },
+})
+
+/** 30 minutes of checks 10 s apart (the longest wait measured was ~8): ~2,000 history events, far under Temporal's 51,200. */
+const MAX_FINALITY_CHECKS = 180
 
 /**
  * The chain-side half of a payment. The API owns everything before this — validations, the
@@ -24,34 +38,68 @@ const { sign, execute, watch, settle, reverse } = proxyActivities<typeof activit
  *
  * Everything awaited here is recorded in Temporal's history, so a worker that dies mid-run
  * replays from it: finished steps return their recorded result instead of running again.
+ *
+ * It ends one of three ways (§6): settled, reversed with proof, or escalated to REVIEW.
  */
 export async function PaymentWorkflow(reference: string): Promise<string[]> {
-  // Signed (§7): the hash exists, and is stored on the row, before anything is sent.
-  const timeline = [await sign(reference)]
-  // Sent (§7): a node has the stored bytes. `execute` is §3's "Execution" box.
-  timeline.push(await execute(reference))
+  const timeline: string[] = []
+  let gaveUp: Escalation | undefined
 
-  // Paid (§7): finality AND the event. One short check, then a durable timer, until the chain gives
-  // a final answer either way. No bound yet: Phase 6 caps it and escalates to REVIEW, with the money
-  // still reserved.
-  let verdict = await watch(reference)
-  while (verdict.outcome !== 'paid' && verdict.outcome !== 'reverted') {
-    await sleep('10 seconds')
-    verdict = await watch(reference)
+  try {
+    // Signed (§7): the hash exists, and is stored on the row, before anything is sent.
+    timeline.push(await sign(reference))
+    // Sent (§7): a node has the stored bytes. `execute` is §3's "Execution" box.
+    timeline.push(await execute(reference))
+
+    // Paid (§7): finality AND the event. One short check, then a durable timer, until the chain gives
+    // a final answer either way, or 30 minutes pass without one.
+    let verdict = await watch(reference)
+    let checks = 1
+    while (verdict.outcome !== 'paid' && verdict.outcome !== 'reverted' && checks < MAX_FINALITY_CHECKS) {
+      await sleep('10 seconds')
+      verdict = await watch(reference)
+      checks += 1
+    }
+
+    if (verdict.outcome === 'paid') {
+      timeline.push(`paid in block ${verdict.evidence.blockNumber} (final ${verdict.evidence.finalBlock})`)
+      // Only now do the books move: Reserved out, Partner debt cleared, the invoice PAID.
+      timeline.push(await settle(reference, verdict.evidence))
+    } else if (verdict.outcome === 'reverted') {
+      // §6, "reverted: proof it did not land, so it is reversed": Reserved back to Available, the invoice OPEN.
+      timeline.push(`reverted in block ${verdict.evidence.blockNumber} (final ${verdict.evidence.finalBlock})`)
+      timeline.push(await reverse(reference, verdict.evidence))
+    } else {
+      const last = verdict.outcome === 'not-final' ? `in block ${verdict.blockNumber}, the final block is ${verdict.finalBlock}` : 'not in a block yet'
+      gaveUp = { step: 'watch', retryState: null, attempts: checks, lastError: `no final answer after 30 minutes: ${last}` }
+    }
+  } catch (failure) {
+    gaveUp = stepThatGaveUp(failure)
   }
 
-  if (verdict.outcome === 'reverted') {
-    // §6, "reverted: proof it did not land, so it is reversed": Reserved back to Available, the invoice OPEN.
-    timeline.push(`reverted in block ${verdict.evidence.blockNumber} (final ${verdict.evidence.finalBlock})`)
-    timeline.push(await reverse(reference, verdict.evidence))
-  } else {
-    timeline.push(`paid in block ${verdict.evidence.blockNumber} (final ${verdict.evidence.finalBlock})`)
-    // Only now do the books move: Reserved out, Partner debt cleared, the invoice PAID.
-    timeline.push(await settle(reference, verdict.evidence))
+  // §6, "silence: no proof, the money does not move": REVIEW, with the reason, and Reserved untouched.
+  if (gaveUp !== undefined) {
+    timeline.push(await escalate(reference, gaveUp))
   }
 
   log.info(`${reference}: ${timeline.join(' → ')}`)
   return timeline
+}
+
+/**
+ * A step out of attempts, or failing in a way retrying cannot help. Anything else is rethrown, a
+ * cancelled run included: a cancellation is not a failure, and escalates nothing.
+ */
+function stepThatGaveUp(failure: unknown): Escalation {
+  if (!(failure instanceof ActivityFailure) || isCancellation(failure)) {
+    throw failure
+  }
+  return {
+    step: failure.activityType,
+    retryState: failure.retryState ?? null,
+    attempts: failure.retryState === 'MAXIMUM_ATTEMPTS_REACHED' ? STEP_ATTEMPTS : null,
+    lastError: rootCause(failure) ?? failure.message,
+  }
 }
 
 /** 11 history events per iteration (measured), so a run closes under 4,000 — an hour at 10s. */
