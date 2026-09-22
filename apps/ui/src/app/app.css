@@ -307,7 +307,8 @@ a {
   border-radius: 6px;
 }
 
-/* What the api is about to do, in the order it does it. A list, not a progress bar. */
+/* What the api is about to do, in the order it does it, and what a Break it run has done so far.
+   A list, not a progress bar. */
 .steps {
   margin: 0.8rem 0 0;
   padding-left: 1.1rem;
@@ -319,6 +320,12 @@ a {
   margin-top: 0.3rem;
 }
 
+/* The stage a run is on, against the ones it has already taken. */
+.steps li.is-doing {
+  color: var(--text);
+}
+
+/* What the api answered, under what it did: the funding's transactions, a run's evidence. */
 .result {
   margin-top: 1rem;
   padding-top: 0.8rem;

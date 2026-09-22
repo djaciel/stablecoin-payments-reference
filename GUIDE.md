@@ -404,18 +404,20 @@ that revert is final, the payment waits SENT with its money reserved.
   transaction, too little for the USDC contract to finish, so it is included and reverts.
 - `packages/chain/src/usdc.test.ts` — a real reverted receipt: `reverted` once its block is final, not
   final one block before. A revert that is not final proves nothing yet.
-- `apps/ui/src/admin/BreakItScreen.tsx` — the Break it screen: "Revert the next payment", what it does
-  in the article's words, a red "armed" badge, Arm and Disarm.
+- `apps/ui/src/admin/BreakItScreen.tsx` — each card's **Run it**: its own 0.02 USDC invoice, armed,
+  paid, followed to the end, the flag off again, and the evidence on the card. The switch is the long way.
 - `apps/ui/src/app/App.tsx` — the Break it tab, the one poll of the flags, and the red banner every admin
   screen shows while one is armed.
 - `apps/ui/src/api/client.ts` — `getExperiments` and `setExperiments` (a PUT).
 - `apps/ui/src/admin/TransfersScreen.tsx` — the Signed line says when the gas limit was set too low on
   purpose, with both numbers.
 
-See it (real testnet gas, no USDC moves): arm "Revert the next payment" on `/admin/break-it`, press
-Pay on a small invoice and open its story: Signed says the gas was set too low on purpose, the explorer
-shows it failed (out of gas, no Transfer), and it waits SENT with its amount in Reserved (`/treasury`)
-until the revert is final. What happens then is the next entry.
+See it (real testnet gas, no USDC moves): press **Run it** on "Revert the next payment" at
+`/admin/break-it`. The card names each stage as it reaches it: the invoice, armed, "Paid as PAY-XXXX",
+then "Sent, waiting for the network". Minutes later, when the revert's block is final, it ends with the
+evidence: FAILED `reverted`, the transaction on the explorer (out of gas, no Transfer), and the money
+back in Available with the invoice payable again. The next entry is what the api did in between; the
+switch under the card is the long way, for paying an invoice of your own in Payables.
 
 ## When it fails: FAILED with proof, and the invoice payable again (§6)
 
@@ -488,8 +490,8 @@ money moves, because nothing proves the transfer can no longer land.
   `execute` (before the broadcast) or `watch` (after it).
 - `apps/api/src/experiments/experiments.controller.ts` — `PUT /settings/experiments` now changes
   only the flags it is sent, so switching one never re-arms the other.
-- `apps/ui/src/admin/BreakItScreen.tsx` — the "Node not responding" card: where it bites, Arm and
-  Disarm. Each card sends its own flag and nothing else.
+- `apps/ui/src/admin/BreakItScreen.tsx` — the "Node not responding" card: where it bites, and a Run it
+  that switches the flag off again the moment its own payment is in REVIEW (it is global while armed).
 - `apps/ui/src/api/client.ts` — `setExperiments` takes only the flags that change.
 - `apps/ui/src/app/App.tsx` — the banner names whichever flag is armed.
 - `packages/ledger/src/audit.ts` — the payment's new `escalated` event.
@@ -500,10 +502,11 @@ money moves, because nothing proves the transfer can no longer land.
 - `tests/db/failure.db.test.ts` — §6's REVIEW next to its FAILED: escalated twice, Available 9,000,
   Reserved 1,000, the invoice PAYING, nothing posted but the reserve. Indexed in `tests/db/README.md`.
 
-See it (this sends real testnet USDC): on `/admin/break-it` arm "Node not responding" after the
-broadcast, press Pay on a small invoice and open its story. About 15 s after Sent it is REVIEW, and
-Escalated says `watch` ran out of its 5 attempts. The explorer shows the transfer landed, while
-`curl localhost:3000/treasury` still has it in Reserved (onchain is below Available + Reserved).
+See it (this sends real testnet USDC): on `/admin/break-it` pick "after the broadcast" on "Node not
+responding" and press **Run it**. About 15 s after Sent the card ends with REVIEW, its money still in
+Reserved; its story on Transfers has an Escalated line saying `watch` ran out of its 5 attempts. The
+explorer shows the transfer landed, while `curl localhost:3000/treasury` still has it in Reserved
+(onchain is below Available + Reserved).
 
 ```
 docker compose logs worker | grep -E 'watch: attempt|escalate'   # attempt 1…5 FAILED, then SENT → REVIEW
@@ -534,16 +537,16 @@ a new signature.
   the story's Resume, its Resumed line, and a re-send's Sent line.
 - `apps/ui/src/api/client.ts` — `resumePayment` (a POST; a 409 shows its sentence).
 - `apps/ui/src/admin/BreakItScreen.tsx` — "Node not responding" before the broadcast says what a held
-  nonce holds up, and where Resume is.
+  nonce holds up, and a run that ends in REVIEW gets its own Resume on the card.
 - `tests/db/failure.db.test.ts` — §6's REVIEW continues through resume: SENT again, `review_from_status`
   cleared, Reserved still 1,000, one `resumed` row; a second resume writes nothing. Indexed in
   `tests/db/README.md`.
 
-See it (this sends real testnet USDC): on `/admin/break-it` arm "Node not responding" before the
-broadcast and press Pay on a small invoice. About 15 s later it is in the REVIEW queue on
-`/admin/transfers`, "holds nonce N"; the explorer does not know its hash, and "Fund partner wallet" on
-Start is refused and names it. Disarm, press Resume: Sent carries the same hash as Signed, then Paid
-and Settled after finality.
+See it (this sends real testnet USDC): on `/admin/break-it` pick "before the broadcast" on "Node not
+responding" and press **Run it**. About 15 s later the card ends in REVIEW with a Resume of its own,
+and the payment is in the REVIEW queue on `/admin/transfers`, "holds nonce N"; the explorer does not
+know its hash, and "Fund partner wallet" on Start is refused and names it. The run has already switched
+the flag off, so press Resume: Sent carries the same hash as Signed, then Paid and Settled after finality.
 
 ```
 docker compose logs worker | grep -E 'sign:|execute:'   # already signed 0x… (nonce N), then sent 0x… (the same hash)
@@ -562,8 +565,8 @@ curl -i -X POST localhost:3000/payments/<its reference>/resume   # once settled:
   and Pay, with each invoice's payment on its row.
 - `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
   Resume, and each one's story step by step.
-- `apps/ui/src/admin/BreakItScreen.tsx` — the failure-injection switches; a red banner on every
-  admin screen while one is armed.
+- `apps/ui/src/admin/BreakItScreen.tsx` — the failures you can cause on purpose: one Run it per
+  card, and the switch under it; a red banner on every admin screen while one is armed.
 - `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint.
   The shapes of the answers are in `packages/domain/src/api.ts`, which the api writes with
   and the browser reads.
@@ -573,5 +576,5 @@ Open `http://localhost:5173/admin`.
 ## Not here yet
 
 Deposits and treasury fundings on the Transfers screen, with the partner side that pays a
-receivable (§8); the four failures as buttons (§9); and
-reconciliation (§10) arrive in later phases. Each will add its entry here when it lands.
+receivable (§8); the other two failures of §9, the double click and the race, as Run it cards of
+their own; and reconciliation (§10) arrive in later phases. Each will add its entry here when it lands.
