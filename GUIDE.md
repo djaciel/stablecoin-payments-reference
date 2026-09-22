@@ -66,18 +66,21 @@ do not move, because crediting a deposit to a partner is the receivables flow, l
 
 ## The durable workflow engine (§3, and the crash in §9)
 
-- `apps/worker/src/workflows.ts` — `PaymentWorkflow`, the recipe: `sign`, then `execute`
-  (watching for finality and settling come later). Each step gets the payment's reference and
-  nothing else, and a worker that dies mid-run picks up from Temporal's history.
+- `apps/worker/src/workflows.ts` — `PaymentWorkflow`, the recipe: `sign`, `execute`, `watch`
+  on a durable timer until the payment is paid, then `settle`. Each step gets the payment's
+  reference and nothing else, and a worker that dies mid-run picks up from Temporal's history.
 - `apps/worker/src/activities.ts` — the list of steps the worker runs, one file per step.
 - `apps/worker/src/index.ts` — starts the worker. On shutdown an in-flight step is cancelled
   and simply runs again as attempt 2: every step re-reads the row and skips what is done.
-- `docs/dev/restart-survival.md` — what Docker restarts and what it does not. The drill in it
-  ran on placeholder steps and is being rewritten on a real payment.
+- `docs/dev/restart-survival.md` — the drill, on a real payment: the worker stopped while the
+  payment waits for finality, started again, and the history showing `sign` and `execute` ran
+  once. Also what Docker restarts on its own and what it does not.
 
-See it: start a payment's workflow (the command is under "Signed, then sent" below) and open
-`http://localhost:8080/namespaces/default/workflows/<its reference>`: `sign`, then `execute`,
-attempt 1 each. Start it again and the second run signs and sends nothing.
+See it: follow the drill in `docs/dev/restart-survival.md`, or start a payment's workflow (the
+command is under "Signed, then sent" below) and open
+`http://localhost:8080/namespaces/default/workflows/<its reference>`: `sign`, `execute`, the
+`watch` checks with a 10 s timer between them, then `settle`. Start it again and the new run signs
+and sends nothing.
 
 ## The books: two entries before the money moves (§5, §6, §7)
 
@@ -276,12 +279,46 @@ docker compose exec temporal temporal workflow start --address temporal:7233 \
   --task-queue payments --type PaymentWorkflow --workflow-id PAY-XXXX --input '"PAY-XXXX"'
 ```
 
-Its row on `/admin/payables` turns SENT with the hash, and
+The same command runs on to SETTLED ("Paid" below). While it waits for finality, its row on
+`/admin/payables` shows SENT with the hash, and
 `SELECT at, event, context->>'txHash' FROM audit_log WHERE subject_id = 'PAY-XXXX' ORDER BY id`
-shows `signed` before `sent`, with the same hash. Start it again: `sign` answers "already
-signed", `execute` "the network already knew", and nothing is sent. Until the payment settles,
-the Start screen's onchain USDC is lower than Available + Reserved: the money has left, and the
-books wait for finality and the Transfer event.
+shows `signed` before `sent`, with the same hash. Start it again once it has settled: `sign`
+answers "already signed", `execute` "nothing to send: SETTLED", and nothing is sent. Until the
+payment settles, the Start screen's onchain USDC is lower than Available + Reserved: the money
+has left, and the books wait for finality and the Transfer event.
+
+## Paid: finality and the event, then the books (§7)
+
+A payment is paid only when its block is final AND its receipt carries the official contract's
+Transfer event, exact amount and destination; the event alone is not enough. Then the books, the
+payment and the invoice move in one transaction, which posts once however often it runs.
+
+- `packages/chain/src/usdc.ts` — `paidVerdict`, the whole rule in one place, next to
+  `findSettlementLog`: not landed, not final, reverted, or paid.
+- `packages/chain/src/usdc.test.ts` — both conditions pinned with a real log: the right event
+  above the final block is not paid yet; at the final block it is.
+- `apps/worker/src/watch.ts` — `watch`, one check and no writes: the receipt, the final block
+  (`safe`, never `latest`), the verdict. Reverted or wrong: it retries, the money stays reserved.
+- `apps/worker/src/settle.ts` — the `settle` step: lock the invoice, then Dr Partner debt / Cr
+  Reserved, SENT → SETTLED, the invoice PAID, and the evidence in the audit log, all or nothing.
+- `apps/worker/src/workflows.ts` — the loop: `watch`, a durable 10 s timer, `watch` again, until
+  paid; then `settle`.
+- `tests/db/settlement.db.test.ts` — §7's figures on a real payment row, settled twice: Available
+  9,000, Reserved 0, Partner debt 0, one `settle` in the ledger. Indexed in `tests/db/README.md`.
+- `docs/dev/restart-survival.md` — the same wait, with the worker stopped in the middle of it.
+- `apps/ui/src/admin/PayablesScreen.tsx` — a settled payment's row says it is paid, with its hash.
+
+See it (this sends real testnet USDC), for a RESERVED payment:
+
+```
+docker compose exec temporal temporal workflow start --address temporal:7233 \
+  --task-queue payments --type PaymentWorkflow --workflow-id PAY-XXXX --input '"PAY-XXXX"'
+docker compose logs -f worker   # watch: not final … → watch: paid → settle: settled
+```
+
+The Start screen and `curl localhost:3000/treasury` then agree again: onchain USDC equals
+Available plus Reserved, Reserved and Partner debt are down by the payment, and Available did not
+move. The invoice on `/admin/payables` is PAID.
 
 ## The screens
 
@@ -301,6 +338,7 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-The rest of §7 (waiting for finality and the Transfer event, then settling the books), the
-four failures as buttons (§9), reconciliation (§10) and the partner side that pays a
-receivable (§8) arrive in later phases; each will add its entry here when it lands.
+Pay starting the workflow by itself, the payment's story step by step on screen, what happens
+when a transfer fails (§6), the four failures as buttons (§9), reconciliation (§10) and the
+partner side that pays a receivable (§8) arrive in later phases; each will add its entry here
+when it lands.

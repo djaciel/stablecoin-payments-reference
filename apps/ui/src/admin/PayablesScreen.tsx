@@ -21,6 +21,7 @@ const REASONS: Record<PaymentFailureReason, string> = {
 const SIGNED_MOMENTS: Partial<Record<PaymentView['status'], string>> = {
   RESERVED: 'Signed, not sent yet.',
   SENT: 'Sent, waiting for the network.',
+  SETTLED: 'Paid: its block is final and its receipt carries the official Transfer event. Reserved and Partner debt went down.',
 }
 
 /**

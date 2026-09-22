@@ -1,6 +1,6 @@
 import { type Log, getAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { USDC_ADDRESS, findSettlementLog } from './usdc'
+import { type LandedTransaction, USDC_ADDRESS, findSettlementLog, paidVerdict } from './usdc'
 
 /**
  * The log below is real: it was emitted by the official USDC contract on Base Sepolia in
@@ -8,11 +8,14 @@ import { USDC_ADDRESS, findSettlementLog } from './usdc'
  * transfer of 0.1 USDC (100000 units, 6 decimals). Copied verbatim from the receipt so
  * these tests exercise the shape the network actually produces.
  *
- * One test per thing the settlement rule claims to do. Everything below the first one is
- * a transaction that SUCCEEDED on chain, and none of them is a payment.
+ * One test per thing the settlement rule claims to do. After the first `findSettlementLog`
+ * test, each one is a transaction that SUCCEEDED on chain, and none of them is a payment.
+ * `paidVerdict` adds the other half, finality: the right event alone is not paid yet.
  */
 const PROBE_ADDRESS = getAddress('0x1Ac9Fe52f99fcb60C80EfB97f022a8BcA8a30423')
 const AMOUNT = 100_000n
+/** The block that transaction landed in. */
+const BLOCK = 45154876n
 
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
 
@@ -24,7 +27,7 @@ function transferLog(overrides: { address?: string; from?: string; to?: string; 
     address: overrides.address ?? USDC_ADDRESS,
     topics: [TRANSFER_TOPIC, asTopic(from), asTopic(to)],
     data: `0x${value.toString(16).padStart(64, '0')}`,
-    blockNumber: 45154876n,
+    blockNumber: BLOCK,
     blockHash: '0x00',
     logIndex: 89,
     transactionHash: '0x00',
@@ -67,5 +70,21 @@ describe('findSettlementLog', () => {
     const short = [transferLog({ value: AMOUNT - 1n })]
 
     expect(() => findSettlementLog(short, EXPECTED)).toThrow(/emitted no Transfer.*Seen instead:.*: 99999$/s)
+  })
+})
+
+describe('paidVerdict', () => {
+  // The same real log inside its receipt: the right event, from the right contract, for the right amount.
+  const receipt = { status: 'success', blockNumber: BLOCK, logs: [transferLog()] } as LandedTransaction
+
+  it('does not call it paid while its block is above the final block, even with the right event', () => {
+    expect(paidVerdict(receipt, BLOCK - 1n, EXPECTED)).toEqual({ outcome: 'not-final', blockNumber: BLOCK, finalBlock: BLOCK - 1n })
+  })
+
+  it('calls it paid once its block is at the final block and the right event is in its logs', () => {
+    const verdict = paidVerdict(receipt, BLOCK, EXPECTED)
+
+    expect(verdict.outcome).toBe('paid')
+    expect(verdict.outcome === 'paid' ? verdict.log.logIndex : undefined).toBe(89)
   })
 })

@@ -6,9 +6,9 @@ import type { ChainClient } from './clients'
  * replaced by a reorganisation, so every number posted to the books is read from a block the
  * network has agreed it will not take back.
  *
- * Measured on `https://sepolia.base.org` (2026-09-17): `safe` trails `latest` by ~43 blocks
- * (~1.5 min), `finalized` by ~666 (~22 min). `safe` is the default — twenty minutes of
- * waiting would make the demo's first lesson a lesson in patience.
+ * On `https://sepolia.base.org`, `safe` usually trails `latest` by a few minutes and moves in
+ * jumps; `finalized` trailed it by ~22 min when measured (2026-09-17). `safe` is the default —
+ * twenty minutes of waiting would make the demo's first lesson a lesson in patience.
  */
 export type FinalityMode = 'safe' | 'finalized' | 'depth'
 

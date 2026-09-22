@@ -2,3 +2,5 @@
 export { watchChain } from './watcher'
 export { sign } from './sign'
 export { execute } from './execute'
+export { watch } from './watch'
+export { settle } from './settle'

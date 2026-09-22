@@ -9,7 +9,7 @@ const { watchChain } = proxyActivities<typeof activities>({
   retry: { maximumAttempts: 3, initialInterval: '1 second', backoffCoefficient: 1 },
 })
 
-const { sign, execute } = proxyActivities<typeof activities>({
+const { sign, execute, watch, settle } = proxyActivities<typeof activities>({
   startToCloseTimeout: '30 seconds',
   // No `maximumAttempts`, on purpose and unlike the watcher: a failing step waits, visibly in the
   // Temporal UI, with the money still reserved. Phase 6 bounds it and escalates to REVIEW.
@@ -27,12 +27,24 @@ const { sign, execute } = proxyActivities<typeof activities>({
  */
 export async function PaymentWorkflow(reference: string): Promise<string[]> {
   // Signed (§7): the hash exists, and is stored on the row, before anything is sent.
-  const signed = await sign(reference)
+  const timeline = [await sign(reference)]
   // Sent (§7): a node has the stored bytes. `execute` is §3's "Execution" box.
-  const sent = await execute(reference)
+  timeline.push(await execute(reference))
 
-  log.info(`${reference}: ${signed} → ${sent}`)
-  return [signed, sent]
+  // Paid (§7): finality AND the event. One short check, then a durable timer, until both hold. No
+  // bound yet: Phase 6 caps it and escalates to REVIEW, with the money still reserved.
+  let verdict = await watch(reference)
+  while (verdict.outcome !== 'paid') {
+    await sleep('10 seconds')
+    verdict = await watch(reference)
+  }
+  timeline.push(`paid in block ${verdict.evidence.blockNumber} (final ${verdict.evidence.finalBlock})`)
+
+  // Only now do the books move: Reserved out, Partner debt cleared, the invoice PAID.
+  timeline.push(await settle(reference, verdict.evidence))
+
+  log.info(`${reference}: ${timeline.join(' → ')}`)
+  return timeline
 }
 
 /** 11 history events per iteration (measured), so a run closes under 4,000 — an hour at 10s. */

@@ -75,11 +75,21 @@ bytes, no network):
 | A payment is signed once: two calls at the same instant and one after ask the signer once, the stored hash is the hash of the stored bytes, the payment stays RESERVED, one `signed` audit row | "signs a payment once…" | the payment row lock (`SELECT … FOR UPDATE`) and the re-check under it; `UNIQUE (tx_hash)` in `0008`. Without the lock this test fails |
 | Two payments signed at the same instant get two nonces, though the chain's pending count told both 7 | "gives two payments signed at the same instant two nonces…" | the treasury's nonce lock (`pg_advisory_xact_lock`) and `max(pending, highest stored + 1)`; `UNIQUE (nonce)` in `0008`. Without the lock this test fails |
 
+And §7's Paid moment, in `settlement.db.test.ts`, calling `settlePayment` from
+`apps/worker/src/settle.ts` on a payment the api reserved and the row then marked SENT:
+
+| Claim | Test | Enforced at |
+|---|---|---|
+| Settling is one transaction that posts once: run twice, it leaves Available 9,000, Reserved 0, Partner debt 0, the payment SETTLED, the invoice PAID, one `settle` and one `settled` audit row | "posts once however often it runs…" | the invoice lock, then the status read under it (SETTLED → nothing to do); the `(kind, reference)` unique index and the guarded SENT → SETTLED behind it |
+
+Whether the transfer is final and carries the official Transfer event is decided before this,
+by `paidVerdict` in `packages/chain/src/usdc.ts`, whose two tests run in `pnpm test`.
+
 Three notes on what a green suite does NOT say:
 
 - **Invariant 5 is proved as far as the books go.** The release cannot be written without its
   evidence, and evidence and entries commit together. Whether the hash inside a proof really
-  reverted in the block it names is checked by reconciliation in Phase 9, not here.
+  reverted in the block it names is checked by reconciliation in Phase 10, not here.
 - **Invariant 4 is proved against a fixture table the test creates.** `payments` moves through
   the same helper; the rest of the `cancel` rule — status RESERVED, no stored hash, under the
   payment row lock — arrives with the hash columns and cancel itself.

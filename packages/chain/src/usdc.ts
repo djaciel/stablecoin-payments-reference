@@ -1,4 +1,4 @@
-import { type Address, type Hex, type Log, decodeEventLog, getAbiItem, getAddress, parseAbi } from 'viem'
+import { type Address, type Hex, type Log, type TransactionReceipt, decodeEventLog, getAbiItem, getAddress, parseAbi } from 'viem'
 import type { ChainClient } from './clients'
 
 /**
@@ -81,7 +81,7 @@ export async function findTransfersTo(client: ChainClient, query: TransferQuery)
  * contract, exact destination, exact amount — and it throws with what it saw instead, which
  * the caller must treat as "not paid" rather than "probably fine".
  */
-export function findSettlementLog(logs: readonly Log[], expected: ExpectedTransfer): Log {
+export function findSettlementLog<L extends Log>(logs: readonly L[], expected: ExpectedTransfer): L {
   // Check 1, which is also why an unrelated log in the same receipt is harmless.
   const fromOfficialContract = logs.filter((log) => getAddress(log.address) === USDC_ADDRESS)
 
@@ -112,6 +112,41 @@ export function findSettlementLog(logs: readonly Log[], expected: ExpectedTransf
   }
 
   return match.log
+}
+
+/** Where a sent payment stands, read from its receipt and the final block. Only `paid` settles. */
+export type PaidVerdict =
+  | { readonly outcome: 'not-landed' }
+  | { readonly outcome: 'not-final'; readonly blockNumber: bigint; readonly finalBlock: bigint }
+  | { readonly outcome: 'reverted'; readonly blockNumber: bigint; readonly finalBlock: bigint }
+  | { readonly outcome: 'paid'; readonly blockNumber: bigint; readonly finalBlock: bigint; readonly log: TransactionReceipt['logs'][number] }
+
+/** The three facts of a receipt the verdict reads. A full viem receipt fits. */
+export type LandedTransaction = Pick<TransactionReceipt, 'status' | 'blockNumber' | 'logs'>
+
+/**
+ * §7's "Paid", both conditions, in the article's order: wait for finality, then look in the logs.
+ * `finalBlock` is `finalBlockNumber()`, never `latest`. A mismatch throws `findSettlementLog`'s
+ * error: a final transaction without the expected event is not paid, and never will be.
+ */
+export function paidVerdict(
+  receipt: LandedTransaction | undefined,
+  finalBlock: bigint,
+  expected: ExpectedTransfer,
+): PaidVerdict {
+  if (receipt === undefined) {
+    return { outcome: 'not-landed' }
+  }
+  const { blockNumber } = receipt
+  // Checked before the status too: a block that is not final can still be replaced, reverted or not.
+  if (blockNumber > finalBlock) {
+    return { outcome: 'not-final', blockNumber, finalBlock }
+  }
+  if (receipt.status === 'reverted') {
+    return { outcome: 'reverted', blockNumber, finalBlock }
+  }
+  // If it is not there, it is not paid.
+  return { outcome: 'paid', blockNumber, finalBlock, log: findSettlementLog(receipt.logs, expected) }
 }
 
 /** Logs from other events share the same shape and simply fail to decode; those are not errors. */

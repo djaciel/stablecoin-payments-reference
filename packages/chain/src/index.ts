@@ -28,9 +28,11 @@ export {
   USDC_ADDRESS,
   findSettlementLog,
   findTransfersTo,
+  paidVerdict,
   readUsdcBalance,
   type ExpectedTransfer,
   type ObservedTransfer,
+  type PaidVerdict,
   type TransferQuery,
 } from './usdc'
 export {
