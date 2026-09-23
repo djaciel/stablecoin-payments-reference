@@ -14,5 +14,11 @@ export const MAX_INVOICE_USDC = '1000'
 export const MIN_PAYMENT_USDC = '0.01'
 export const MAX_PAYMENT_USDC = '1000'
 
+/**
+ * How far ahead a payment may be scheduled. A demo caps it because a scheduled payment holds real
+ * testnet money under Reserved from the moment it is made, and one forgotten would hold it for ever.
+ */
+export const MAX_SCHEDULE_AHEAD_HOURS = 24
+
 /** Destinations the compliance mock refuses (`payments/compliance.ts`). Add one to see `compliance_rejected`. */
 export const COMPLIANCE_DENYLIST: readonly string[] = []

@@ -4,18 +4,17 @@ import { PAYMENT_WORKFLOW, paymentWorkflowStart, readTemporalConfig } from '@pay
 import { workerPool } from './db'
 
 /**
- * The dispatcher's one rule: every RESERVED or SENT payment has a running workflow. The api starts
- * it right after COMMIT; this finds the ones it could not (Temporal down, a process that died in
- * between) and runs that ended without finishing. REVIEW is left alone on purpose: a human resumes
- * it (`POST /payments/:reference/resume`). Scheduled payments add `execute_at <= now()` here (Phase 9).
+ * The dispatcher's one rule: every RESERVED or SENT payment whose time has come has a running
+ * workflow. The api starts one right after COMMIT and leaves a payment promised for later to this
+ * query. REVIEW is left alone on purpose: a human resumes it (`POST /payments/:reference/resume`).
  */
-const IN_FLIGHT = "SELECT reference, status FROM payments WHERE status IN ('RESERVED', 'SENT') ORDER BY created_at"
+const DUE = "SELECT reference, status FROM payments WHERE status IN ('RESERVED', 'SENT') AND (execute_at IS NULL OR execute_at <= now()) ORDER BY created_at"
 
 const { taskQueue } = readTemporalConfig()
 
 /** One tick. Returns its line so the Temporal UI shows it; only a start is logged, not every quiet tick. */
 export async function dispatchPayments(): Promise<string> {
-  const { rows } = await workerPool().query<{ reference: string; status: string }>(IN_FLIGHT)
+  const { rows } = await workerPool().query<{ reference: string; status: string }>(DUE)
   // The worker's own client, over the connection it already polls with.
   const client = getClient()
 
@@ -28,7 +27,7 @@ export async function dispatchPayments(): Promise<string> {
     log.info(`dispatcher: started ${reference} (${status}, had no running workflow)`)
     started += 1
   }
-  return `${rows.length} payment(s) RESERVED or SENT, ${started} started`
+  return `${rows.length} payment(s) RESERVED or SENT and due, ${started} started`
 }
 
 /** Never started, or its last run ended (failed, terminated, or completed early): both mean no. */

@@ -324,6 +324,11 @@ export interface PaymentView {
   /** Present once the payment is signed: the hash exists, and is stored, before anything is sent. */
   readonly transaction?: { readonly hash: string; readonly explorerUrl: string }
   readonly createdAt: string
+  /**
+   * Present only for a payment scheduled for later: when it runs. Its money is already reserved,
+   * and nothing is signed until the dispatcher starts it, within about ten seconds of this time.
+   */
+  readonly executeAt?: string
 }
 
 /**

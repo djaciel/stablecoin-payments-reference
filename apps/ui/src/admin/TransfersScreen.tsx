@@ -28,10 +28,12 @@ function PaymentList() {
   }
   // Oldest first by creation time (the list reversed), not by nonce: each held nonce is on its row.
   const queue = payments.filter((payment) => payment.review !== undefined).reverse()
+  const waiting = payments.filter(isWaitingForItsTime).sort(soonestFirst)
 
   return (
     <>
       {queue.length > 0 && <ReviewQueue payments={queue} />}
+      {waiting.length > 0 && <WaitingForTheirTime payments={waiting} />}
       <PaymentTable payments={payments} />
       <DepositTable deposits={deposits} />
     </>
@@ -221,6 +223,66 @@ function ResumeButton({ reference }: { readonly reference: string }) {
   )
 }
 
+type Scheduled = PaymentSummary & { readonly executeAt: string }
+
+/** Promised for later: RESERVED, with a time still ahead. At its time the dispatcher takes it. */
+function isWaitingForItsTime(payment: PaymentSummary): payment is Scheduled {
+  return payment.status === 'RESERVED' && payment.executeAt !== undefined && new Date(payment.executeAt) > new Date()
+}
+
+/** ISO times sort as text, and they all carry the same time zone. */
+function soonestFirst(one: Scheduled, other: Scheduled): number {
+  return one.executeAt.localeCompare(other.executeAt)
+}
+
+/** The payments promised for later: what the money is doing while they wait, and when they go. */
+function WaitingForTheirTime({ payments }: { readonly payments: readonly Scheduled[] }) {
+  return (
+    <section className="panel">
+      <h2 className="card-title">Waiting for their time</h2>
+      <p className="panel-lead">
+        The money is already reserved: it left Available when the payment was made, and nothing else can spend it.
+        Nothing is signed until the payment runs, which happens within about ten seconds of its time.
+      </p>
+      <div className="table-scroll">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Reference</th>
+              <th className="is-number">Amount</th>
+              <th>Where it goes</th>
+              <th>Runs at</th>
+              <th>Promised</th>
+            </tr>
+          </thead>
+          <tbody>
+            {payments.map(({ reference, amount, partnerName, executeAt, createdAt }) => (
+              <tr key={reference}>
+                <td>
+                  <Link to={`/admin/transfers/${reference}`}>{reference}</Link>
+                </td>
+                <td className="is-number">{amount} USDC</td>
+                <td>{partnerName ?? TO_AN_ADDRESS}</td>
+                <td>
+                  {MOMENT.format(new Date(executeAt))}
+                  <span className="cell-note">{fromNow(executeAt)}</span>
+                </td>
+                <td>{MOMENT.format(new Date(createdAt))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+/** "in 2 minutes" next to the exact time: the exact one is the promise, this one is the wait. */
+function fromNow(at: string): string {
+  const seconds = Math.round((new Date(at).getTime() - Date.now()) / 1000)
+  return Math.abs(seconds) < 60 ? COUNTDOWN.format(seconds, 'second') : COUNTDOWN.format(Math.round(seconds / 60), 'minute')
+}
+
 function PaymentTable({ payments }: { readonly payments: readonly PaymentSummary[] }) {
   return (
     <section className="panel">
@@ -393,6 +455,8 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
   const lines: Line[] = []
   const signedHash = steps.find((step) => step.subjectType === 'payment' && step.event === 'signed')?.context.txHash
   const wasReserved = steps.some((step) => step.subjectType === 'payment' && step.event === 'reserved')
+  // Written by the door on the `created` row: present only for a payment promised for later.
+  const promisedFor = steps.find((step) => step.subjectType === 'payment' && step.event === 'created')?.context.executeAt
 
   for (const step of steps) {
     const previous = lines.at(-1)
@@ -403,13 +467,27 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
     const { context } = step
     switch (step.event) {
       case 'created':
-        lines.push({ name: 'Created', rows: [step], text: <>The payment intent, recorded with its idempotency key <code>{context.idempotencyKey}</code>.</> })
+        lines.push({
+          name: 'Created',
+          rows: [step],
+          text: (
+            <>
+              The payment intent, recorded with its idempotency key <code>{context.idempotencyKey}</code>.
+              {promisedFor !== undefined && ` Promised for ${MOMENT.format(new Date(promisedFor))}: nothing is signed until then.`}
+            </>
+          ),
+        })
         break
       case 'reserved':
         lines.push({ name: 'Reserved', rows: [step], text: `${payment.amount} USDC moved from Available to Reserved.` })
         break
       case 'signed':
-        lines.push({ name: 'Signed', rows: [step], text: <>{gasTooLowText(context)}Its hash and nonce {context.nonce}, stored before anything was sent: <Hash hash={context.txHash} /></> })
+        lines.push({
+          name: 'Signed',
+          rows: [step],
+          // The gap above this line was the wait, not the chain: worth saying where the story shows it.
+          text: <>{promisedFor === undefined ? '' : 'Its time came. '}{gasTooLowText(context)}Its hash and nonce {context.nonce}, stored before anything was sent: <Hash hash={context.txHash} /></>,
+        })
         break
       case 'sent':
         lines.push({ name: 'Sent', rows: [step], text: sentText(context, signedHash) })
@@ -471,10 +549,18 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
   if (payment.status === 'RESERVED' || payment.status === 'SENT') {
     const missing = STEPS.filter((name) => !lines.some((line) => line.name === name))
     missing.forEach((name, index) => {
-      lines.push({ name, rows: [], text: index === 0 ? (WAITING[name] ?? 'Waiting.') : 'Waiting.' })
+      lines.push({ name, rows: [], text: index === 0 ? (waitingFor(name, promisedFor) ?? 'Waiting.') : 'Waiting.' })
     })
   }
   return lines
+}
+
+/** A payment promised for later is not waiting for a signer: it is waiting for its own time. */
+function waitingFor(name: (typeof STEPS)[number], promisedFor: string | undefined): string | undefined {
+  if (name === 'Signed' && promisedFor !== undefined && new Date(promisedFor) > new Date()) {
+    return `Waiting for its time, ${MOMENT.format(new Date(promisedFor))}: the money is reserved and nothing is signed until then.`
+  }
+  return WAITING[name]
 }
 
 function sentText(context: AuditStep['context'], signedHash: string | undefined): ReactNode {
@@ -583,4 +669,6 @@ function timesOf(lines: readonly Line[]): string[] {
 // Milliseconds on the story's lines: signed and sent are often under a second apart, in that order.
 const DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
 const TIME = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3, hourCycle: 'h23' })
-const MOMENT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+/** Exported so the screen that schedules a payment prints its time the way this one does. */
+export const MOMENT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+const COUNTDOWN = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' })

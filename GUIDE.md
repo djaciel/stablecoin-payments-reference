@@ -879,6 +879,53 @@ curl -s -X POST localhost:3000/allowlist -H 'content-type: application/json' \
   -d '{"address":"0xnope","label":"Typo"}'                           # 400, nothing written
 ```
 
+## Scheduled: reserved now, sent at its time (§5, §7)
+
+A payment can be promised for later, and §5's two entries happen when it is promised, not when the
+transfer leaves: the money goes from Available to Reserved at once, where nothing else can spend it,
+and nothing is signed until its time. It is the cheapest way to see that reserving and the chain are
+two different moments (§7) — here they are minutes apart, and both screens show the gap.
+
+- `migrations/0014_scheduled_payments.sql` — `payments.execute_at`: when the payment runs. Null
+  means now, which is what every payment nobody scheduled says.
+- `apps/api/src/config.ts` — `MAX_SCHEDULE_AHEAD_HOURS`, and why a demo caps it: a forgotten
+  scheduled payment holds real testnet money under Reserved.
+- `apps/api/src/body.ts` — `readExecuteAt`: an ISO time, in the future and at most that far ahead,
+  or one 400 that says so.
+- `apps/api/src/payments/create-payment.ts` — the door is untouched except for two lines: the time
+  is stored with the intent, and it joins the request fingerprint **only when it is there**, so a
+  body with no time hashes to exactly the bytes it always did and every key already recorded still
+  replays instead of answering 409.
+- `apps/api/src/payments/payments.controller.ts` — `POST /payments` starts the workflow only for a
+  payment whose time is absent or already past, on a 201 and on a replay. Everything else is the
+  dispatcher's.
+- `apps/api/src/payments/read-payments.ts` — `execute_at` joins the columns every payment read
+  selects, so the list, the one payment and the story all carry it.
+- `apps/worker/src/dispatcher.ts` — the one clause that makes scheduling work,
+  `AND (execute_at IS NULL OR execute_at <= now())`. Its rule reads "every RESERVED or SENT payment
+  whose time has come has a running workflow", and its tick is every ten seconds, which is exactly
+  how late a scheduled payment can be.
+- `packages/domain/src/api.ts` — `PaymentView.executeAt`, present only for a payment scheduled for
+  later: its money is already reserved.
+- `apps/ui/src/admin/PayToAddressScreen.tsx` — the **now / at a time** choice on the form, two
+  minutes ahead by default, and an answer that says which it was.
+- `apps/ui/src/admin/TransfersScreen.tsx` — the **Waiting for their time** panel: what is promised,
+  where it goes, when it runs and how long that is from now.
+- `apps/ui/src/api/client.ts` — `payPayable` sends the time, and leaves the field out for a payment
+  that runs now.
+
+See it: on `/admin/pay-to-address` paste the partner wallet's address from Start, 0.02, a note, pick
+**At a time** and press **Create and pay**. The answer is RESERVED straight away: Start shows the
+amount under Reserved while the chain still shows the old balance, `/admin/transfers` lists it under
+**Waiting for their time** with the countdown, and the Temporal UI has no run for it at all. Within
+about ten seconds of its time the panel drops the row and the story gains Signed and Sent, minutes
+after Created and Reserved.
+
+```
+curl -s localhost:3000/payments/PAY-XXXX                  # executeAt, and no transaction yet
+docker compose logs --tail=40 worker | grep dispatcher    # started PAY-XXXX, at its time
+```
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -899,7 +946,8 @@ curl -s -X POST localhost:3000/allowlist -H 'content-type: application/json' \
   at, and the shared wallet it pays from, labelled demo scaffolding. The chosen partner lives in
   the address bar, so a reload keeps it.
 - `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
-  Resume, each one's story step by step, and below them the money that arrived.
+  Resume, the payments waiting for their time, each one's story step by step, and below them the
+  money that arrived.
 - `apps/ui/src/admin/BreakItScreen.tsx` — the failures you can cause on purpose, five cards with
   one Run it each, in the article's order: the double click, the race, the crash after signing and
   the node that does not answer (§9's four), then the revert (§6). The three that inject a fault

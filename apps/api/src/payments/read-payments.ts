@@ -9,7 +9,7 @@ import { AUDIT_SUBJECTS, PAYMENT_EVENTS, formatMinor } from '@payments/ledger'
  */
 
 /** The columns every payment read selects and `toView` maps. `create-payment.ts` adds its fingerprint. */
-export const PAYMENT_COLUMNS = 'reference, status, payable_id, destination, amount_minor, currency, failure_reason, tx_hash, created_at'
+export const PAYMENT_COLUMNS = 'reference, status, payable_id, destination, amount_minor, currency, failure_reason, tx_hash, created_at, execute_at'
 
 /** The list shows the latest ones; the rest are still in the database. */
 const LIST_LIMIT = 100
@@ -31,6 +31,8 @@ export interface PaymentRow {
   readonly failure_reason: PaymentFailureReason | null
   readonly tx_hash: string | null
   readonly created_at: Date
+  /** Null for a payment that runs now, which is every payment nobody scheduled (`0014`). */
+  readonly execute_at: Date | null
 }
 
 /** `GET /payments/:reference`. */
@@ -84,6 +86,7 @@ export function toView(row: PaymentRow): PaymentView {
     reason: row.failure_reason ?? undefined,
     transaction: transactionView(row.tx_hash),
     createdAt: row.created_at.toISOString(),
+    ...(row.execute_at === null ? {} : { executeAt: row.execute_at.toISOString() }),
   }
 }
 

@@ -10,6 +10,7 @@
 import { BadRequestException } from '@nestjs/common'
 import { USDC_DECIMALS, toMinorFromDecimal, type MinorUnits } from '@payments/ledger'
 import { getAddress, type Address } from 'viem'
+import { MAX_SCHEDULE_AHEAD_HOURS } from './config'
 
 /** The longest description a list shows without turning a row into a paragraph. */
 export const MAX_DESCRIPTION_LENGTH = 200
@@ -70,6 +71,26 @@ function parseAmount(value: string, example: string): MinorUnits {
       `amount must be a positive decimal string in USDC, with at most ${String(USDC_DECIMALS)} decimals, like "${example}".`,
     )
   }
+}
+
+/**
+ * When a payment should run. Absent means now, which is what almost every payment says; a time is
+ * read as one moment (the browser sends an ISO string, time zone included) and the money is set
+ * aside all the same.
+ */
+export function readExecuteAt(body: unknown): Date | undefined {
+  const raw = field(body, 'executeAt')
+  if (raw === undefined) {
+    return undefined
+  }
+  const at = new Date(typeof raw === 'string' ? raw : '')
+  const hoursAhead = (at.getTime() - Date.now()) / 3_600_000
+  if (Number.isNaN(hoursAhead) || hoursAhead <= 0 || hoursAhead > MAX_SCHEDULE_AHEAD_HOURS) {
+    throw new BadRequestException(
+      `executeAt must be an ISO time in the future and at most ${String(MAX_SCHEDULE_AHEAD_HOURS)} hours ahead, like "${new Date(Date.now() + 120_000).toISOString()}".`,
+    )
+  }
+  return at
 }
 
 export function readDescription(body: unknown): string {

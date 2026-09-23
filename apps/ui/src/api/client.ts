@@ -81,13 +81,13 @@ export function payReceivable(receivableId: string): Promise<PartnerPaymentRecei
 }
 
 /**
- * `POST /payments` for one invoice, with the key the screen made for this attempt. A 422 resolves
- * instead of throwing: it is a payment the api recorded as FAILED, and its body carries the reason
- * the screen puts in a sentence. A 400, a 409 or an api that is not there throw, with the api's
- * own sentence when it sent one.
+ * `POST /payments` for one invoice, with the key the screen made for this attempt and, when it is
+ * not to run now, the ISO time it runs at. A 422 resolves instead of throwing: it is a payment the
+ * api recorded as FAILED, and its body carries the reason the screen puts in a sentence. A 400, a
+ * 409 or an api that is not there throw, with the api's own sentence when it sent one.
  */
-export async function payPayable(payableId: string, idempotencyKey: string): Promise<PaymentView> {
-  return (await postPayment(payableId, idempotencyKey)).payment
+export async function payPayable(payableId: string, idempotencyKey: string, executeAt?: string): Promise<PaymentView> {
+  return (await postPayment(payableId, idempotencyKey, executeAt)).payment
 }
 
 /** One answer to `POST /payments`, code and all: which call recorded the payment is in the code. */
@@ -107,8 +107,10 @@ export function doubleClick(payableId: string, idempotencyKey: string): Promise<
   return Promise.all([postPayment(payableId, idempotencyKey), postPayment(payableId, idempotencyKey)])
 }
 
-async function postPayment(payableId: string, idempotencyKey: string): Promise<PaymentAnswer> {
-  const response = await write('POST', '/payments', { payableId }, { 'idempotency-key': idempotencyKey })
+async function postPayment(payableId: string, idempotencyKey: string, executeAt?: string): Promise<PaymentAnswer> {
+  // The field is left out for a payment that runs now, which is what its absence means to the api.
+  const body = { payableId, ...(executeAt === undefined ? {} : { executeAt }) }
+  const response = await write('POST', '/payments', body, { 'idempotency-key': idempotencyKey })
   if (!response.ok && response.status !== 422) {
     throw new Error(await refusalMessage(response))
   }

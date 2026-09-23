@@ -2,6 +2,7 @@ import { BadRequestException, Body, ConflictException, Controller, Get, Headers,
 import { inTransaction, type Pool, type PoolClient } from '@payments/db'
 import { failedAfterReserving, type PaymentTimeline, type PaymentView, type Payments } from '@payments/domain'
 import type { Client } from '@temporalio/client'
+import { readExecuteAt } from '../body'
 import { DATABASE_POOL } from '../db/db.module'
 import { TEMPORAL_CLIENT } from '../temporal/temporal.module'
 import { createPayment } from './create-payment'
@@ -33,7 +34,7 @@ export class PaymentsController {
   ): Promise<PaymentView> {
     // Validated by hand, one condition and one 400 each: tsx emits no decorator metadata, so
     // `ValidationPipe` would check nothing here (spec assumption 18).
-    const request = { idempotencyKey: readIdempotencyKey(header), payableId: readPayableId(body) }
+    const request = { idempotencyKey: readIdempotencyKey(header), payableId: readPayableId(body), executeAt: readExecuteAt(body) }
 
     const outcome = await this.inOneTransaction((client) => createPayment(client, request))
     if (outcome.kind === 'key-conflict') {
@@ -46,8 +47,9 @@ export class PaymentsController {
     }
 
     // Committed first, dispatched after: the money is reserved before any workflow exists. A replay
-    // of a payment still RESERVED dispatches again, since its first start may have failed.
-    if (outcome.payment.status === 'RESERVED') {
+    // of a payment still RESERVED dispatches again, since its first start may have failed. A payment
+    // promised for later is not started here at all: the dispatcher owns everything from its time on.
+    if (outcome.payment.status === 'RESERVED' && itsTimeHasCome(outcome.payment)) {
       await dispatchPayment(this.temporal, outcome.payment.reference)
     }
 
@@ -116,6 +118,11 @@ export function statusCodeOf(outcome: { readonly kind: 'recorded' | 'replayed'; 
     return 422
   }
   return outcome.kind === 'recorded' ? 201 : 200
+}
+
+/** No time means now. A time already past is a payment due, which the dispatcher would start anyway. */
+function itsTimeHasCome({ executeAt }: PaymentView): boolean {
+  return executeAt === undefined || new Date(executeAt).getTime() <= Date.now()
 }
 
 function notFound(reference: string): never {

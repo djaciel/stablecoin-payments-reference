@@ -4,9 +4,13 @@ import type { Allowlist, PayableSummary, PaymentView } from '@payments/domain'
 import { addToAllowlist, createPayable, getAllowlist, payPayable } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { REASONS, TO_AN_ADDRESS } from './PayablesScreen'
+import { MOMENT } from './TransfersScreen'
 
 /** Small on purpose: every payment from here spends real testnet USDC from the treasury. */
 const DEFAULT_AMOUNT = '0.02'
+
+/** Far enough ahead to watch the money sit in Reserved, near enough to not have to come back. */
+const DEFAULT_MINUTES_AHEAD = 2
 
 /** What the form was holding when it was submitted, which is what the invoice must match. */
 interface Typed {
@@ -27,6 +31,8 @@ export function PayToAddressScreen() {
   const [destination, setDestination] = useState('')
   const [amount, setAmount] = useState(DEFAULT_AMOUNT)
   const [note, setNote] = useState('')
+  const [runsNow, setRunsNow] = useState(true)
+  const [runAt, setRunAt] = useState(minutesAhead(DEFAULT_MINUTES_AHEAD))
   const [invoice, setInvoice] = useState<PayableSummary | undefined>(undefined)
   const [payment, setPayment] = useState<PaymentView | undefined>(undefined)
   const [busy, setBusy] = useState(false)
@@ -44,9 +50,18 @@ export function PayToAddressScreen() {
 
   const pay = async (payableId: string): Promise<void> => {
     attemptKey.current ??= crypto.randomUUID()
-    const answer = await payPayable(payableId, attemptKey.current)
+    // The form holds local time and the api is told the exact moment, time zone and all. It is read
+    // when Pay is pressed, so a retry after a refusal runs at the time the form says then.
+    const answer = await payPayable(payableId, attemptKey.current, runsNow ? undefined : new Date(runAt).toISOString())
     attemptKey.current = undefined
     setPayment(answer)
+  }
+
+  // The default is the time of the click that picked it, and typing an address takes minutes: a
+  // value already in the past is refreshed rather than sent, because the invoice is written before
+  // the payment and a refused time would leave it open on the books.
+  const freshTime = (): void => {
+    setRunAt(minutesAhead(DEFAULT_MINUTES_AHEAD))
   }
 
   const run = (start: Promise<void>): void => {
@@ -116,13 +131,54 @@ export function PayToAddressScreen() {
             placeholder="What it is for"
             aria-label="What it is for"
           />
+          <label className="field-unit">
+            <input
+              type="radio"
+              name="when-it-runs"
+              checked={runsNow}
+              onChange={() => {
+                setRunsNow(true)
+              }}
+            />
+            Now
+          </label>
+          <label className="field-unit">
+            <input
+              type="radio"
+              name="when-it-runs"
+              checked={!runsNow}
+              onChange={() => {
+                setRunsNow(false)
+                freshTime()
+              }}
+            />
+            At a time
+          </label>
+          <input
+            className="field"
+            type="datetime-local"
+            value={runAt}
+            onChange={(event) => {
+              setRunAt(event.target.value)
+            }}
+            onFocus={() => {
+              if (new Date(runAt) <= new Date()) {
+                freshTime()
+              }
+            }}
+            disabled={runsNow}
+            required
+            aria-label="When it runs"
+          />
           <button type="submit" className="button" disabled={busy}>
             {busy ? 'paying…' : 'Create and pay'}
           </button>
         </form>
         <p className="card-note">
           This writes the invoice first and then pays it: the demo has one path to a payment, so an amount typed here
-          becomes a debt on the books and goes through the same checks as an invoice to a partner.
+          becomes a debt on the books and goes through the same checks as an invoice to a partner. At a time, the checks
+          run and the money is set aside right now; only the transfer waits, and it leaves within about ten seconds of
+          the time you pick.
         </p>
         {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
       </section>
@@ -193,7 +249,10 @@ function Attempt({
       {payment !== undefined && payment.status !== 'FAILED' && (
         <p className="card-value">
           Payment <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link> is {payment.status}:{' '}
-          {payment.amount} USDC moved from Available to Reserved, and only then is it signed and sent.
+          {payment.amount} USDC moved from Available to Reserved
+          {payment.executeAt === undefined
+            ? ', and only then is it signed and sent.'
+            : ` now, and it runs at ${MOMENT.format(new Date(payment.executeAt))}. Nothing is signed until then.`}
         </p>
       )}
     </section>
@@ -320,6 +379,12 @@ function justCreated(payables: readonly PayableSummary[], typed: Typed): Payable
     throw new Error('the invoice was written, but it is not the newest one on Payables. Open that screen and pay it there.')
   }
   return newest
+}
+
+/** A `datetime-local` value reads local time, which is what a person means, so the UTC one is shifted back. */
+function minutesAhead(minutes: number): string {
+  const at = new Date(Date.now() + minutes * 60_000)
+  return new Date(at.getTime() - at.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
 }
 
 /** What was typed, as the api formats it back: "0.02" and "0.020000" are the same money. */

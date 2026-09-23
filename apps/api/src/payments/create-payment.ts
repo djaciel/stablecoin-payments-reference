@@ -21,6 +21,8 @@ type IntentRow = PaymentRow & { readonly request_fingerprint: string }
 export interface PaymentRequest {
   readonly idempotencyKey: string
   readonly payableId: string
+  /** Absent runs it now; a time reserves the money now and leaves the transfer to the dispatcher. */
+  readonly executeAt?: Date
 }
 
 export type PaymentOutcome =
@@ -46,7 +48,14 @@ export async function createPayment(client: PoolClient, request: PaymentRequest)
   }
   const { reference, destination, currency } = intent
   const amountMinor = BigInt(intent.amount_minor)
-  await audit(client, reference, PAYMENT_EVENTS.created, { idempotencyKey: request.idempotencyKey, destination, amountMinor })
+  // The time joins the `created` row rather than getting an event of its own: the story then reads
+  // Created and Reserved at once and Signed minutes later, which is the gap this feature is about.
+  await audit(client, reference, PAYMENT_EVENTS.created, {
+    idempotencyKey: request.idempotencyKey,
+    destination,
+    amountMinor,
+    ...(request.executeAt ? { executeAt: request.executeAt.toISOString() } : {}),
+  })
 
   // 2. Lock the invoice so its status holds still until COMMIT. Taken BEFORE step 4's account
   //    locks, on every path, so two payments queue instead of deadlocking. NO KEY UPDATE, not
@@ -144,10 +153,10 @@ async function insertIntent(client: PoolClient, request: PaymentRequest, fingerp
     await client.query('SAVEPOINT payment_intent')
     try {
       const inserted = await client.query<IntentRow>(
-        `INSERT INTO payments (reference, status, payable_id, destination, amount_minor, currency, idempotency_key, request_fingerprint)
-         SELECT $1, 'CREATED', id, destination, amount_minor, currency, $2, $3 FROM payables WHERE id = $4
+        `INSERT INTO payments (reference, status, payable_id, destination, amount_minor, currency, idempotency_key, request_fingerprint, execute_at)
+         SELECT $1, 'CREATED', id, destination, amount_minor, currency, $2, $3, $5 FROM payables WHERE id = $4
          RETURNING ${COLUMNS}`,
-        [newReference(), request.idempotencyKey, fingerprint, request.payableId],
+        [newReference(), request.idempotencyKey, fingerprint, request.payableId, request.executeAt ?? null],
       )
       await client.query('RELEASE SAVEPOINT payment_intent')
       return inserted.rows[0]
@@ -178,10 +187,14 @@ async function replay(client: PoolClient, key: string, fingerprint: string): Pro
 
 /**
  * What "the same body" means, all of it here: the validated request rather than the raw bytes, so
- * whitespace, key order or the case of the invoice id is not a different body.
+ * whitespace, key order or the case of the invoice id is not a different body. Two times are two
+ * requests, so the time joins it; the spread puts it there ONLY when it was asked for, which keeps
+ * a body with no time hashing to exactly the bytes it always did, and every key already recorded
+ * still replaying instead of answering 409.
  */
 function fingerprintOf(request: PaymentRequest): string {
-  return createHash('sha256').update(JSON.stringify({ payableId: request.payableId.toLowerCase() })).digest('hex')
+  const body = { payableId: request.payableId.toLowerCase(), ...(request.executeAt ? { executeAt: request.executeAt.toISOString() } : {}) }
+  return createHash('sha256').update(JSON.stringify(body)).digest('hex')
 }
 
 /** The article's PAY-XXXX: four random digits. A real system uses a longer id; ten thousand runs out. */
