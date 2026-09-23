@@ -11,6 +11,10 @@ const LOOPS = [
 ] as const
 
 async function main(): Promise<void> {
+  // This process's own birthday. Break it's crash shows up in the log as this line arriving again
+  // seconds after a step killed the worker: the death and the rebirth, two timestamps apart.
+  console.log(`worker: started at ${new Date().toISOString()}`)
+
   const config = readTemporalConfig()
   const { address, namespace, taskQueue } = config
 

@@ -92,7 +92,8 @@ Both were run in the same session as the drill.
 
 The worker is the only service with `restart: unless-stopped`. It is there for the crash
 experiment of §9, where a step kills its own process on purpose: the payment can only carry on if
-something brings the worker back without a human in the loop.
+something brings the worker back without a human in the loop. That experiment is built now, and
+the section after this table is how to run it.
 
 The policy covers a process that ends by itself. Docker deliberately does not apply it to a
 container you stopped or killed through Docker: both are recorded as "stopped by hand". So:
@@ -129,3 +130,32 @@ worker: could not start — the container will be restarted, so expect this to r
 
 If you see that line scrolling past every few seconds, the worker is in a crash loop and the error
 after it is the real one.
+
+## The crash experiment: the same thing, without you
+
+The drill above is the operator's view: you stop the worker, you start it again. §9's crash is the
+other one, where the process dies of its own accord and nobody is there to bring it back.
+
+Arm **Crash after signing** on `/admin/break-it` and press **Run it**, or run the same thing from
+the command line:
+
+```
+pnpm experiment:crash                # writes its own 0.02 USDC invoice, pays it, follows it
+docker compose logs -f worker        # the loud line, then "worker: started at …" seconds later
+```
+
+The `sign` step stores the hash, the signed bytes and the nonce, commits, and then calls
+`process.exit(1)`. Nothing has been sent, so the payment does not know whether the transfer went
+out. Docker restarts the container; about half a minute later (the step's `startToCloseTimeout`)
+Temporal runs `sign` again — **attempt 2**, which finds the hash already stored — and `execute`
+asks the network about it, does not find it, and sends the same bytes. One transfer.
+
+The extra attempt lands on `sign`, not on `execute`: `execute` had never run when the process
+died, so its `sent` row says attempt 1 with `networkAlreadyKnew: false`, which is the recovery.
+That is also the cost of the experiment for anything else in flight, since every step of every
+running payment loses one of its five attempts when the worker goes.
+
+The flag is claimed in the same transaction that stores the hash, so it is already spent when the
+worker comes back — otherwise the restarted worker would sign and die again for ever, and a crash
+inside a step restarts the worker silently. `pnpm experiment:crash` prints `RestartCount` either
+side of the death, which is the proof that the process really ended.

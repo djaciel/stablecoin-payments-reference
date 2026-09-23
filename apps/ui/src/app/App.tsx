@@ -138,9 +138,10 @@ function PartnerSide() {
 }
 
 /** What the banner says for each flag that is armed. */
-function armedFlags({ revertNextPayment, blackholeRpc }: Experiments): string[] {
+function armedFlags({ revertNextPayment, crashAfterSigning, blackholeRpc }: Experiments): string[] {
   return [
     ...(revertNextPayment ? ['the next payment will revert'] : []),
+    ...(crashAfterSigning ? ['the next payment kills the worker after signing'] : []),
     ...(blackholeRpc.enabled ? [`the node does not answer ${BLACKHOLE_WHERE[blackholeRpc.step]} (${blackholeRpc.step}), for every payment in flight`] : []),
   ]
 }

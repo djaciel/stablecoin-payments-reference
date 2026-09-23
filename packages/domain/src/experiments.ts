@@ -9,6 +9,7 @@ export const BLACKHOLE_STEPS: readonly BlackholeStep[] = ['execute', 'watch']
 /** What `GET /settings/experiments` answers. `PUT` takes any of these fields and changes only those. */
 export interface Experiments {
   readonly revertNextPayment: boolean
+  readonly crashAfterSigning: boolean
   readonly blackholeRpc: { readonly enabled: boolean; readonly step: BlackholeStep }
 }
 
@@ -19,6 +20,11 @@ export const EXPERIMENT_KEYS = {
    * includes it, it runs out of gas and reverts: nothing moves, it costs only gas.
    */
   revertNextPayment: 'experiment.revert_next_payment',
+  /**
+   * One-shot: the next payment stores its hash, its signed bytes and its nonce, commits, and then
+   * the worker kills its own process with nothing sent. It comes back and finishes the payment (§9).
+   */
+  crashAfterSigning: 'experiment.crash_after_signing',
   /**
    * While enabled, that step of every payment in flight fails like a node that does not answer, so
    * its attempts run out and the payment goes to REVIEW with its money still reserved (§9's stuck one).

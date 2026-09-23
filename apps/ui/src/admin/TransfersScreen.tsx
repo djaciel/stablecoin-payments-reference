@@ -490,7 +490,8 @@ function sentText(context: AuditStep['context'], signedHash: string | undefined)
 
 /** Break it's revert flag, as the `signed` row records it: the gas signed, and what the payout would have had. */
 function gasTooLowText(context: AuditStep['context']): string {
-  if (context.failureInjection !== 'revert_next_payment') {
+  // A signature can have taken more than one Break it flag, and the row names every one it took.
+  if (!(context.failureInjection ?? '').includes('revert_next_payment')) {
     return ''
   }
   return `The gas limit was set too low on purpose (Break it): ${context.gas} instead of ${context.estimatedGas ?? 'its estimate'}, so it runs out of gas and reverts onchain. `

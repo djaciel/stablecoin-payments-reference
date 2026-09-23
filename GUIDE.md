@@ -76,11 +76,14 @@ and the books only move once its block can no longer be replaced ("Money that ar
 - `docs/dev/restart-survival.md` — the drill, on a real payment: the worker stopped while the
   payment waits for finality, started again, and the history showing `sign` and `execute` ran
   once. Also what Docker restarts on its own and what it does not.
+- A worker you stop by hand is the operator's version. The one where the process dies on its own,
+  at the worst moment, is "Crash after signing" below.
 
 See it: follow the drill in `docs/dev/restart-survival.md`, or press Pay on a small invoice and
-open `http://localhost:8080/namespaces/default/workflows/<its reference>`: `sign`, `execute`, the
-`watch` checks with a 10 s timer between them, then `settle`. Start it again once it has settled
-(the command is under "Signed, then sent" below) and the new run signs and sends nothing.
+open the payment's runs in the Temporal UI (the Temporal link on its story, built by
+`packages/domain/src/temporal.ts`): `sign`, `execute`, the `watch` checks with a 10 s timer
+between them, then `settle`. Start it again once it has settled (the command is under "Signed,
+then sent" below) and the new run signs and sends nothing.
 
 ## The books: two entries before the money moves (§5, §6, §7)
 
@@ -668,6 +671,55 @@ holds at the same address.
 ```
 docker compose logs -f worker                      # detected ... credited, matched by hash
 curl -s localhost:3000/deposits | python3 -m json.tool
+```
+
+## Crash after signing: the worker dies and the payment finishes itself (§9)
+
+The worst moment to lose a process is between signing and broadcasting: the hash exists, and
+nobody knows whether the transfer went out. One switch makes that happen for real — the step
+commits the hash, the bytes and the nonce, then kills its own process. Nobody restarts anything.
+Docker brings the worker back, Temporal runs the step again, and the payment asks the network
+about the hash it stored, does not find it, and sends the same bytes: one transfer, no duplicate.
+
+- `apps/worker/src/sign.ts` — where the kill is, and where it is not: `signPayment` claims the
+  flag inside the transaction that stores the hash and never exits (the db suite calls it
+  directly); the `sign` activity exits, once that transaction has committed.
+- `apps/worker/src/experiments.ts` — `claimCrashAfterSigning`: one UPDATE takes the flag and
+  switches it off, so the worker that comes back cannot sign and die again for ever.
+- `apps/worker/src/execute.ts` — the recovery, unchanged since Phase 5 ("Signed, then sent"
+  above): ask the network for the stored hash, and send the SAME bytes when it does not know them.
+  This experiment causes the moment; that file is what survives it.
+- `apps/worker/src/index.ts` — `worker: started at <ISO>`, so the death and the rebirth read as
+  two timestamps seconds apart in `docker compose logs worker`.
+- `packages/domain/src/experiments.ts` — `crashAfterSigning` and its `settings` key, next to the
+  other two flags. An absent row is off.
+- `apps/api/src/experiments/experiments.controller.ts` — the flag joins the partial PUT. The api
+  stores it and, as with the others, never acts on it.
+- `apps/ui/src/admin/BreakItScreen.tsx` — the "Crash after signing" card, and the one new seam in
+  the runner: `narrate`, which reads the stages a status cannot show out of the payment's own story.
+- `apps/ui/src/app/App.tsx` — the sentence the red banner adds while this one is armed.
+- `apps/ui/src/admin/TransfersScreen.tsx` — the `signed` row can now name more than one flag, so
+  the revert's line looks for its own name in the list.
+- `scripts/experiments/harness.ts` — what every `pnpm experiment:*` command runs on: the api
+  client it drives the demo with (`get`/`post`/`put`, follow a payment to its end) and the one
+  shape it prints evidence in.
+- `scripts/experiments/crash.ts` — `pnpm experiment:crash`: the same doors the card presses, plus
+  the one thing a browser cannot read, Docker's `RestartCount` either side of the death.
+- `docs/dev/restart-survival.md` — the drill (you stop the worker) next to the experiment (the
+  worker stops itself), and why Docker's restart policy only covers the second.
+
+See it (real testnet USDC, about four minutes, and it kills whatever else is in flight — run it
+alone): press **Run it** on "Crash after signing" at `/admin/break-it`, or run the command. The
+card names the stages as it reaches them: the invoice, armed, "Paid as PAY-XXXX", "Signed 0x…,
+then the worker was killed with nothing sent", and half a minute later "The worker came back,
+asked the network about that hash, did not find it, and sent the same bytes", then SETTLED with
+one transfer on the explorer. In the Temporal UI the extra attempt is on `sign`, not on `execute`:
+`execute` had never run when the process died.
+
+```
+docker inspect -f '{{.RestartCount}} {{.State.StartedAt}}' stablecoin-payments-reference-worker-1
+pnpm experiment:crash              # the same story, with that count before and after
+docker compose logs -f worker      # "killing this worker on purpose", then "worker: started at …"
 ```
 
 ## The screens

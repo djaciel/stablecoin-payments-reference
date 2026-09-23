@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { failedAfterReserving, type BlackholeStep, type Experiments, type PaymentSummary, type PaymentView } from '@payments/domain'
+import { failedAfterReserving, type AuditStep, type BlackholeStep, type Experiments, type PaymentSummary, type PaymentView } from '@payments/domain'
 import { createPayable, getPayables, getPaymentTimeline, payPayable, resumePayment, setExperiments } from '../api/client'
 import { AddressLine } from '../app/AddressLine'
 import { REASONS } from './PayablesScreen'
@@ -55,6 +55,7 @@ export function BreakItScreen() {
     <div className="cards">
       <RevertCard armed={experiments.revertNextPayment} {...card} />
       <BlackholeCard blackhole={experiments.blackholeRpc} {...card} />
+      <CrashCard armed={experiments.crashAfterSigning} {...card} />
     </div>
   )
 }
@@ -135,6 +136,59 @@ function BlackholeCard({ blackhole, ...card }: { readonly blackhole: Experiments
       <Switch armed={blackhole.enabled} run={run} show={card.show} flag={{ blackholeRpc: { enabled: !blackhole.enabled, step } }} />
     </section>
   )
+}
+
+function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) {
+  const run = useRun('crash', card, {
+    flag: (on) => ({ crashAfterSigning: on }),
+    armed: 'Armed: the next payment kills the worker the moment its hash is stored.',
+    description: 'Crash run',
+    narrate: crashStages,
+  })
+
+  return (
+    <section className="card">
+      <h2 className="card-title">
+        Crash after signing <Badge armed={armed} />
+      </h2>
+      <p className="card-value">
+        The worker dies between signing and broadcasting, and the payment finishes itself with the bytes it had
+        already signed.
+      </p>
+      <p className="card-note">
+        The signing step stores the hash, the signed bytes and the nonce, commits, and then kills its own process:
+        nothing was sent, and the payment cannot know whether the transfer went out. Nobody restarts it by hand.
+        Docker brings the worker back within seconds, and half a minute later that step runs again, on its second
+        attempt, and finds the hash already stored. The next step is the one that asks the network about it, does not
+        find it, and sends the same bytes. The process really dies, so it takes down every payment in flight with it:
+        each of their steps loses one of its attempts. Run this one on its own.
+      </p>
+      <RunIt run={run} />
+      <Switch armed={armed} run={run} show={card.show} flag={{ crashAfterSigning: !armed }} />
+    </section>
+  )
+}
+
+/**
+ * The two moments of §9's crash that a status cannot show, read from the story the run already
+ * asks for: the `signed` row that took the flag, and the `sent` row that found the network had
+ * never heard of the hash.
+ */
+function crashStages(steps: readonly AuditStep[]): string[] {
+  const stages: string[] = []
+  const signed = steps.find((step) => step.event === 'signed' && (step.context.failureInjection ?? '').includes('crash_after_signing'))
+  if (signed !== undefined) {
+    stages.push(`Signed ${shortened(signed.context.txHash)}, then the worker was killed with nothing sent.`)
+  }
+  const sent = steps.find((step) => step.event === 'sent' && step.context.networkAlreadyKnew === 'false')
+  if (sent !== undefined) {
+    stages.push('The worker came back, asked the network about that hash, did not find it, and sent the same bytes.')
+  }
+  return stages
+}
+
+function shortened(hash: string | undefined): string {
+  return hash === undefined ? 'it' : `${hash.slice(0, 10)}…${hash.slice(-4)}`
 }
 
 /** Run it, the stages the run has reached as it reaches them, and the evidence it ends with. */
@@ -264,6 +318,11 @@ interface RunPlan {
   readonly flag: (armed: boolean) => Partial<Experiments>
   readonly armed: string
   readonly description: string
+  /**
+   * What this card can tell from the payment's story that its status cannot say. Called with the
+   * steps each poll already returns, it answers the stages so far; the run shows the new ones.
+   */
+  readonly narrate?: (steps: readonly AuditStep[]) => string[]
 }
 
 interface RunState {
@@ -318,10 +377,16 @@ function useRun(card: string, { show, running, setRunning }: CardProps, plan: Ru
   const follow = async (reference: string): Promise<void> => {
     const until = Date.now() + RUN_LIMIT_MS
     let blips = 0
+    // How many of the card's own stages are already on screen, so each one is shown once.
+    let narrated = 0
     while (Date.now() < until) {
       try {
-        const { payment } = await getPaymentTimeline(reference)
+        const { payment, steps } = await getPaymentTimeline(reference)
         blips = 0
+        for (const stage of (plan.narrate?.(steps) ?? []).slice(narrated)) {
+          did(stage)
+          narrated += 1
+        }
         if (isResting(payment.status)) {
           setState((run) => ({ ...run, doing: undefined, payment }))
           return

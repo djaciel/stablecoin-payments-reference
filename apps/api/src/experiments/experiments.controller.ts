@@ -25,11 +25,14 @@ export class ExperimentsController {
     const changes = changesIn(body)
     if (changes === undefined) {
       throw new BadRequestException(
-        'Send revertNextPayment (true or false), blackholeRpc ({ "enabled": true or false, "step": "execute" or "watch" }), or both, and nothing else.',
+        'Send revertNextPayment (true or false), crashAfterSigning (true or false), blackholeRpc ({ "enabled": true or false, "step": "execute" or "watch" }), any of them, and nothing else.',
       )
     }
     if (changes.revertNextPayment !== undefined) {
       await writeFlag(this.pool, EXPERIMENT_KEYS.revertNextPayment, changes.revertNextPayment)
+    }
+    if (changes.crashAfterSigning !== undefined) {
+      await writeFlag(this.pool, EXPERIMENT_KEYS.crashAfterSigning, changes.crashAfterSigning)
     }
     if (changes.blackholeRpc !== undefined) {
       await writeFlag(this.pool, EXPERIMENT_KEYS.blackholeRpc, changes.blackholeRpc)
@@ -43,17 +46,20 @@ function changesIn(body: unknown): Partial<Experiments> | undefined {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
     return undefined
   }
-  const { revertNextPayment, blackholeRpc, ...unknownFields } = body as Record<string, unknown>
+  const { revertNextPayment, crashAfterSigning, blackholeRpc, ...unknownFields } = body as Record<string, unknown>
   if (Object.keys(unknownFields).length > 0) {
     return undefined
   }
   if (revertNextPayment !== undefined && typeof revertNextPayment !== 'boolean') {
     return undefined
   }
+  if (crashAfterSigning !== undefined && typeof crashAfterSigning !== 'boolean') {
+    return undefined
+  }
   if (blackholeRpc !== undefined && !isBlackhole(blackholeRpc)) {
     return undefined
   }
-  return { revertNextPayment, blackholeRpc }
+  return { revertNextPayment, crashAfterSigning, blackholeRpc }
 }
 
 function isBlackhole(value: unknown): value is Experiments['blackholeRpc'] {
@@ -72,6 +78,7 @@ async function readExperiments(pool: Pool): Promise<Experiments> {
   const stored = new Map(result.rows.map((row) => [row.key, row.value]))
   return {
     revertNextPayment: stored.get(EXPERIMENT_KEYS.revertNextPayment) === true,
+    crashAfterSigning: stored.get(EXPERIMENT_KEYS.crashAfterSigning) === true,
     blackholeRpc: (stored.get(EXPERIMENT_KEYS.blackholeRpc) as Experiments['blackholeRpc'] | undefined) ?? { enabled: false, step: 'watch' },
   }
 }

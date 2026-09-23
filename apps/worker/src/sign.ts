@@ -15,7 +15,7 @@ import { AUDIT_ACTORS, AUDIT_SUBJECTS, PAYMENT_EVENTS, recordAudit } from '@paym
 import { getAddress, keccak256 } from 'viem'
 import { FEE_CAP_MULTIPLIER, GAS_HEADROOM_PERCENT, REVERT_GAS_LIMIT } from './config'
 import { workerPool } from './db'
-import { claimRevertNextPayment } from './experiments'
+import { claimCrashAfterSigning, claimRevertNextPayment } from './experiments'
 
 const chain = createChainClient()
 const signer = new SignerClient(readSignerUrl())
@@ -37,7 +37,14 @@ export interface SigningInput {
 
 export type SignOutcome =
   /** Signed now: hash, bytes and nonce are committed on the row. */
-  | { readonly kind: 'signed'; readonly txHash: string; readonly nonce: number; readonly gasTooLowOnPurpose: boolean }
+  | {
+      readonly kind: 'signed'
+      readonly txHash: string
+      readonly nonce: number
+      readonly gasTooLowOnPurpose: boolean
+      /** Break it's crash: the ACTIVITY kills the process once this outcome is in hand (never here). */
+      readonly crashOnPurpose: boolean
+    }
   /** Signed before: the signer was not asked, and this is the stored hash. */
   | { readonly kind: 'already-signed'; readonly txHash: string; readonly nonce: number }
   /** No longer RESERVED, so there is nothing to sign. */
@@ -62,7 +69,15 @@ export async function sign(reference: string): Promise<string> {
     //    a call to a public endpoint holds its locks for as long as the internet feels like it.
     const input = { reference, ...(await readChain(payment)) }
 
-    return report(reference, await signPayment(client, input, (transaction) => signer.signTransfer(transaction)))
+    const outcome = await signPayment(client, input, (transaction) => signer.signTransfer(transaction))
+    const line = report(reference, outcome)
+
+    // The transaction above has COMMITTED: the hash, the bytes and the nonce are on the row, and
+    // the flag is spent. The kill lives here, in the activity, and nowhere else.
+    if (outcome.kind === 'signed' && outcome.crashOnPurpose) {
+      killThisWorker(reference, outcome.txHash, outcome.nonce)
+    }
+    return line
   } catch (error) {
     log.error(`${reference} sign: attempt ${activityInfo().attempt} FAILED — ${chainErrorMessage(error)} [chain: ${rpcHost()}]`)
     throw error
@@ -72,9 +87,27 @@ export async function sign(reference: string): Promise<string> {
 }
 
 /**
+ * §9's crash, at the one moment that matters: the payment has a hash and nobody has sent anything.
+ *
+ * `process.exit(1)` is the only honest way to cause it. Docker does not apply its restart policy to
+ * a container stopped from outside, and PID 1 ignores `kill -9` (`docs/dev/restart-survival.md`).
+ */
+function killThisWorker(reference: string, txHash: string, nonce: number): never {
+  log.error(
+    `${reference} sign: killing this worker on purpose (Break it: crash after signing). ` +
+      `${txHash} (nonce ${nonce}) is stored and nothing has been sent. ` +
+      'Docker restarts this container and Temporal runs this step again.',
+  )
+  process.exit(1)
+}
+
+/**
  * Steps 3 to 5 in one database transaction, committed before this returns. No Temporal API in
  * here, so `tests/db/signing.db.test.ts` calls it directly; like every unit of work in this repo
  * it joins a transaction the caller already opened.
+ *
+ * It NEVER exits the process, whatever Break it has armed: an exit here would kill the test runner.
+ * The crash belongs to the `sign` activity above, after this transaction has committed.
  */
 export async function signPayment(
   client: PoolClient,
@@ -102,9 +135,10 @@ export async function signPayment(
     const stored = await client.query<{ next: number | null }>('SELECT max(nonce) + 1 AS next FROM payments')
     const nonce = Math.max(input.pendingNonce, stored.rows[0]?.next ?? 0)
 
-    // Break it's revert flag, claimed in this transaction: a rollback (the signer down) leaves it
-    // armed, and two payments signing together cannot both take it.
+    // Break it's two one-shot flags, claimed in this transaction: a rollback (the signer down)
+    // leaves them armed, and two payments signing together cannot both take the same one.
     const gasTooLowOnPurpose = await claimRevertNextPayment(client)
+    const crashOnPurpose = await claimCrashAfterSigning(client)
     const gas = gasTooLowOnPurpose ? REVERT_GAS_LIMIT : input.gas
 
     // 4. The signer, inside the transaction. Not the "no network inside a transaction" case: a
@@ -132,6 +166,7 @@ export async function signPayment(
     if (updated.rowCount !== 1) {
       throw new Error(`${input.reference} changed under its own row lock; nothing was stored`)
     }
+    const injections = [...(gasTooLowOnPurpose ? ['revert_next_payment'] : []), ...(crashOnPurpose ? ['crash_after_signing'] : [])]
     await recordAudit(client, {
       actor: AUDIT_ACTORS.worker,
       subjectType: AUDIT_SUBJECTS.payment,
@@ -141,13 +176,15 @@ export async function signPayment(
         txHash: signed.hash,
         nonce,
         gas,
-        // What the payout would have been signed with, next to the gas it was signed with.
-        ...(gasTooLowOnPurpose ? { failureInjection: 'revert_next_payment', estimatedGas: input.gas } : {}),
+        // Every Break it flag this signature took, and for the revert what the payout would
+        // otherwise have been signed with. Both can be armed at once, so this names them all.
+        ...(injections.length > 0 ? { failureInjection: injections.join(', ') } : {}),
+        ...(gasTooLowOnPurpose ? { estimatedGas: input.gas } : {}),
         maxFeePerGas: input.maxFeePerGas,
         maxPriorityFeePerGas: input.maxPriorityFeePerGas,
       },
     })
-    return { kind: 'signed', txHash: signed.hash, nonce, gasTooLowOnPurpose }
+    return { kind: 'signed', txHash: signed.hash, nonce, gasTooLowOnPurpose, crashOnPurpose }
   })
 }
 
@@ -204,6 +241,9 @@ function report(reference: string, outcome: SignOutcome): string {
       line = `signed ${outcome.txHash} (nonce ${outcome.nonce})`
       if (outcome.gasTooLowOnPurpose) {
         line += `, with a gas limit of ${REVERT_GAS_LIMIT} set too low on purpose (Break it): it will be included and revert`
+      }
+      if (outcome.crashOnPurpose) {
+        line += ', and Break it armed the crash: this worker is about to kill itself'
       }
       break
     case 'already-signed':
