@@ -153,7 +153,40 @@ describe('releasing a hold', () => {
     // What stands in for a chain proof, in words, because a screen has to show something.
     expect(audit[0]?.context['proof']).toMatch(/no signed transaction exists/)
   })
+
+  it('is refused by the database when the cancelled payment carries a hash, and allowed when it carries none', async () => {
+    // Straight through `cancel`, bypassing the payment service whose row lock is the primary
+    // guard (`0015`): signed bytes can still land, whoever writes the movement.
+    await recordSignedPayment()
+
+    const refusal = await withLedgerTransaction(pool, (client) =>
+      cancel(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC, reason: 'signed a second ago' }),
+    ).catch((error: unknown) => error)
+
+    expect((refusal as Error).message).toMatch(/already carries a signed transaction/)
+    expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(PAYMENT)
+    expect(await auditRowsFor(REFERENCE)).toEqual([])
+
+    // The same movement once nothing is signed. The trigger refuses only what it can see: it
+    // never asks that a payment exist, or the article's own ledger fixture would break.
+    await pool.query('UPDATE payments SET tx_hash = NULL, signed_tx = NULL, nonce = NULL WHERE reference = $1', [REFERENCE])
+    await withLedgerTransaction(pool, (client) =>
+      cancel(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC, reason: 'nothing was signed' }),
+    )
+
+    expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(0n)
+    expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(ARTICLE_TREASURY)
+  })
 })
+
+/** PAY-4821 as the `sign` step leaves it: RESERVED, with hash, bytes and nonce on the row. */
+async function recordSignedPayment(): Promise<void> {
+  await pool.query(
+    `INSERT INTO payments (reference, status, destination, amount_minor, currency, idempotency_key, request_fingerprint, tx_hash, signed_tx, nonce)
+     VALUES ($1, 'RESERVED', '0x1111111111111111111111111111111111111111', $2, $3, 'key-4821', 'fingerprint', '0xsigned', '0x02', 7)`,
+    [REFERENCE, PAYMENT.toString(), USDC],
+  )
+}
 
 async function auditRowsFor(reference: string): Promise<Array<{ event: string; context: Record<string, unknown> }>> {
   const result = await pool.query<{ event: string; context: Record<string, unknown> }>(

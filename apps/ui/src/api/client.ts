@@ -146,6 +146,15 @@ export function resumePayment(reference: string): Promise<PaymentView> {
 }
 
 /**
+ * A payment promised for later, cancelled before anything is signed: its money goes back to
+ * Available and its invoice reopens. A 404, and a 409 for a payment already signed, throw with
+ * the api's own sentence.
+ */
+export function cancelPayment(reference: string): Promise<PaymentView> {
+  return send<PaymentView>(`/payments/${encodeURIComponent(reference)}/cancel`, undefined)
+}
+
+/**
  * Sends USDC and gas from the treasury to the partner wallet. It takes as long as two
  * transactions take to land (a few seconds on Base Sepolia) because the answer is the
  * evidence: both hashes, the gas that was spent, and the entry written to the books.

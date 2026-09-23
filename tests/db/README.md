@@ -54,7 +54,7 @@ because a guarantee that only holds for well-behaved callers is not a guarantee.
 | 2 | Posted entries are immutable; corrections are new entries | `guards.db.test.ts` | `BEFORE UPDATE OR DELETE` triggers on both ledger tables — and `audit_log` has its own, with its own message |
 | 3 | `treasury:available` and every `never negative` account stay at or above zero | `guards.db.test.ts`, `race.db.test.ts` | engine check under `SELECT … FOR UPDATE`, plus `CHECK (allows_negative OR balance_minor >= 0)` on the maintained balance |
 | 4 | Transitions are guarded and change exactly one row | `guarded-transition.db.test.ts` | `applyGuardedTransition` in `packages/db`: `UPDATE … WHERE status = $expected`, then `rowCount === 1` or `TransitionRejected` |
-| 5 | Reserved money is released only with proof the transfer can no longer land | `release.db.test.ts` | `reversal` requires the proof argument; `CHECK (kind <> 'reversal' OR proof IS NOT NULL)`; and the deferred trigger `ledger_entries_release_is_allowed`, which refuses that movement of money under any kind but `reversal` and `cancel` |
+| 5 | Reserved money is released only with proof the transfer can no longer land | `release.db.test.ts` (the ledger's two doors) and `cancel.db.test.ts` (the second door's conditions, and its race with `sign`) | `reversal` requires the proof argument; `CHECK (kind <> 'reversal' OR proof IS NOT NULL)`; and the deferred trigger `ledger_entries_release_is_allowed`, which refuses that movement of money under any kind but `reversal` and `cancel`, and refuses a `cancel` whose payment carries a hash (`0015`) |
 
 And the article's idempotency key (§4, §9's double click), one test per claim, all in
 `payments.db.test.ts`, calling `createPayment` from `apps/api/src/payments/create-payment.ts`
@@ -97,6 +97,17 @@ on a payment the api reserved and the row then marked SENT:
 | A final revert releases the money only with proof, reopens the invoice and posts once: run twice, it leaves Available 10,000, Reserved 0, Partner debt 1,000 (the invoice is still owed), the payment FAILED `reverted`, the invoice OPEN with no payment on it, one `reversal` whose proof names the hash and the block, one `failed` and one `released` row; a new key then reserves the same invoice again | "releases the money only with proof…" (`reversePayment`, from `apps/worker/src/reverse.ts`) | the invoice lock, then the status read under it (FAILED → nothing to do); the guarded SENT → FAILED and PAYING → OPEN; `reversal`'s required proof and `ledger_reversal_needs_proof` |
 | No proof either way leaves the money where it is, there and back: escalated twice, it moves the payment SENT → REVIEW with `review_from_status` SENT and leaves Available 9,000, Reserved 1,000, Partner debt 1,000, the invoice PAYING, no ledger transaction but the seed's and the `reserve`, and one `escalated` row carrying the step, the attempts, the last error, the hash and the nonce; resumed twice, it is SENT again with `review_from_status` cleared, the same three figures and postings, and one `resumed` row | "goes to REVIEW and back on resume…" (`escalatePayment`, from `apps/worker/src/escalate.ts`; `resumePayment`, from `apps/api/src/payments/resume-payment.ts`) | the payment row lock, then the status read under it (REVIEW → nothing to escalate; not REVIEW → nothing to resume); the guarded SENT → REVIEW → SENT; no ledger call in `escalate` or `resumePayment` at all; `0010`'s CHECK that a REVIEW, and only a REVIEW, knows where it came from |
 
+And §6's second release door, the one with no chain proof, in `cancel.db.test.ts`, calling
+`cancelPayment` from `apps/api/src/payments/cancel-payment.ts` on a payment the api reserved and
+nobody signed:
+
+| Claim | Test | Enforced at |
+|---|---|---|
+| Cancelling before anything is signed releases the money and reopens the invoice: Available 10,000, Reserved 0, Partner debt 1,000 (the invoice is still owed), the payment FAILED `cancelled` with no hash, the invoice OPEN with no payment on it, one `cancel` whose `proof` column is empty, one `failed` / one `released` / one `reopened` row; a second cancel answers `not-cancellable` and writes nothing; a new key reserves the same invoice again | "gives the money back when nothing was signed…" | the invoice lock, then the payment row lock and the status read under it; the guarded RESERVED → FAILED and PAYING → OPEN; the `(kind, reference)` unique index |
+| A payment whose bytes are signed cannot be cancelled: `signed-already`, zero rows written anywhere, Reserved still holding the 1,000 and the invoice still PAYING | "refuses a payment whose transaction is already signed…" | `tx_hash` read under `SELECT … FOR UPDATE`, before anything is written; `0015`'s trigger says the same thing to whoever posts the movement |
+| Once a payment is cancelled there is nothing left to sign: `signPayment` answers `not-reserved` FAILED, never asks the signer, and leaves `tx_hash`, `signed_tx` and `nonce` null | "leaves nothing to sign once it has been cancelled…" | the same row lock, then `nothingToSign`'s status check under it. Without it a signature after the release would burn a treasury nonce on a FAILED payment, and every payout signed after it would wait behind that nonce |
+| Cancel and `sign` at the same instant have exactly one winner: either a stored hash or a `cancel` transaction, never both and never neither, with Reserved at 1,000 when sign won and 0 when cancel won, and no deadlock in five runs | "lets sign or cancel win when they run at the same instant…" | the payment row lock both of them take — `signPayment` holds it across the signer call — so the loser reads the winner's row and returns without writing |
+
 And §8's money coming in, in `deposits.db.test.ts`, calling `recordDetected`,
 `promotableDeposits` and `settleDeposit` from `apps/worker/src/deposits.ts`:
 
@@ -116,8 +127,8 @@ Three notes on what a green suite does NOT say:
   evidence, and evidence and entries commit together. Whether the hash inside a proof really
   reverted in the block it names is checked by reconciliation in Phase 10, not here.
 - **Invariant 4 is proved against a fixture table the test creates.** `payments` moves through
-  the same helper; the rest of the `cancel` rule — status RESERVED, no stored hash, under the
-  payment row lock — arrives with the hash columns and cancel itself.
+  the same helper, and the rest of the `cancel` rule — status RESERVED, no stored hash, read under
+  the payment row lock — is `cancel.db.test.ts`'s.
 - **The race proves an outcome, not an instant.** An outside observer cannot see a
   mid-transaction balance; "Available never goes negative" is carried by the final figure plus
   the `CHECK` that `guards.db.test.ts` violates on purpose.

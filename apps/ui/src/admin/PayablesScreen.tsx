@@ -20,6 +20,7 @@ export const REASONS: Record<PaymentFailureReason, string> = {
   amount_out_of_range: 'The amount was outside the payment limits.',
   compliance_rejected: 'The compliance check refused the destination.',
   reverted: 'The transfer reached the chain and reverted.',
+  cancelled: 'The payment was cancelled before anything was signed.',
 }
 
 /** Where a signed payment stands, in the article's words (§7). */

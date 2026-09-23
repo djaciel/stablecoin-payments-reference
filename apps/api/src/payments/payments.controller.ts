@@ -5,6 +5,7 @@ import type { Client } from '@temporalio/client'
 import { readExecuteAt } from '../body'
 import { DATABASE_POOL } from '../db/db.module'
 import { TEMPORAL_CLIENT } from '../temporal/temporal.module'
+import { cancelPayment } from './cancel-payment'
 import { createPayment } from './create-payment'
 import { dispatchPayment } from './dispatch'
 import { findPayment, listPayments, paymentTimeline } from './read-payments'
@@ -72,6 +73,29 @@ export class PaymentsController {
       throw new ConflictException(`${reference} is ${outcome.status}: only a payment in REVIEW can be resumed.`)
     }
     await dispatchPayment(this.temporal, reference)
+    return outcome.payment
+  }
+
+  /**
+   * The money back with no chain proof, because nothing was ever signed (§6). Nothing is
+   * dispatched: there is no workflow to start, and a run already going finds a FAILED payment
+   * and stops by itself.
+   */
+  @Post(':reference/cancel')
+  @HttpCode(HttpStatus.OK)
+  async cancel(@Param('reference') reference: string): Promise<PaymentView> {
+    const outcome = await this.inOneTransaction((client) => cancelPayment(client, reference))
+    if (outcome.kind === 'unknown') {
+      notFound(reference)
+    }
+    if (outcome.kind === 'signed-already') {
+      throw new ConflictException(
+        `${reference} cannot_cancel_after_signing: it was already signed, and those bytes can still land, so only the chain can end it.`,
+      )
+    }
+    if (outcome.kind === 'not-cancellable') {
+      throw new ConflictException(`${reference} is ${outcome.status}: only a payment whose money is reserved and whose transfer was never signed can be cancelled.`)
+    }
     return outcome.payment
   }
 

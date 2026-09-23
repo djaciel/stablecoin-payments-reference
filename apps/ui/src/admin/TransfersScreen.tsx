@@ -1,7 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { AuditStep, DepositSummary, PaymentReview, PaymentSummary, PaymentTimeline } from '@payments/domain'
-import { getPaymentTimeline, readTransfers, resumePayment } from '../api/client'
+import { cancelPayment, getPaymentTimeline, readTransfers, resumePayment } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { CopyButton } from '../app/AddressLine'
 import { REASONS, TO_AN_ADDRESS } from './PayablesScreen'
@@ -237,12 +237,17 @@ function soonestFirst(one: Scheduled, other: Scheduled): number {
 
 /** The payments promised for later: what the money is doing while they wait, and when they go. */
 function WaitingForTheirTime({ payments }: { readonly payments: readonly Scheduled[] }) {
+  // The payment the confirmation is open for. One dialog for the panel, outside the table: a
+  // modal inside a scrolling table cell is clipped by it.
+  const [asking, setAsking] = useState<Scheduled | undefined>(undefined)
+
   return (
     <section className="panel">
       <h2 className="card-title">Waiting for their time</h2>
       <p className="panel-lead">
         The money is already reserved: it left Available when the payment was made, and nothing else can spend it.
-        Nothing is signed until the payment runs, which happens within about ten seconds of its time.
+        Nothing is signed until the payment runs, which happens within about ten seconds of its time. Until then Cancel
+        gives the money back, and it costs nothing: there are no signed bytes to take back.
       </p>
       <div className="table-scroll">
         <table className="table">
@@ -253,27 +258,90 @@ function WaitingForTheirTime({ payments }: { readonly payments: readonly Schedul
               <th>Where it goes</th>
               <th>Runs at</th>
               <th>Promised</th>
+              <th />
             </tr>
           </thead>
           <tbody>
-            {payments.map(({ reference, amount, partnerName, executeAt, createdAt }) => (
-              <tr key={reference}>
+            {payments.map((payment) => (
+              <tr key={payment.reference}>
                 <td>
-                  <Link to={`/admin/transfers/${reference}`}>{reference}</Link>
+                  <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link>
                 </td>
-                <td className="is-number">{amount} USDC</td>
-                <td>{partnerName ?? TO_AN_ADDRESS}</td>
+                <td className="is-number">{payment.amount} USDC</td>
+                <td>{payment.partnerName ?? TO_AN_ADDRESS}</td>
                 <td>
-                  {MOMENT.format(new Date(executeAt))}
-                  <span className="cell-note">{fromNow(executeAt)}</span>
+                  {MOMENT.format(new Date(payment.executeAt))}
+                  <span className="cell-note">{fromNow(payment.executeAt)}</span>
                 </td>
-                <td>{MOMENT.format(new Date(createdAt))}</td>
+                <td>{MOMENT.format(new Date(payment.createdAt))}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => {
+                      setAsking(payment)
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {asking !== undefined && (
+        <CancelDialog
+          payment={asking}
+          onClose={() => {
+            setAsking(undefined)
+          }}
+        />
+      )}
     </section>
+  )
+}
+
+/**
+ * Says what Cancel does before it does it, the way `PayablesScreen` says what Pay does, because
+ * this is the other side of that button. `POST /payments/:reference/cancel`; a payment signed a
+ * moment ago answers 409 and its sentence shows here. The next poll drops the row.
+ */
+function CancelDialog({ payment, onClose }: { readonly payment: Scheduled; readonly onClose: () => void }) {
+  const [cancelling, setCancelling] = useState(false)
+  const [failure, setFailure] = useState<string | undefined>(undefined)
+
+  const cancel = (): void => {
+    setCancelling(true)
+    setFailure(undefined)
+    cancelPayment(payment.reference)
+      .then(onClose)
+      .catch((refused: unknown) => {
+        setFailure(refused instanceof Error ? refused.message : String(refused))
+        setCancelling(false)
+      })
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal" role="dialog" aria-modal="true" aria-label="Cancel payment">
+        <h2 className="card-title">Cancel {payment.reference}</h2>
+        <p className="panel-lead">
+          Nothing has been signed yet, so there is nothing to take back: <strong>{payment.amount} USDC</strong> goes
+          from Reserved back to Available, no transaction is sent and no fee is paid. The invoice opens again and can
+          be paid with a new key.
+        </p>
+        {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
+        <p className="card-actions">
+          <button type="button" className="button" disabled={cancelling} onClick={cancel}>
+            {cancelling ? 'cancelling…' : 'Cancel the payment'}
+          </button>
+          <button type="button" className="link-button" onClick={onClose}>
+            Leave it
+          </button>
+        </p>
+      </section>
+    </div>
   )
 }
 
@@ -526,9 +594,15 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
           rows: [step],
           text: (
             <>
-              {payment.amount} USDC went from Reserved back to Available (Dr Available / Cr Reserved), with the proof: the
-              transaction{' '}
-              <Hash hash={proof.txHash} /> in block {proof.blockNumber}. Ledger transaction <code>{context.ledgerTransactionId}</code>.
+              {payment.amount} USDC went from Reserved back to Available (Dr Available / Cr Reserved),{' '}
+              {proof === undefined ? (
+                'with no chain proof because nothing was ever signed: no node can include what does not exist.'
+              ) : (
+                <>
+                  with the proof: the transaction <Hash hash={proof.txHash} /> in block {proof.blockNumber}.
+                </>
+              )}{' '}
+              Ledger transaction <code>{context.ledgerTransactionId}</code>.
             </>
           ),
         })
@@ -622,12 +696,19 @@ function reasonInWords(code: string | undefined): string {
   return (REASONS as Record<string, string | undefined>)[code ?? ''] ?? ''
 }
 
-/** A reversal's proof is stored as an object, so its row carries it as JSON. */
-function proofOf(context: AuditStep['context']): { readonly txHash?: string; readonly blockNumber?: number } {
+/**
+ * A reversal's proof is an object, so its row carries it as JSON. A cancel's is a sentence, and
+ * there is nothing to point at: undefined here is what makes the line say so instead of printing
+ * an empty hash in block undefined.
+ */
+function proofOf(context: AuditStep['context']): { readonly txHash: string; readonly blockNumber: number } | undefined {
   try {
-    return JSON.parse(context.proof ?? '{}') as { txHash?: string; blockNumber?: number }
+    const proof: unknown = JSON.parse(context.proof ?? 'null')
+    return typeof proof === 'object' && proof !== null && 'txHash' in proof
+      ? (proof as { txHash: string; blockNumber: number })
+      : undefined
   } catch {
-    return {}
+    return undefined
   }
 }
 

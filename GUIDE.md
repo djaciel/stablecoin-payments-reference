@@ -117,7 +117,11 @@ log in the same database transaction as the entries.
 
 - `packages/ledger/src/movements.ts` — `reversal` (proof required by the type) and `cancel`
   (a reason required), next to `reserve` and `settle`. `apps/worker/src/reverse.ts` is the
-  reversal's first caller, on a transfer that reverted onchain.
+  reversal's caller, on a transfer that reverted onchain;
+  `apps/api/src/payments/cancel-payment.ts` is the cancel's, on a payment nobody signed.
+- `migrations/0015_cancel_needs_no_hash.sql` — the second door's condition in the database: a
+  `cancel` is refused when a payment with that reference exists and carries a hash. It never
+  demands that a payment exist, because the article's own ledger fixture has none.
 - `migrations/0003_audit_log.sql` + `packages/ledger/src/audit.ts` — the append-only log
   every step writes to. An audit log you can edit is not an audit log; the trigger says so.
 - `packages/db/src/guarded-update.ts` — how a state changes: one `UPDATE … WHERE status =
@@ -926,6 +930,47 @@ curl -s localhost:3000/payments/PAY-XXXX                  # executeAt, and no tr
 docker compose logs --tail=40 worker | grep dispatcher    # started PAY-XXXX, at its time
 ```
 
+## Cancel: the release with no chain proof (§6)
+
+Reserved money is released only with proof the transfer can no longer land. A payment nobody has
+signed yet is the one case where that proof is an absence: there are no signed bytes, so no node can
+ever include them. Cancelling one costs nothing at all, not even gas, and it is the only release in
+the repo that shows no transaction.
+
+- `apps/api/src/payments/cancel-payment.ts` — the door, in one transaction: the invoice locked
+  first (`reverse`'s order), then the payment's own row, and only under that lock are its status and
+  its hash read. A hash means bytes that can still land, so it refuses and writes nothing.
+- `migrations/0015_cancel_needs_no_hash.sql` — the same rule in the database, for whoever posts the
+  movement: the deferred release trigger now refuses a `cancel` whose payment carries a hash. It
+  cannot ask that the payment exist, or `pnpm ledger:seed --release=cancel` would break.
+- `apps/api/src/payments/payments.controller.ts` — `POST /payments/:reference/cancel`: 200 with the
+  payment FAILED `cancelled`, 404 unknown, 409 `cannot_cancel_after_signing`, 409 naming the status
+  for anything else. Nothing is dispatched: there is no workflow to start.
+- `packages/domain/src/api.ts` — `cancelled` joins the failure reasons as one that happened **after**
+  the money was reserved, so a replay of its key answers 200 and no screen says "Nothing was
+  reserved." about it.
+- `apps/ui/src/admin/TransfersScreen.tsx` — **Cancel** next to each payment waiting for its time,
+  with a confirmation that says where the money goes, and the story's **Released** line, which now
+  prints the cancel's sentence instead of a hash that does not exist.
+- `apps/ui/src/admin/PayablesScreen.tsx` — the one sentence a screen shows for `cancelled`.
+- `apps/ui/src/api/client.ts` — `cancelPayment(reference)`, next to `resumePayment`.
+- `tests/db/cancel.db.test.ts` — the three claims: cancelled before signing the money comes back and
+  the invoice reopens; cancelled after signing nothing at all is written; cancel and `sign` at the
+  same instant have exactly one winner, whichever it is.
+- `tests/db/release.db.test.ts` — the database's own refusal, posted straight through the ledger:
+  refused with a hash on the payment, allowed without one. `tests/db/README.md` indexes both.
+
+See it: on `/admin/pay-to-address` schedule 0.02 for ten minutes ahead, then press **Cancel** on
+`/admin/transfers`. Reserved goes back to Available at once, the invoice is OPEN on Payables and
+payable with a new key, and the payment's story ends with Failed and Released — no Signed line, no
+explorer link, no run in Temporal. Then try it on a payment that was signed:
+
+```
+curl -i -X POST localhost:3000/payments/PAY-XXXX/cancel   # 409 cannot_cancel_after_signing
+docker compose exec postgres psql -U payments -d payments \
+  -c "SELECT kind, reference, proof FROM ledger_transactions WHERE kind = 'cancel'"
+```
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -946,8 +991,8 @@ docker compose logs --tail=40 worker | grep dispatcher    # started PAY-XXXX, at
   at, and the shared wallet it pays from, labelled demo scaffolding. The chosen partner lives in
   the address bar, so a reload keeps it.
 - `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
-  Resume, the payments waiting for their time, each one's story step by step, and below them the
-  money that arrived.
+  Resume, the payments waiting for their time with Cancel next to each one, each payment's story
+  step by step, and below them the money that arrived.
 - `apps/ui/src/admin/BreakItScreen.tsx` — the failures you can cause on purpose, five cards with
   one Run it each, in the article's order: the double click, the race, the crash after signing and
   the node that does not answer (§9's four), then the revert (§6). The three that inject a fault

@@ -290,6 +290,7 @@ export type PaymentFailureReason =
   | 'compliance_rejected'
   | 'insufficient_funds'
   | 'reverted'
+  | 'cancelled'
 
 /** Each reason, decided once: did it fail after the money was reserved (true), or at the door (false)? */
 const AFTER_RESERVING: Record<PaymentFailureReason, boolean> = {
@@ -300,6 +301,9 @@ const AFTER_RESERVING: Record<PaymentFailureReason, boolean> = {
   compliance_rejected: false,
   insufficient_funds: false,
   reverted: true,
+  // The money was reserved and given back: a replay answers 200 with it, and no screen says
+  // "Nothing was reserved." about a payment that held its amount until somebody cancelled it.
+  cancelled: true,
 }
 
 /** The one rule behind the api's replay code and the screen's "Nothing was reserved." */
