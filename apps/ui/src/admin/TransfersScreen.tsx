@@ -1,7 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import type { AuditStep, PaymentReview, PaymentSummary, PaymentTimeline } from '@payments/domain'
-import { getPaymentTimeline, getPayments, resumePayment } from '../api/client'
+import type { AuditStep, DepositSummary, PaymentReview, PaymentSummary, PaymentTimeline } from '@payments/domain'
+import { getPaymentTimeline, readTransfers, resumePayment } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { CopyButton } from '../app/AddressLine'
 import { REASONS } from './PayablesScreen'
@@ -16,21 +16,114 @@ export function TransfersScreen() {
 }
 
 function PaymentList() {
-  const { data, error } = usePolling(getPayments)
+  const { data, error } = usePolling(readTransfers)
 
   if (data === undefined) {
     return <p className="card-note">{error === undefined ? 'reading…' : `unavailable — ${error}`}</p>
   }
-  if (data.payments.length === 0) {
-    return <p className="card-note">No payments yet. Press Pay on an invoice in Payables.</p>
+  const { payments } = data.payments
+  const { deposits } = data.deposits
+  if (payments.length === 0 && deposits.length === 0) {
+    return <p className="card-note">Nothing yet. Press Pay on an invoice in Payables, or have a partner pay one in Receivables.</p>
   }
   // Oldest first by creation time (the list reversed), not by nonce: each held nonce is on its row.
-  const queue = data.payments.filter((payment) => payment.review !== undefined).reverse()
+  const queue = payments.filter((payment) => payment.review !== undefined).reverse()
 
   return (
     <>
       {queue.length > 0 && <ReviewQueue payments={queue} />}
-      <PaymentTable payments={data.payments} />
+      <PaymentTable payments={payments} />
+      <DepositTable deposits={deposits} />
+    </>
+  )
+}
+
+/**
+ * Money coming in. Two states only: seen, and credited. The gap between them is the whole
+ * lesson — a transfer everybody can see on the explorer is still not on the books.
+ */
+function DepositTable({ deposits }: { readonly deposits: readonly DepositSummary[] }) {
+  return (
+    <section className="panel">
+      <h2 className="card-title">Money that arrived, newest first</h2>
+      <p className="panel-lead">
+        Each partner pays at an address of its own, so what says whose money this is, is where it came in. Nothing here
+        was typed by anyone: the watcher wrote every row from the chain.
+      </p>
+      {deposits.length === 0 ? (
+        <p className="card-note">Nothing has arrived yet. Have a partner pay an invoice on the partner side.</p>
+      ) : (
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Partner</th>
+                <th className="is-number">Amount</th>
+                <th>Arrived at</th>
+                <th>State</th>
+                <th>Whose money it is</th>
+                <th>Transaction</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deposits.map((money) => (
+                <tr key={money.id}>
+                  <td>{money.partnerName}</td>
+                  <td className="is-number">{money.amount} USDC</td>
+                  <td className="is-mono">{shortAddress(money.depositAddress)}</td>
+                  <td>
+                    {money.status}
+                    <span className="cell-note">{stateOf(money)}</span>
+                  </td>
+                  <td>{attributionOf(money)}</td>
+                  <td className="is-mono">
+                    <a href={money.transaction.explorerUrl} target="_blank" rel="noreferrer">
+                      {shortHash(money.transaction.hash)}
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="card-note">
+        The money stays on the deposit addresses in this demo. Moving it into the treasury would be a transaction of its
+        own, and the address it leaves from needs a little of the network's own currency to pay for it.
+      </p>
+    </section>
+  )
+}
+
+/** DETECTED says what has NOT happened yet, which is the part that is easy to read as done. */
+function stateOf(money: DepositSummary): string {
+  if (money.status === 'DETECTED') {
+    return `Seen in block ${money.blockNumber}. That block can still be replaced, so nothing has been credited.`
+  }
+  return `Block ${money.blockNumber} can no longer be replaced, and the official contract's transfer says the exact amount at this exact address, so the books have it.`
+}
+
+/** Which of the three rules found the invoice, in words rather than in the code stored on the row. */
+function attributionOf(money: DepositSummary): ReactNode {
+  if (money.matchedBy === null) {
+    return <span className="cell-note">{money.partnerName}'s, by the address. Which invoice it pays is decided when it is credited.</span>
+  }
+  if (money.receivable === null) {
+    return (
+      <>
+        {money.partnerName}'s, by the address
+        <span className="cell-note">No invoice matched: credited anyway, and it shows as owing them until one is written.</span>
+      </>
+    )
+  }
+  return (
+    <>
+      {money.receivable.description}
+      <span className="cell-note">
+        {money.matchedBy === 'hash'
+          ? 'Matched by the transaction the partner recorded before sending it.'
+          : 'Matched by the exact amount, on their oldest open invoice.'}
+      </span>
     </>
   )
 }
@@ -464,6 +557,10 @@ function Hash({ hash }: { readonly hash: string | undefined }) {
 
 function shortHash(hash: string): string {
   return `${hash.slice(0, 10)}…${hash.slice(-8)}`
+}
+
+function shortAddress(address: string): string {
+  return `${address.slice(0, 8)}…${address.slice(-6)}`
 }
 
 /** The date where it changes and the time on every line: a payment's story can span days. */

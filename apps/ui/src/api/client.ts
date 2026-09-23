@@ -11,7 +11,7 @@
  * variable.
  */
 
-import type { Experiments, Health, PartnerPaymentReceipt, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, Receivables, Treasury } from '@payments/domain'
+import type { Deposits, Experiments, Health, PartnerPaymentReceipt, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, Receivables, Treasury } from '@payments/domain'
 
 const API_BASE_PATH = '/api'
 
@@ -81,6 +81,20 @@ export async function payPayable(payableId: string, idempotencyKey: string): Pro
 
 export function getPayments(): Promise<Payments> {
   return read<Payments>('/payments')
+}
+
+/** The money that arrived at the deposit addresses, newest first. */
+export function getDeposits(): Promise<Deposits> {
+  return read<Deposits>('/deposits')
+}
+
+/**
+ * What the Transfers screen shows: money going out and money coming in, asked for together so
+ * the screen keeps one "reading…" and one "unavailable" instead of two of each.
+ */
+export async function readTransfers(): Promise<{ payments: Payments; deposits: Deposits }> {
+  const [payments, deposits] = await Promise.all([getPayments(), getDeposits()])
+  return { payments, deposits }
 }
 
 /** One payment's story, from the audit log. */

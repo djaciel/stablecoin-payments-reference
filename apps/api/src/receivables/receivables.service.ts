@@ -34,6 +34,8 @@ export interface Receivable {
   readonly status: ReceivableSummary['status']
   /** Stored before the partner broadcasts its transfer, which is what lets a deposit match back. */
   readonly paymentTxHash: string | null
+  /** The transaction of the deposit that settled it, once the watcher credited one. */
+  readonly depositTxHash: string | null
   /** Where this invoice is paid: the partner's deposit address, which is the attribution itself. */
   readonly depositAddress: Address
 }
@@ -159,14 +161,16 @@ interface ReceivableRow {
   readonly description: string
   readonly status: ReceivableSummary['status']
   readonly payment_tx_hash: string | null
+  readonly deposit_tx_hash: string | null
   readonly deposit_address: string
 }
 
 /** One invoice, written once: every read of one goes through this SELECT and `toReceivable`. */
 const READ_RECEIVABLE = `SELECT r.id, partners.name AS partner_name, r.amount_minor, r.description, r.status,
-          r.payment_tx_hash, partners.deposit_address
+          r.payment_tx_hash, d.tx_hash AS deposit_tx_hash, partners.deposit_address
      FROM receivables r
-     JOIN partners ON partners.id = r.partner_id`
+     JOIN partners ON partners.id = r.partner_id
+     LEFT JOIN deposits d ON d.id = r.deposit_id`
 
 /**
  * Newest first, for one partner or for all of them. Exported because the partner screen reads the
@@ -199,6 +203,12 @@ export function receivableView(invoice: Receivable): ReceivableSummary {
       invoice.paymentTxHash === null
         ? null
         : { hash: invoice.paymentTxHash, explorerUrl: explorerTransactionUrl(invoice.paymentTxHash) },
+    // Usually the same transaction as the one above: the company's own proof of it, read off the
+    // chain rather than off what the partner said it was about to send.
+    deposit:
+      invoice.depositTxHash === null
+        ? null
+        : { hash: invoice.depositTxHash, explorerUrl: explorerTransactionUrl(invoice.depositTxHash) },
   }
 }
 
@@ -210,6 +220,7 @@ function toReceivable(row: ReceivableRow): Receivable {
     description: row.description,
     status: row.status,
     paymentTxHash: row.payment_tx_hash,
+    depositTxHash: row.deposit_tx_hash,
     depositAddress: getAddress(row.deposit_address),
   }
 }

@@ -54,6 +54,13 @@ export interface ReceivableInput {
   readonly currency: string
 }
 
+export interface DepositInput {
+  /** The deposit row this credit belongs to. Its id names the ledger transaction. */
+  readonly depositId: string
+  readonly amount: MinorUnits
+  readonly currency: string
+}
+
 export interface FundingInput {
   readonly txHash: string
   /** Position of the Transfer event inside that transaction. */
@@ -169,6 +176,26 @@ export function receivable(client: PoolClient, input: ReceivableInput): Promise<
     entries: [
       { account: ACCOUNTS.partnerReceivable, direction: 'debit', amount: input.amount },
       { account: ACCOUNTS.revenueServices, direction: 'credit', amount: input.amount },
+    ],
+  })
+}
+
+/**
+ * Money that arrived at a partner's deposit address, once the block is final and the official
+ * contract's Transfer says so: Dr `deposits:onchain` / Cr `partner:receivable`. The invoice it
+ * pays is not in the entries — what the books record is that the debt shrank and the money exists.
+ *
+ * It never touches `treasury:reserved`, so the release trigger has nothing to say about it. The
+ * audit row is the caller's: only the caller knows which invoice this matched, and how.
+ */
+export function deposit(client: PoolClient, input: DepositInput): Promise<LedgerTransactionId> {
+  return writeTransaction(client, {
+    kind: 'deposit',
+    reference: input.depositId,
+    currency: input.currency,
+    entries: [
+      { account: ACCOUNTS.depositsOnchain, direction: 'debit', amount: input.amount },
+      { account: ACCOUNTS.partnerReceivable, direction: 'credit', amount: input.amount },
     ],
   })
 }

@@ -109,6 +109,12 @@ export interface PartnerSummary {
   readonly derivationIndex: number
   readonly deposit: AddressBalance
   readonly payout: AddressBalance
+  /** What this partner still owes: its OPEN and PAYING invoices. */
+  readonly owes: string
+  /** What the company still owes it: its OPEN and PAYING payables. */
+  readonly owed: string
+  /** What has arrived at its deposit address and been credited: the sum of its SETTLED deposits. */
+  readonly arrived: string
 }
 
 /**
@@ -160,6 +166,8 @@ export interface ReceivableSummary {
   readonly status: 'OPEN' | 'PAYING' | 'PAID'
   /** The hash the partner recorded before broadcasting its transfer. Null until it pays. */
   readonly transaction: { readonly hash: string; readonly explorerUrl: string } | null
+  /** The deposit that settled it, once the watcher credited one. Null until then. */
+  readonly deposit: { readonly hash: string; readonly explorerUrl: string } | null
 }
 
 /** The two figures a receivable and its deposit move. Neither is the treasury's money yet. */
@@ -178,6 +186,31 @@ export interface Receivables {
   readonly receivables: readonly ReceivableSummary[]
   readonly partners: readonly { readonly id: string; readonly name: string }[]
   readonly ledger: ReceivableFigures
+}
+
+/**
+ * One deposit as the Transfers screen lists it. DETECTED is what the chain showed; SETTLED is
+ * what the books were told, and `matchedBy` says which rule decided the invoice it paid.
+ */
+export interface DepositSummary {
+  readonly id: string
+  readonly partnerName: string
+  readonly amount: string
+  readonly status: 'DETECTED' | 'SETTLED'
+  /** The address it arrived at, which is the whole attribution. */
+  readonly depositAddress: string
+  readonly blockNumber: string
+  readonly transaction: { readonly hash: string; readonly explorerUrl: string }
+  /** Null while DETECTED: nothing has been matched because nothing has been credited. */
+  readonly matchedBy: 'hash' | 'amount' | 'unmatched' | null
+  /** The invoice it paid. Null when it matched none, and for a deposit not credited yet. */
+  readonly receivable: { readonly id: string; readonly description: string } | null
+  readonly detectedAt: string
+}
+
+/** What `GET /deposits` answers: the latest deposits, newest first. */
+export interface Deposits {
+  readonly deposits: readonly DepositSummary[]
 }
 
 /**

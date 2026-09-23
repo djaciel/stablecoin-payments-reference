@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import type { AddressBalance, Partners } from '@payments/domain'
+import type { AddressBalance, PartnerSummary, Partners } from '@payments/domain'
 import { createPartner, getPartners } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine } from '../app/AddressLine'
@@ -38,12 +38,14 @@ export function PartnersScreen() {
                   {partner.name} · index {partner.derivationIndex}
                 </h2>
 
+                <Figures partner={partner} />
+
                 <AddressBlock
                   heading="They pay you here"
                   sub="deposit address, derived from the company seed"
                   address={partner.deposit}
                   emptyNote="Nothing paid in yet."
-                  fundedNote="On chain, and not in the books yet: crediting a deposit to the partner it belongs to arrives with receivables."
+                  fundedNote="Compare it with what has arrived above: the two agree once every deposit here has been credited."
                 />
 
                 <AddressBlock
@@ -68,6 +70,30 @@ export function PartnersScreen() {
         </>
       )}
     </>
+  )
+}
+
+/**
+ * The three figures that make this screen the per-partner view of the books. They come from the
+ * invoice tables, not from an account per partner: the ledger keeps one total each (Partner debt,
+ * Partner receivables, Deposits) and these are that total cut by partner.
+ */
+function Figures({ partner }: { readonly partner: PartnerSummary }) {
+  return (
+    <dl className="figures">
+      <div className="figure">
+        <dt>They owe you</dt>
+        <dd>{partner.owes} USDC</dd>
+      </div>
+      <div className="figure">
+        <dt>You owe them</dt>
+        <dd>{partner.owed} USDC</dd>
+      </div>
+      <div className="figure">
+        <dt>Arrived at their address</dt>
+        <dd>{partner.arrived} USDC</dd>
+      </div>
+    </dl>
   )
 }
 

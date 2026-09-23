@@ -71,6 +71,36 @@ export async function seedInvoices(pool: Pool): Promise<{ first: string; second:
   return { first: first.id, second: second.id }
 }
 
+/** One partner with its own deposit address, which is what attributes money arriving at it. */
+export async function seedPartner(pool: Pool, name: string, index: number, depositAddress: string): Promise<string> {
+  const result = await pool.query<{ id: string }>(
+    `INSERT INTO partners (name, derivation_index, deposit_address, payout_address)
+     VALUES ($1, $2, $3, $4) RETURNING id`,
+    [name, index, depositAddress, `0x${String(index).repeat(40).slice(0, 40)}`],
+  )
+  return requireId(result.rows[0], 'the partner was not written')
+}
+
+/** One invoice a partner owes, written straight to the table: these tests are about deposits. */
+export async function seedReceivable(
+  pool: Pool,
+  invoice: { partnerId: string; amountMinor: bigint; description: string; status?: string; paymentTxHash?: string },
+): Promise<string> {
+  const result = await pool.query<{ id: string }>(
+    `INSERT INTO receivables (partner_id, amount_minor, description, status, payment_tx_hash)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [invoice.partnerId, invoice.amountMinor.toString(), invoice.description, invoice.status ?? 'OPEN', invoice.paymentTxHash ?? null],
+  )
+  return requireId(result.rows[0], 'the receivable was not written')
+}
+
+function requireId(row: { id: string } | undefined, what: string): string {
+  if (row === undefined) {
+    throw new Error(what)
+  }
+  return row.id
+}
+
 /**
  * Reads a balance straight from the column the trigger maintains. On purpose: a test that read
  * balances through the ledger's own reader could not catch a reader that lies.

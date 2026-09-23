@@ -168,6 +168,9 @@ function toView(partner: Partner, depositUsdc: string | null, payoutUsdc: string
     derivationIndex: partner.derivationIndex,
     deposit: { address: partner.depositAddress, explorerUrl: explorerAddressUrl(partner.depositAddress), usdc: depositUsdc },
     payout: { address: partner.payoutAddress, explorerUrl: explorerAddressUrl(partner.payoutAddress), usdc: payoutUsdc },
+    owes: formatMinor(partner.owesMinor),
+    owed: formatMinor(partner.owedMinor),
+    arrived: formatMinor(partner.arrivedMinor),
   }
 }
 

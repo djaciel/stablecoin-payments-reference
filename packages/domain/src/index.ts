@@ -8,6 +8,8 @@
 export type {
   AddressBalance,
   AuditStep,
+  DepositSummary,
+  Deposits,
   FundingAmounts,
   FundingTransfer,
   GasSpent,

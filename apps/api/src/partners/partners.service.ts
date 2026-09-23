@@ -4,6 +4,7 @@ import { getAddress, type Address } from 'viem'
 import type { PartnerKeysService } from '../demo-scaffolding/partner-keys.service'
 import { readReceivables, type Receivable } from '../receivables/receivables.service'
 import type { SignerClient } from '@payments/chain'
+import type { MinorUnits } from '@payments/ledger'
 
 /**
  * Here rather than in `partners.module.ts`, like the treasury's token: the module registers
@@ -20,6 +21,12 @@ export interface Partner {
   readonly depositAddress: Address
   /** Partner seed, demo scaffolding. Where the company pays what it owes this partner. */
   readonly payoutAddress: Address
+  /** What this partner owes: its OPEN and PAYING invoices. */
+  readonly owesMinor: MinorUnits
+  /** What the company owes it: its OPEN and PAYING payables. */
+  readonly owedMinor: MinorUnits
+  /** What arrived at its deposit address and was credited: its SETTLED deposits. */
+  readonly arrivedMinor: MinorUnits
 }
 
 /**
@@ -75,10 +82,21 @@ export class PartnersService implements OnApplicationBootstrap {
     return readReceivables(this.pool, partnerId)
   }
 
+  /**
+   * Every partner with the three figures the screen puts next to its two addresses. One query:
+   * the sums come from the invoice tables, which are the per-partner view of three ledger
+   * accounts that stay whole (spec assumption 1), so nothing here asks the chain.
+   */
   async list(): Promise<Partner[]> {
     const result = await this.pool.query<PartnerRow>(
-      `SELECT id, name, derivation_index, deposit_address, payout_address
-         FROM partners ORDER BY derivation_index`,
+      `SELECT p.id, p.name, p.derivation_index, p.deposit_address, p.payout_address,
+              (SELECT coalesce(sum(amount_minor), 0) FROM receivables
+                WHERE partner_id = p.id AND status IN ('OPEN', 'PAYING')) AS owes_minor,
+              (SELECT coalesce(sum(amount_minor), 0) FROM payables
+                WHERE partner_id = p.id AND status IN ('OPEN', 'PAYING')) AS owed_minor,
+              (SELECT coalesce(sum(amount_minor), 0) FROM deposits
+                WHERE partner_id = p.id AND status = 'SETTLED') AS arrived_minor
+         FROM partners p ORDER BY p.derivation_index`,
     )
     return result.rows.map(toPartner)
   }
@@ -100,13 +118,14 @@ export class PartnersService implements OnApplicationBootstrap {
         const deposit = await this.signer.depositAddress(index)
         const payout = this.partnerKeys.payoutAccount(index).address
 
-        const inserted = await client.query<PartnerRow>(
+        const inserted = await client.query<Omit<PartnerRow, 'owes_minor' | 'owed_minor' | 'arrived_minor'>>(
           `INSERT INTO partners (name, derivation_index, deposit_address, payout_address)
            VALUES ($1, $2, $3, $4)
            RETURNING id, name, derivation_index, deposit_address, payout_address`,
           [name, index, getAddress(deposit.address), getAddress(payout)],
         )
-        const partner = toPartner(requireRow(inserted.rows[0]))
+        // A partner created a second ago owes nothing and is owed nothing.
+        const partner = toPartner({ ...requireRow(inserted.rows[0]), owes_minor: '0', owed_minor: '0', arrived_minor: '0' })
 
         await client.query(
           `INSERT INTO watched_addresses (address, role, partner_id) VALUES ($1, 'deposit', $2)`,
@@ -127,6 +146,9 @@ interface PartnerRow {
   readonly derivation_index: number
   readonly deposit_address: string
   readonly payout_address: string
+  readonly owes_minor: string
+  readonly owed_minor: string
+  readonly arrived_minor: string
 }
 
 function toPartner(row: PartnerRow): Partner {
@@ -136,6 +158,9 @@ function toPartner(row: PartnerRow): Partner {
     derivationIndex: row.derivation_index,
     depositAddress: getAddress(row.deposit_address),
     payoutAddress: getAddress(row.payout_address),
+    owesMinor: BigInt(row.owes_minor),
+    owedMinor: BigInt(row.owed_minor),
+    arrivedMinor: BigInt(row.arrived_minor),
   }
 }
 

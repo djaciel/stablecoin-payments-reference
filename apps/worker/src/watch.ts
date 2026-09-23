@@ -103,7 +103,7 @@ export async function watch(reference: string): Promise<WatchResult> {
 }
 
 /** A node that has not seen the transaction in a block answers null, which viem raises. */
-async function readReceipt(hash: Hex): Promise<TransactionReceipt | undefined> {
+export async function readReceipt(hash: Hex): Promise<TransactionReceipt | undefined> {
   try {
     return await chain.getTransactionReceipt({ hash })
   } catch (error) {

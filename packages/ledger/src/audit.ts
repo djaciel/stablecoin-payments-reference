@@ -13,6 +13,7 @@ export const AUDIT_SUBJECTS = {
   payment: 'payment',
   invoice: 'invoice',
   receivable: 'receivable',
+  deposit: 'deposit',
   treasury: 'treasury',
   demo: 'demo',
 } as const
@@ -52,7 +53,14 @@ export const RECEIVABLE_EVENTS = {
   paid: 'paid',
 } as const
 
-/** The watcher's one event, and the demo scaffolding's. */
+/**
+ * A deposit's events: seen on the chain, credited once its block is final and the event still
+ * says so, and `mismatched` when that second look disagrees — the row stays DETECTED and nothing
+ * is credited, because a deposit nobody can prove is not money.
+ */
+export const DEPOSIT_EVENTS = { detected: 'detected', settled: 'settled', mismatched: 'mismatched' } as const
+
+/** The watcher's one event at the treasury, and the demo scaffolding's. */
 export const TREASURY_EVENTS = { funded: 'funded' } as const
 export const DEMO_EVENTS = { partnerWalletFunded: 'partner-wallet-funded' } as const
 
@@ -63,6 +71,7 @@ export type AuditEventName =
   | ValueOf<typeof PAYMENT_EVENTS>
   | ValueOf<typeof PAYABLE_EVENTS>
   | ValueOf<typeof RECEIVABLE_EVENTS>
+  | ValueOf<typeof DEPOSIT_EVENTS>
   | ValueOf<typeof TREASURY_EVENTS>
   | ValueOf<typeof DEMO_EVENTS>
 

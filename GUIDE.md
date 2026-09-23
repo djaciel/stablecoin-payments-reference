@@ -61,8 +61,8 @@ seed this demo only holds because one machine has to play both sides.
 
 See it: open `http://localhost:5173/admin/partners`, add a partner, and watch its deposit
 address appear in `SELECT * FROM watched_addresses` and in the watcher's next tick without a
-restart. Send test USDC to a deposit address: the balance on the screen goes up and the books
-do not move, because crediting a deposit to a partner is the receivables flow, later.
+restart. Send test USDC to a deposit address: it shows up on `/admin/transfers` within a tick,
+and the books only move once its block can no longer be replaced ("Money that arrived", below).
 
 ## The durable workflow engine (§3, and the crash in §9)
 
@@ -278,9 +278,9 @@ contract, in one request, for transfers to the addresses the database says to wa
 in blocks that are already final, so nothing it posts can be undone.
 
 - `apps/worker/src/watcher.ts` — one tick, top to bottom: final block → range → the logs →
-  one `funding` entry per transfer, exactly once (the transaction hash and log index are
-  the reference, and the database refuses a second one) → cursor moved in the same
-  database transaction.
+  one `funding` entry per transfer to the treasury, exactly once (the transaction hash and log
+  index are the reference, and the database refuses a second one) → cursor moved in the same
+  database transaction. A transfer to a deposit address takes the other road, below.
 - `apps/worker/src/workflows.ts` — `WatcherWorkflow`: the loop, and the failed tick it
   survives. `apps/worker/src/index.ts` starts it when the worker boots if it is not
   already running, which is also the only thing that brings it back if you terminate it.
@@ -622,6 +622,54 @@ docker compose logs worker | grep -E 'sign:|execute:'   # already signed 0x… (
 curl -i -X POST localhost:3000/payments/<its reference>/resume   # once settled: 409, only a payment in REVIEW can be resumed
 ```
 
+## Money that arrived: the address is the attribution (§8)
+
+Somebody paid you. Which invoice does it settle? Not the one whose amount matches, because two
+partners can owe the same figure on the same day. Each partner pays at an address of its own, so
+the money says whose it is by where it came in. And it is credited only when its block can no
+longer be replaced AND the official contract's transfer still says the exact amount at that exact
+address: until then it is a row on a screen, not money in the books.
+
+- `migrations/0012_deposits.sql` — one row per arriving transfer. `(tx_hash, log_index)` is unique,
+  so scanning a block twice cannot credit money twice; `partner_id` is on the row from the first
+  moment, because the address it arrived at is the attribution.
+- `apps/worker/src/deposits.ts` — the deposit half of a tick: record what was seen, list what is
+  final, credit it, and the matching rule in two SQL statements (the hash the partner recorded,
+  then the exact amount on its oldest open invoice, then `unmatched`).
+- `apps/worker/src/watcher.ts` — the tick, now two ranges: final blocks as before (fundings and
+  deposits), plus the unfinalized tail for the deposit addresses only, which writes DETECTED rows
+  and nothing else. Then the promotion pass, outside the transaction, that asks the chain again.
+- `packages/ledger/src/movements.ts` — `deposit`: Dr `deposits:onchain` / Cr `partner:receivable`,
+  named by the deposit row, so the same money can only be credited once.
+- `packages/ledger/src/audit.ts` — `deposit` joins the subjects, with `detected`, `settled` and
+  `mismatched`: the last one is a deposit whose second look disagreed, left DETECTED on purpose.
+- `apps/api/src/deposits/deposits.controller.ts` — `GET /deposits`: the latest, newest first, with
+  the partner, the address, how it was matched and the invoice it paid. A read and nothing else.
+- `apps/api/src/partners/partners.service.ts` — the three figures per partner in one query: what
+  they owe you, what you owe them, and what has arrived at their deposit address.
+- `apps/ui/src/admin/TransfersScreen.tsx` — the "Money that arrived" panel under the payments
+  table, and the sentence about what a deposit address costs: sweeping it into the treasury is a
+  transaction of its own, paid in the network's own currency.
+- `apps/ui/src/admin/PartnersScreen.tsx` — those three figures next to each partner's two
+  addresses, so what arrived and what the chain holds can be compared by eye.
+- `apps/ui/src/api/client.ts` — `readTransfers`, which asks for payments and deposits together so
+  the screen keeps one "reading…" and one "unavailable".
+- `packages/domain/src/api.ts` — `DepositSummary`; a receivable now carries the deposit that paid
+  it, and a partner its three figures.
+- `tests/db/deposits.db.test.ts` — the three claims: credited only once the block cannot be
+  replaced, the address decides whose money it is (invoice or no invoice), and a second pass posts
+  nothing twice.
+
+See it: have a partner pay an invoice on `/partner`, then watch `/admin/transfers`. Within a tick
+the deposit is DETECTED and the books have not moved; a few minutes later it is SETTLED, the
+invoice is PAID, and Deposits went up. `/admin/partners` shows what arrived next to what the chain
+holds at the same address.
+
+```
+docker compose logs -f worker                      # detected ... credited, matched by hash
+curl -s localhost:3000/deposits | python3 -m json.tool
+```
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -629,7 +677,8 @@ curl -i -X POST localhost:3000/payments/<its reference>/resume   # once settled:
 - `apps/ui/src/admin/StartScreen.tsx` — where the demo starts: the treasury address, the
   faucet links, what the chain holds next to what the books say, and the partner wallet with
   the button that funds it.
-- `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses.
+- `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses and the
+  three figures that go with them: they owe you, you owe them, and what has arrived.
 - `apps/ui/src/admin/PayablesScreen.tsx` — the invoices the company owes, the books they move,
   and Pay, with each invoice's payment on its row.
 - `apps/ui/src/admin/ReceivablesScreen.tsx` — the invoices partners owe, the two figures they
@@ -638,7 +687,7 @@ curl -i -X POST localhost:3000/payments/<its reference>/resume   # once settled:
   at, and the shared wallet it pays from, labelled demo scaffolding. The chosen partner lives in
   the address bar, so a reload keeps it.
 - `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
-  Resume, and each one's story step by step.
+  Resume, each one's story step by step, and below them the money that arrived.
 - `apps/ui/src/admin/BreakItScreen.tsx` — the failures you can cause on purpose: one Run it per
   card, and the switch under it; a red banner on every admin screen while one is armed.
 - `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint.
@@ -649,6 +698,6 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-Deposits and treasury fundings on the Transfers screen, and the credit that turns a partner's
-transfer into money on the books (§8); the other two failures of §9, the double click and the race,
-as Run it cards of their own; and reconciliation (§10) arrive in later phases. Each will add its entry here when it lands.
+Treasury fundings on the Transfers screen; the other two failures of §9, the double click and the
+race, as Run it cards of their own; and reconciliation (§10) arrive in later phases. Each will add
+its entry here when it lands.

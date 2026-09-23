@@ -19,6 +19,7 @@ export { writeTransaction, withLedgerTransaction } from './engine'
 export { InsufficientFunds, LedgerRejected, NotZeroSum, toLedgerError } from './errors'
 export {
   cancel,
+  deposit,
   funding,
   fundingReference,
   payable,
@@ -29,6 +30,7 @@ export {
   scaffoldingReference,
   settle,
   type CancelInput,
+  type DepositInput,
   type FundingInput,
   type PayableInput,
   type ReceivableInput,
@@ -40,6 +42,7 @@ export {
   AUDIT_ACTORS,
   AUDIT_SUBJECTS,
   DEMO_EVENTS,
+  DEPOSIT_EVENTS,
   PAYABLE_EVENTS,
   PAYMENT_EVENTS,
   RECEIVABLE_EVENTS,
