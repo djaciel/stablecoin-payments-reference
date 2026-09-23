@@ -758,6 +758,85 @@ pnpm experiment:stuck                                 # REVIEW with the money he
 curl -s localhost:3000/payments/PAY-XXXX/timeline     # one created row, one reserved row
 ```
 
+## The race: 1,500 against two of 1,000 (§9)
+
+Two payments arrive at the same instant, with different keys, and together they are worth more
+than Available. If both read the balance before the other one writes, both think they fit. The
+check and the lock live inside the same transaction, so one reserves and the other is refused for
+insufficient funds, and Available never crosses into negative.
+
+This is the one failure the demo's own money cannot show: the article's race starts at 1,500 and
+the treasury here holds a few dollars of real testnet USDC. So the race runs against a sandbox
+database of its own, with the article's figures, through the same payment door the Pay button
+presses. The demo's books do not move, and nothing is signed or sent.
+
+- `apps/api/src/experiments/race.ts` — the whole thing in seven numbered steps: the guard on the
+  database name, the sandbox created and migrated on demand, the reset and the seed, the latch,
+  and the two `createPayment` calls the answer is built from.
+- `apps/api/src/experiments/race.controller.ts` — `POST /experiments/race`, no body: the two
+  racing calls happen inside the api, because two requests from a browser cannot be made to
+  arrive at the same instant.
+- `apps/api/src/app.module.ts` — registers that controller (it has no service, so no module).
+- `apps/api/src/payments/payments.controller.ts` — `statusCodeOf` is exported here, so the race
+  answers 201 and 422 from the payment door's own rule instead of two literals written twice.
+- `packages/db/src/migrate.ts` and `packages/db/src/pool.ts` — each takes an optional connection
+  string now, so the sandbox is migrated and pooled without changing `DATABASE_URL` under a
+  running api.
+- `packages/domain/src/api.ts` — `RaceResult` and `RaceAttempt`: what the endpoint answers, with
+  the database it ran against as part of the evidence.
+- `apps/ui/src/api/client.ts` — `runRace`: one call and no body, the only endpoint the browser
+  asks to do the concurrency for it.
+- `apps/ui/src/admin/BreakItScreen.tsx` — the "The race" card and its own small runner next to
+  `useRun`: no invoice, no flag and no payment to follow, but the same latch as the other cards.
+  The five cards are also reordered here into the article's order.
+- `tests/db/race.db.test.ts` — the same race twice: at the ledger engine, where the lock is, and
+  at the payment door, which is what this endpoint runs. Both claims are in the index in
+  `tests/db/README.md`.
+- `scripts/experiments/race.ts` — `pnpm experiment:race`: the same call from a terminal, and it
+  names the database it used.
+
+See it (it costs nothing and takes seconds): press **Run it** on "The race" at `/admin/break-it`.
+The card shows `201 PAY-XXXX RESERVED 1,000.000000` and `422 PAY-YYYY FAILED insufficient_funds
+1,000.000000`, one reserve, and Available 1,500 → 500. Then open `/admin` and see that the demo's
+own Available is exactly what it was.
+
+```
+pnpm experiment:race
+docker compose exec postgres psql -U payments -d payments_experiment \
+  -c "SELECT code, balance_minor FROM ledger_accounts WHERE code LIKE 'treasury%'"
+docker compose exec postgres psql -U payments -d payments \
+  -c "SELECT count(*) FROM ledger_transactions"   # the same before and after a run
+```
+
+## The four failures from one command (§9, §12)
+
+Every Break it card has a command that does the same thing from a terminal, because §12 promises
+the reader can run the four failures. They press the same api doors the buttons press, and they
+add one thing a browser cannot do: Docker's own count of how many times the worker has come back.
+Each prints one screen — what it did, the figures before, the outcome, the figures after, and the
+artefacts — and none of them ever prints an RPC URL or a key.
+
+- `scripts/experiments/harness.ts` — what all four run on: the api client, the pre-flight that
+  refuses to start while another payment is moving, the invoice a run writes for itself, and the
+  one shape the evidence is printed in.
+- `scripts/experiments/double-click.ts` — `pnpm experiment:double-click`: two calls, one key, one
+  payment.
+- `scripts/experiments/race.ts` — `pnpm experiment:race`: the only one that spends nothing.
+- `scripts/experiments/crash.ts` — `pnpm experiment:crash`: the worker dies after signing, with
+  `RestartCount` either side.
+- `scripts/experiments/stuck.ts` — `pnpm experiment:stuck`: REVIEW with the money held, then
+  Resume.
+
+See it: run them one at a time, with nothing else in flight (each one checks). Three of them send
+real testnet USDC, 0.02 each, and take four to five minutes; the race takes seconds.
+
+```
+pnpm experiment:race                  # seconds, no money
+pnpm experiment:double-click          # ~4 min
+pnpm experiment:crash                 # ~4 min, prints the worker's restart count
+pnpm experiment:stuck                 # ~5 min, arms, escalates, disarms, resumes
+```
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -776,9 +855,11 @@ curl -s localhost:3000/payments/PAY-XXXX/timeline     # one created row, one res
   the address bar, so a reload keeps it.
 - `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
   Resume, each one's story step by step, and below them the money that arrived.
-- `apps/ui/src/admin/BreakItScreen.tsx` — the failures you can cause on purpose: one Run it per
-  card, with a switch under the cards that arm a flag; a red banner on every admin screen while one
-  is armed.
+- `apps/ui/src/admin/BreakItScreen.tsx` — the failures you can cause on purpose, five cards with
+  one Run it each, in the article's order: the double click, the race, the crash after signing and
+  the node that does not answer (§9's four), then the revert (§6). The three that inject a fault
+  also carry a switch, the long way, and a red banner shows on every admin screen while one is
+  armed. Only the race spends nothing: it runs in a sandbox database of its own.
 - `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint, plus
   `doubleClick`, which calls one of them twice at once. The shapes of the answers are in
   `packages/domain/src/api.ts`, which the api writes with and the browser reads.
@@ -787,5 +868,5 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-Treasury fundings on the Transfers screen; the last failure of §9, the race, as a Run it card of its
-own; and reconciliation (§10) arrive in later phases. Each will add its entry here when it lands.
+Treasury fundings on the Transfers screen, and reconciliation (§10), arrive in later phases. Each
+will add its entry here when it lands.

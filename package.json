@@ -17,6 +17,7 @@
     "ledger:seed": "tsx scripts/ledger-seed.ts",
     "experiment:crash": "tsx scripts/experiments/crash.ts",
     "experiment:double-click": "tsx scripts/experiments/double-click.ts",
+    "experiment:race": "tsx scripts/experiments/race.ts",
     "experiment:stuck": "tsx scripts/experiments/stuck.ts"
   },
   "devDependencies": {

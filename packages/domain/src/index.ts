@@ -28,6 +28,8 @@ export type {
   PaymentTimeline,
   PaymentView,
   Payments,
+  RaceAttempt,
+  RaceResult,
   ReceivableFigures,
   ReceivableSummary,
   Receivables,

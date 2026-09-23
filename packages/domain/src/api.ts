@@ -310,6 +310,32 @@ export interface PaymentView {
   readonly createdAt: string
 }
 
+/**
+ * One of the two payments in §9's race, as the api would have answered it: the body it would have
+ * sent, and the code the payment door's own rule gives that outcome (201 recorded, 422 refused).
+ */
+export interface RaceAttempt {
+  readonly reference: string
+  readonly amount: string
+  readonly status: PaymentView['status']
+  readonly reason?: PaymentFailureReason
+  readonly code: number
+}
+
+/**
+ * What `POST /experiments/race` answers: §9's race with the article's own figures, run against a
+ * sandbox database (spec assumption 10), which is why `database` is part of the evidence.
+ */
+export interface RaceResult {
+  readonly database: string
+  readonly availableBefore: string
+  readonly attempts: readonly RaceAttempt[]
+  /** `reserve` ledger transactions the two attempts left behind. The article's answer is one. */
+  readonly reserves: number
+  readonly availableAfter: string
+  readonly reservedAfter: string
+}
+
 /** One payment as the Transfers list shows it: its view, who it pays, and when its log last moved. */
 export interface PaymentSummary extends PaymentView {
   /** Null only for a payment to an address, which has no partner. */

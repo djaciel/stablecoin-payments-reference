@@ -1,4 +1,5 @@
 import { inTransaction } from '@payments/db'
+import type { PaymentView } from '@payments/domain'
 import {
   ACCOUNTS,
   InsufficientFunds,
@@ -9,11 +10,15 @@ import {
   withLedgerTransaction,
 } from '@payments/ledger'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { balanceOf, barrier, resetDatabase, testPool, withClient } from './helpers/database'
+import { createPayment, type PaymentOutcome } from '../../apps/api/src/payments/create-payment'
+import { balanceOf, barrier, resetDatabase, seedInvoices, testPool, withClient } from './helpers/database'
 
 /**
  * The article's §9 race, executable: the treasury holds 1,500, two payments of 1,000 arrive at
  * the same instant, one must be reserved and the other rejected — never both.
+ *
+ * Twice, because §9's race has two audiences: at the ledger engine, where the lock is, and at the
+ * payment door, which is what `POST /payments` and `POST /experiments/race` actually run.
  *
  * What is asserted is the outcome, not the instant in between: an outside observer cannot see a
  * mid-transaction balance, so "Available never goes negative" is carried by the final figure
@@ -73,6 +78,47 @@ describe('two payments racing for the same money', () => {
     expect(await countRowsFor(loser)).toEqual({ transactions: 0, entries: 0 })
   })
 })
+
+describe('two payments racing at the payment door', () => {
+  it('reserves one and records the other as FAILED insufficient_funds, with one reserve in the books', async () => {
+    await withLedgerTransaction(pool, (client) => seedRace(client))
+    // Two invoices of 1,000 to one partner: the door checks the allowlist, and the allowlist is
+    // the payout addresses of active partners.
+    const invoices = await seedInvoices(pool)
+
+    // Different keys, because these are two payments and not one clicked twice — the gate under
+    // test here is the account lock, not the idempotency index.
+    const startTogether = barrier(2)
+    const attempt = (payableId: string): Promise<PaymentOutcome> =>
+      withClient(pool, (client) =>
+        inTransaction(client, async () => {
+          await startTogether()
+          return createPayment(client, { idempotencyKey: crypto.randomUUID(), payableId })
+        }),
+      )
+
+    const outcomes = await Promise.all([attempt(invoices.first), attempt(invoices.second)])
+
+    // Both are recorded: the refusal is a payment written as FAILED, not a rollback, which is what
+    // lets the api answer it with a reason and a reference.
+    expect(outcomes.map((outcome) => outcome.kind)).toEqual(['recorded', 'recorded'])
+    const payments = outcomes.map(paymentOf)
+    expect(payments.map((payment) => payment.status).sort()).toEqual(['FAILED', 'RESERVED'])
+    expect(payments.find((payment) => payment.status === 'FAILED')?.reason).toBe('insufficient_funds')
+
+    // §9's figures, from the door the demo really uses: 1,500 minus the one payment that fit.
+    expect(await countReserves()).toBe(1)
+    expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(RACE_TREASURY - PAYMENT)
+    expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(PAYMENT)
+  })
+})
+
+function paymentOf(outcome: PaymentOutcome): PaymentView {
+  if (outcome.kind !== 'recorded') {
+    throw new Error(`expected a recorded payment, got ${outcome.kind}`)
+  }
+  return outcome.payment
+}
 
 /**
  * The canary. It does NOT test the ledger — it tests this file's ability to run two things at

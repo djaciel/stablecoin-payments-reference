@@ -66,6 +66,13 @@ directly:
 | The same key with a different body is refused, and nothing is written | "refuses the same key with a different body…" | the request fingerprint stored next to the key |
 | Two calls with one key in parallel make one payment and one `reserve` | "makes one payment out of two parallel calls…" | the same index: the loser waits on it until the winner commits. A SELECT before the INSERT fails this test |
 
+And §9's race at the payment door, in `race.db.test.ts` next to the same race at the ledger engine,
+calling the same `createPayment`:
+
+| Claim | Test | Enforced at |
+|---|---|---|
+| 1,500 and two payments of 1,000 with different keys: one is RESERVED and the other is recorded FAILED `insufficient_funds`, with one `reserve` in the books, Available 500 and Reserved 1,000 | "reserves one and records the other as FAILED insufficient_funds…" | the engine's check under `SELECT … FOR UPDATE` on `treasury:available`, and step 5 of `create-payment.ts`, which turns `InsufficientFunds` into a recorded refusal instead of a rollback. This is what `POST /experiments/race` runs |
+
 And §7's Signed moment, in `signing.db.test.ts`, calling `signPayment` from
 `apps/worker/src/sign.ts` with a signer that really signs (the published test mnemonic; real
 bytes, no network):

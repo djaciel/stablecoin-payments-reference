@@ -11,7 +11,7 @@
  * variable.
  */
 
-import type { Deposits, Experiments, Health, PartnerPaymentReceipt, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, Receivables, Treasury } from '@payments/domain'
+import type { Deposits, Experiments, Health, PartnerPaymentReceipt, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, RaceResult, Receivables, Treasury } from '@payments/domain'
 
 const API_BASE_PATH = '/api'
 
@@ -135,6 +135,15 @@ export function resumePayment(reference: string): Promise<PaymentView> {
  */
 export function fundPartnerWallet(): Promise<PartnerWalletFunding> {
   return send<PartnerWalletFunding>('/treasury/fund-partner-wallet', undefined)
+}
+
+/**
+ * §9's race, in one call: the api seeds a sandbox database with the article's 1,500 and races two
+ * payments of 1,000 through the same payment door. The two calls are made there and not here
+ * because two requests from a browser cannot be made to arrive at the same instant.
+ */
+export function runRace(): Promise<RaceResult> {
+  return send<RaceResult>('/experiments/race', undefined)
 }
 
 /** The failure-injection flags the Break it screen switches. */

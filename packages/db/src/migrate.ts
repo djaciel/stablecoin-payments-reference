@@ -22,9 +22,14 @@ export function orderMigrationFiles(entries: readonly string[]): string[] {
   return entries.filter((name) => name.endsWith('.sql')).sort()
 }
 
-export async function migrate(): Promise<void> {
+/**
+ * Migrates the database `DATABASE_URL` points at, or another one when it is named: the race
+ * endpoint migrates its sandbox from inside a running api, where changing that variable would
+ * change it for every other request too.
+ */
+export async function migrate(connectionString: string = readDatabaseUrl()): Promise<void> {
   const directory = migrationsDirectory()
-  const client = new Client({ connectionString: readDatabaseUrl() })
+  const client = new Client({ connectionString })
 
   // A dropped connection arrives here. Without a listener, node-postgres turns it into an
   // unhandled 'error' event and the process dies before it can say which file was running.

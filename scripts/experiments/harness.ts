@@ -140,11 +140,14 @@ export function wait(ms: number): Promise<void> {
   })
 }
 
-/** The command's title, and under it where it is pointed: the api, and the chain by host only. */
-export function heading(name: string, title: string): void {
+/**
+ * The command's title, and under it where it is pointed: the api, and the chain by host only. The
+ * race passes its own second line, because it is the one command that never reaches a chain.
+ */
+export function heading(name: string, title: string, chain: string = rpcHost()): void {
   console.log(`\n${name}  ${title}\n`)
   field('api', apiUrl())
-  field('chain', rpcHost())
+  field('chain', chain)
   console.log('')
 }
 

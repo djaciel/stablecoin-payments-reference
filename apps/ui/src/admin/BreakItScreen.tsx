@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { failedAfterReserving, type AuditStep, type BlackholeStep, type Experiments, type PaymentSummary, type PaymentView } from '@payments/domain'
-import { createPayable, doubleClick, getPayables, getPayments, getPaymentTimeline, payPayable, resumePayment, setExperiments, type PaymentAnswer } from '../api/client'
+import { failedAfterReserving, type AuditStep, type BlackholeStep, type Experiments, type PaymentSummary, type PaymentView, type RaceResult } from '@payments/domain'
+import { createPayable, doubleClick, getPayables, getPayments, getPaymentTimeline, payPayable, resumePayment, runRace, setExperiments, type PaymentAnswer } from '../api/client'
 import { AddressLine } from '../app/AddressLine'
 import { REASONS } from './PayablesScreen'
 
@@ -50,13 +50,15 @@ export function BreakItScreen() {
     return <p className="card-note">reading…</p>
   }
 
+  // §9's four failures in the order the article lists them, then §6's revert.
   const card: CardProps = { show, running, setRunning }
   return (
     <div className="cards">
-      <RevertCard armed={experiments.revertNextPayment} {...card} />
-      <BlackholeCard blackhole={experiments.blackholeRpc} {...card} />
-      <CrashCard armed={experiments.crashAfterSigning} {...card} />
       <DoubleClickCard {...card} />
+      <RaceCard {...card} />
+      <CrashCard armed={experiments.crashAfterSigning} {...card} />
+      <BlackholeCard blackhole={experiments.blackholeRpc} {...card} />
+      <RevertCard armed={experiments.revertNextPayment} {...card} />
     </div>
   )
 }
@@ -77,7 +79,7 @@ function RevertCard({ armed, ...card }: { readonly armed: boolean } & CardProps)
   return (
     <section className="card">
       <h2 className="card-title">
-        Revert the next payment <Badge armed={armed} />
+        Revert the next payment · article §6 <Badge armed={armed} />
       </h2>
       <p className="card-value">The next payment reaches the chain and reverts: nothing moves, and it costs only gas.</p>
       <p className="card-note">
@@ -103,7 +105,7 @@ function BlackholeCard({ blackhole, ...card }: { readonly blackhole: Experiments
   return (
     <section className="card">
       <h2 className="card-title">
-        Node not responding <Badge armed={blackhole.enabled} />
+        Node not responding · article §9 <Badge armed={blackhole.enabled} />
       </h2>
       <p className="card-value">
         The node stops answering the payment's workflow: the step runs out of its attempts and the payment goes to REVIEW,
@@ -147,7 +149,7 @@ function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) 
   return (
     <section className="card">
       <h2 className="card-title">
-        Crash after signing <Badge armed={armed} />
+        Crash after signing · article §9 <Badge armed={armed} />
       </h2>
       <p className="card-value">
         The worker dies between signing and broadcasting, and the payment finishes itself with the bytes it had
@@ -185,7 +187,7 @@ function DoubleClickCard(card: CardProps) {
 
   return (
     <section className="card">
-      <h2 className="card-title">Double click</h2>
+      <h2 className="card-title">Double click · article §9</h2>
       <p className="card-value">
         The same invoice is paid twice at the same instant, with the same key, and one payment comes out of it.
       </p>
@@ -197,6 +199,116 @@ function DoubleClickCard(card: CardProps) {
       </p>
       <RunIt run={run} />
     </section>
+  )
+}
+
+/**
+ * §9's race. The only card that spends nothing, and the only one that does not run on the demo's
+ * own books: the two payments together have to be more than Available, and Available here is a few
+ * dollars of real testnet money. Its runner is its own, next to `useRun` rather than inside it, but
+ * it shares the same latch: there is no invoice, no flag and no payment to follow.
+ */
+function RaceCard({ running, setRunning }: CardProps) {
+  const [result, setResult] = useState<RaceResult | undefined>(undefined)
+  const [failure, setFailure] = useState<string | undefined>(undefined)
+  const busy = running === 'race'
+  const blocked = running !== undefined && !busy
+
+  const start = (): void => {
+    setRunning('race')
+    setResult(undefined)
+    setFailure(undefined)
+    runRace()
+      .then(setResult, (refused: unknown) => {
+        setFailure(sentenceOf(refused))
+      })
+      .finally(() => {
+        setRunning(undefined)
+      })
+  }
+
+  return (
+    <section className="card">
+      <h2 className="card-title">The race · article §9</h2>
+      <p className="card-value">
+        There is 1,500 available and two payments of 1,000 arrive at the same instant, with different keys: one is
+        reserved and the other is refused.
+      </p>
+      <p className="card-note">
+        This is the failure the demo's own money cannot show, because the two payments together have to be more than
+        Available and Available here is a few dollars of real testnet USDC. So this one runs the article's figures
+        against a sandbox database of its own, through the same payment door the Pay button presses: the demo's books
+        do not move, and nothing is signed or sent. The long way is the command <code>pnpm experiment:race</code>.
+      </p>
+      <p className="card-actions">
+        <button type="button" className="button" disabled={busy || blocked} onClick={start}>
+          {busy ? 'running…' : 'Run it'}
+        </button>
+        {blocked && <span className="card-note">The other run has to finish first.</span>}
+      </p>
+      {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
+      {result !== undefined && <RaceEvidence result={result} />}
+    </section>
+  )
+}
+
+/** What the race left in the sandbox: the two answers as the api would have sent them, and the books. */
+function RaceEvidence({ result }: { readonly result: RaceResult }) {
+  return (
+    <div className="result">
+      <p className="card-value">{raceVerdict(result)}</p>
+      <ol className="steps">
+        {result.attempts.map((attempt) => (
+          <li key={attempt.reference}>
+            <code>{attempt.code}</code> {attempt.reference} {attempt.status}{' '}
+            {attempt.reason !== undefined && <code>{attempt.reason}</code>} {attempt.amount}
+          </li>
+        ))}
+      </ol>
+      <dl className="figures">
+        <div className="figure">
+          <dt>Available before</dt>
+          <dd>{result.availableBefore}</dd>
+        </div>
+        <div className="figure">
+          <dt>Payments reserved</dt>
+          <dd>{result.reserves}</dd>
+        </div>
+        <div className="figure">
+          <dt>Available after</dt>
+          <dd>{result.availableAfter}</dd>
+        </div>
+        <div className="figure">
+          <dt>Reserved after</dt>
+          <dd>{result.reservedAfter}</dd>
+        </div>
+        <div className="figure">
+          <dt>Ran against</dt>
+          <dd>{result.database}</dd>
+        </div>
+      </dl>
+    </div>
+  )
+}
+
+/**
+ * The three things this card claims, checked rather than announced: one of the two reserved, the
+ * other was refused for insufficient funds, and one reserve reached the books. A negative Available
+ * is read off the string, because these figures carry thousands separators.
+ */
+function raceVerdict(result: RaceResult): string {
+  const reserved = result.attempts.find((attempt) => attempt.status === 'RESERVED')
+  const refused = result.attempts.find((attempt) => attempt.reason === 'insufficient_funds')
+  const negative = result.availableAfter.startsWith('-')
+  if (reserved === undefined || refused === undefined || result.attempts.length !== 2 || result.reserves !== 1 || negative) {
+    return (
+      `Not what this card claims: ${count(result.attempts.length, 'payment')} with ` +
+      `${count(result.reserves, 'reserve')} in the books, and Available at ${result.availableAfter}.`
+    )
+  }
+  return (
+    `${reserved.reference} reserved its ${reserved.amount} and ${refused.reference} was refused for insufficient ` +
+    `funds. Available went from ${result.availableBefore} to ${result.availableAfter}, and never below zero.`
   )
 }
 

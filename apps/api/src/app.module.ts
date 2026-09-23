@@ -3,6 +3,7 @@ import { DbModule } from './db/db.module'
 import { DemoScaffoldingModule } from './demo-scaffolding/demo-scaffolding.module'
 import { DepositsController } from './deposits/deposits.controller'
 import { ExperimentsController } from './experiments/experiments.controller'
+import { RaceController } from './experiments/race.controller'
 import { HealthController } from './health/health.controller'
 import { PartnersModule } from './partners/partners.module'
 import { PayablesModule } from './payables/payables.module'
@@ -25,6 +26,6 @@ import { TreasuryModule } from './treasury/treasury.module'
  */
 @Module({
   imports: [DbModule, DemoScaffoldingModule, PartnersModule, PayablesModule, ReceivablesModule, TemporalModule, TreasuryModule],
-  controllers: [DepositsController, ExperimentsController, HealthController, PaymentsController],
+  controllers: [DepositsController, ExperimentsController, HealthController, PaymentsController, RaceController],
 })
 export class AppModule {}

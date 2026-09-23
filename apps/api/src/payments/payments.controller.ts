@@ -106,8 +106,11 @@ export class PaymentsController {
  * whatever its state now. Spec assumption 19, decided: the code answers the request's first outcome
  * and the body the payment's current state, so a replay of a payment that later reverted is 200 with
  * FAILED `reverted`, and a client that reads only codes never takes a refusal for an acceptance.
+ *
+ * Exported because the race endpoint answers with the codes this door would have given, rather
+ * than with two literals written a second time.
  */
-function statusCodeOf(outcome: { readonly kind: 'recorded' | 'replayed'; readonly payment: PaymentView }): number {
+export function statusCodeOf(outcome: { readonly kind: 'recorded' | 'replayed'; readonly payment: PaymentView }): number {
   const { status, reason } = outcome.payment
   if (status === 'FAILED' && !failedAfterReserving(reason)) {
     return 422

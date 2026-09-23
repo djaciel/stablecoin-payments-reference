@@ -7,11 +7,12 @@ const CONNECTION_TIMEOUT_MS = 5000
 
 /**
  * Every service talks to Postgres through a pool built here, so there is one place
- * that decides how the connection is configured.
+ * that decides how the connection is configured. The database is `DATABASE_URL`'s unless
+ * one is named, which only the race endpoint's sandbox does.
  */
-export function createPool(): Pool {
+export function createPool(connectionString: string = readDatabaseUrl()): Pool {
   const pool = new Pool({
-    connectionString: readDatabaseUrl(),
+    connectionString,
     connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
   })
 
