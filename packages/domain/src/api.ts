@@ -415,3 +415,46 @@ export interface PaymentTimeline {
    */
   readonly workflowUrl?: string
 }
+
+/**
+ * One reconciliation run as the list shows it (§10): the block it pinned the chain side to, how it
+ * came out, and the line a human reads. `block` is null for a database whose watcher has never
+ * scanned: there is no block at which the books and the chain can be compared.
+ */
+export interface ReconciliationRunSummary {
+  readonly id: string
+  readonly startedAt: string
+  readonly finishedAt: string
+  readonly block: string | null
+  readonly outcome: 'clean' | 'mismatch' | 'incomplete'
+  /** `checked` is the number of items; the other two count how many of them are which. */
+  readonly checked: number
+  readonly explained: number
+  readonly mismatched: number
+  readonly summary: string
+}
+
+/** One thing a run checked: a payment, a deposit, or the whole treasury. */
+export interface ReconciliationItemView {
+  readonly subject: 'payment' | 'deposit' | 'global'
+  /** A payment reference, a deposit id, or `global`. */
+  readonly subjectId: string
+  readonly outcome: 'ok' | 'explained' | 'mismatch' | 'unchecked'
+  /** Books minus chain at the run's block, in whole USDC. Absent when it contributes nothing. */
+  readonly delta?: string
+  /** The sentence. A payment refused at the door reads as that and nothing else. */
+  readonly detail: string
+  /** Present when the item names a transaction. */
+  readonly explorerUrl?: string
+}
+
+/** What `GET /reconciliation/runs/:id` answers: one run and every line of it. */
+export interface ReconciliationRunView {
+  readonly run: ReconciliationRunSummary
+  readonly items: readonly ReconciliationItemView[]
+}
+
+/** What `GET /reconciliation/runs` answers: the latest runs, newest first. */
+export interface ReconciliationRuns {
+  readonly runs: readonly ReconciliationRunSummary[]
+}

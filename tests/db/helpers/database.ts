@@ -92,6 +92,14 @@ export async function seedPartner(pool: Pool, name: string, index: number, depos
   return id
 }
 
+/**
+ * One address the system watches, as the api writes it at startup and when a partner is created.
+ * Reconciliation reads the same table, so a test needs the rows a running system would have.
+ */
+export async function seedWatchedAddress(pool: Pool, address: string, role: 'treasury' | 'deposit', partnerId?: string): Promise<void> {
+  await pool.query('INSERT INTO watched_addresses (address, role, partner_id) VALUES ($1, $2, $3)', [address, role, partnerId ?? null])
+}
+
 /** One invoice a partner owes, written straight to the table: these tests are about deposits. */
 export async function seedReceivable(
   pool: Pool,

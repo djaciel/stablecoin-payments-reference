@@ -971,6 +971,52 @@ docker compose exec postgres psql -U payments -d payments \
   -c "SELECT kind, reference, proof FROM ledger_transactions WHERE kind = 'cancel'"
 ```
 
+## Reconciliation: your books against the chain (§10)
+
+Your ledger and the chain are written by different processes at different moments, so the only
+honest answer is to check. A separate process takes one snapshot of the database and one block of
+the chain, and writes down for every payment and every deposit whether the three versions agree:
+what was asked for, what was recorded, what happened. It reports and never repairs.
+
+- `migrations/0016_reconciliation.sql` — the two tables a run leaves behind: `reconciliation_runs`
+  (the block it pinned, the outcome, the counts, one line) and `reconciliation_items` (one row per
+  thing checked, with a signed `delta_minor` that means *books minus chain at that block*).
+- `apps/worker/src/reconcile.ts` — the whole run, top to bottom in the order it happens: one
+  `REPEATABLE READ` snapshot, the block **B = min(watcher cursor, final block)**, the chain reads
+  (never inside a transaction), one item per row, then one insert of the run with its items.
+- `apps/worker/src/reconcile-items.ts` — step 4 on its own: the rules that decide one payment's or
+  one deposit's item, and the sentences. This is where this demo's history stops being alerts.
+- `apps/worker/src/workflows.ts` — the third long-lived loop next to the watcher and the
+  dispatcher, and the two-line one-shot the api starts for "Run now". No Temporal Schedules.
+- `apps/api/src/reconciliation/reconciliation.controller.ts` — two GETs and a POST that starts the
+  one-shot and answers 202 without waiting; 503 when Temporal cannot be reached, because then
+  nothing was queued.
+- `apps/api/src/reconciliation/read-reconciliation.ts` — the two reads. The api computes no
+  reconciliation of its own; it prints what the worker wrote.
+- `packages/domain/src/temporal.ts` — how "Run now" is started: the workflow id is the second it
+  was asked for, so two presses in the same second are one run.
+- `tests/db/reconciliation.db.test.ts` — three claims against real Postgres with a stub chain: the
+  three versions agree; a settled payment the chain never carried; a release whose proof is not
+  true. A live system is always clean, so the mismatch is manufactured on the chain's side.
+  `tests/db/README.md` indexes the three, next to the invariant they finish proving.
+
+Two things the check deliberately does not look at. **Gas is never posted to the books** and the
+comparison is stablecoin-only, so a fee can never show up as a difference. And the article's rhythm
+is **daily**; here it is every ten minutes, so a reader can watch a run appear on its own.
+
+See it:
+
+```
+curl -i -X POST localhost:3000/reconciliation/run          # 202 and a link to its run in Temporal
+curl -s localhost:3000/reconciliation/runs | jq '.runs[0]' # the block it pinned and how it came out
+curl -s localhost:3000/reconciliation/runs/<id> | jq -r '.items[] | "\(.subjectId) \(.outcome) \(.detail)"'
+```
+
+That last one is the point of the phase: one sentence per payment and per deposit, including the
+ones a naive check would call alerts. A reverted payout says the transaction its proof names really
+reverted in that block, a cancelled one says nothing was ever signed, a payment refused at the door
+says no money moved, and money nobody invoiced says so instead of being flagged.
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -1006,5 +1052,6 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-Treasury fundings on the Transfers screen, and reconciliation (§10), arrive in later phases. Each
-will add its entry here when it lands.
+Treasury fundings on the Transfers screen, and the Reconciliation screen with the one global
+identity (books against the chain at a fixed block), arrive in later phases. Each will add its
+entry here when it lands.

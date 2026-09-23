@@ -6,8 +6,17 @@ import type { Escalation } from './escalate'
 const { watchChain, dispatchPayments } = proxyActivities<typeof activities>({
   // Bounded on purpose: a tick that cannot finish must not hold its loop. Three quick attempts,
   // then the failure comes back to the loop below, which logs it and waits for the next tick.
-  startToCloseTimeout: '10 seconds',
+  // 30 s rather than 10: a watcher tick that promotes several deposits re-reads a receipt for
+  // each of them, and a public endpoint takes its time.
+  startToCloseTimeout: '30 seconds',
   retry: { maximumAttempts: 3, initialInterval: '1 second', backoffCoefficient: 1 },
+})
+
+const { reconcileNow } = proxyActivities<typeof activities>({
+  // A run reads one receipt per payment and per deposit, so it is minutes, not seconds. Two
+  // attempts: a run that fails is logged, and the next tick does the whole thing again anyway.
+  startToCloseTimeout: '3 minutes',
+  retry: { maximumAttempts: 2, initialInterval: '5 seconds', backoffCoefficient: 1 },
 })
 
 /** Attempts per step, 1 → 2 → 4 → 8 s apart: about 15 s from the first failure to the last. */
@@ -105,12 +114,18 @@ function stepThatGaveUp(failure: unknown): Escalation {
 /** 11 history events per iteration (measured), so a run closes under 4,000 — an hour at 10s. */
 const TICKS_PER_RUN = 360
 
+/** How often the two loops that follow the chain tick. */
+const CHAIN_INTERVAL = '10 seconds'
+
+/** Section 10's rhythm is daily; ten minutes here, so a reader can watch a run appear by itself. */
+const RECONCILE_INTERVAL = '10 minutes'
+
 /**
  * The watcher: tick, wait ten seconds, tick again. The tick writes its own line and keeps its
  * cursor in the database, so the loop holds nothing but its counter.
  */
 export async function WatcherWorkflow(): Promise<void> {
-  await everyTenSeconds('watcher', watchChain)
+  await forever('watcher', CHAIN_INTERVAL, watchChain)
 }
 
 /**
@@ -118,22 +133,35 @@ export async function WatcherWorkflow(): Promise<void> {
  * `PaymentWorkflow` gets one. The rule and its query are in `dispatcher.ts`.
  */
 export async function DispatcherWorkflow(): Promise<void> {
-  await everyTenSeconds('dispatcher', dispatchPayments)
+  await forever('dispatcher', CHAIN_INTERVAL, dispatchPayments)
 }
 
-/** The loop both share: one workflow that never ends, not one workflow per tick. */
-async function everyTenSeconds(name: string, tick: () => Promise<string>): Promise<void> {
+/**
+ * The reconciler (§10): every ten minutes, one run that checks every payment and every deposit
+ * against the chain at one block. It writes only its own two tables and repairs nothing.
+ */
+export async function ReconcilerWorkflow(): Promise<void> {
+  await forever('reconciler', RECONCILE_INTERVAL, reconcileNow)
+}
+
+/** "Run now": one run, on demand. The api starts it and answers 202 without waiting for the result. */
+export async function ReconciliationRun(): Promise<string> {
+  return reconcileNow()
+}
+
+/** The loop all three share: one workflow that never ends, not one workflow per tick. */
+async function forever(name: string, interval: string, tick: () => Promise<string>): Promise<void> {
   for (let count = 0; count < TICKS_PER_RUN; count += 1) {
     try {
       await tick()
     } catch (error) {
       // Each failed attempt is already in the worker's log; this line is the one that matters
       // at 2 a.m. — the loop is still alive.
-      log.error(`${name}: tick failed after its attempts, next one in 10s — ${rootCause(error)}`)
+      log.error(`${name}: tick failed after its attempts, next one in ${interval} — ${rootCause(error)}`)
     }
 
     // Durable: the timer lives in Temporal, so a worker that dies mid-wait resumes it.
-    await sleep('10 seconds')
+    await sleep(interval)
   }
 
   // Outside the try, because `continueAsNew` works by throwing. It continues as the same workflow

@@ -55,3 +55,19 @@ export function paymentWorkflowStart(reference: string, taskQueue: string) {
     workflowIdConflictPolicy: 'USE_EXISTING' as const,
   }
 }
+
+/** The one-shot reconciliation run's type name, started by "Run now" (§10). */
+export const RECONCILIATION_WORKFLOW = 'ReconciliationRun'
+
+/**
+ * How that one-shot is started. The id is the second it was asked for, so two presses in the same
+ * second are one run, and every run still has its own page in the Temporal UI.
+ */
+export function reconciliationRunStart(askedAt: Date, taskQueue: string) {
+  return {
+    workflowId: `reconciliation-${askedAt.toISOString().replace(/\.\d+Z$/, 'Z')}`,
+    taskQueue,
+    args: [] as [],
+    workflowIdConflictPolicy: 'USE_EXISTING' as const,
+  }
+}

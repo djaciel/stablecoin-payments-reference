@@ -16,7 +16,7 @@ import { correctBlock, markMismatched, promotableDeposits, recordDetected, settl
 import { readReceipt } from './watch'
 
 /** The one scan there is today. `watcher_state` is keyed by it so a second one is a row. */
-const SCAN_NAME = 'usdc-transfers'
+export const SCAN_NAME = 'usdc-transfers'
 
 /** The books are USDC-only (spec assumption 2). Gas is never posted. */
 const CURRENCY = 'USDC'

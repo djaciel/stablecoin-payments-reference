@@ -10,6 +10,7 @@ import { PartnersModule } from './partners/partners.module'
 import { PayablesModule } from './payables/payables.module'
 import { PaymentsController } from './payments/payments.controller'
 import { ReceivablesModule } from './receivables/receivables.module'
+import { ReconciliationController } from './reconciliation/reconciliation.controller'
 import { TemporalModule } from './temporal/temporal.module'
 import { TreasuryModule } from './treasury/treasury.module'
 
@@ -27,6 +28,14 @@ import { TreasuryModule } from './treasury/treasury.module'
  */
 @Module({
   imports: [DbModule, DemoScaffoldingModule, PartnersModule, PayablesModule, ReceivablesModule, TemporalModule, TreasuryModule],
-  controllers: [AllowlistController, DepositsController, ExperimentsController, HealthController, PaymentsController, RaceController],
+  controllers: [
+    AllowlistController,
+    DepositsController,
+    ExperimentsController,
+    HealthController,
+    PaymentsController,
+    RaceController,
+    ReconciliationController,
+  ],
 })
 export class AppModule {}

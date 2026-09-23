@@ -42,6 +42,7 @@ export {
   paidVerdict,
   readUsdcBalance,
   type ExpectedTransfer,
+  type LandedTransaction,
   type ObservedTransfer,
   type PaidVerdict,
   type TransferQuery,

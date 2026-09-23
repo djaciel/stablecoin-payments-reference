@@ -32,6 +32,10 @@ export type {
   Payments,
   RaceAttempt,
   RaceResult,
+  ReconciliationItemView,
+  ReconciliationRunSummary,
+  ReconciliationRunView,
+  ReconciliationRuns,
   ReceivableFigures,
   ReceivableSummary,
   Receivables,
@@ -40,4 +44,12 @@ export type {
 export { failedAfterReserving } from './api'
 export { optionalEnv, readEnv, requireEnv } from './env'
 export { BLACKHOLE_STEPS, EXPERIMENT_KEYS, type BlackholeStep, type Experiments } from './experiments'
-export { PAYMENT_WORKFLOW, paymentWorkflowStart, readTemporalConfig, workflowUrl, type TemporalConfig } from './temporal'
+export {
+  PAYMENT_WORKFLOW,
+  RECONCILIATION_WORKFLOW,
+  paymentWorkflowStart,
+  readTemporalConfig,
+  reconciliationRunStart,
+  workflowUrl,
+  type TemporalConfig,
+} from './temporal'

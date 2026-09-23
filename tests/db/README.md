@@ -117,15 +117,27 @@ And §8's money coming in, in `deposits.db.test.ts`, calling `recordDetected`,
 | The address decides whose money it is: two partners owing the same amount, and the deposit settles the invoice of the partner whose address it arrived at; a deposit nobody invoiced is credited anyway, flagged `unmatched`, and takes `partner:receivable` negative | "belongs to whoever owns the address it arrived at…" | `partner_id` written at detection from `watched_addresses`; the two matching statements in `settleDeposit`; `allows_negative` on `partner:receivable` |
 | A second pass posts nothing twice: `recordDetected` twice leaves one row, `settleDeposit` twice answers `already-settled`, with one `deposit` transaction, one `paid` audit row and the invoice PAID | "cannot be recorded or credited twice…" | `UNIQUE (tx_hash, log_index)` with `ON CONFLICT DO NOTHING`; the deposit row lock and the status read under it; the `(kind, reference)` unique index |
 
+And §10's check of all three at once, in `reconciliation.db.test.ts`, calling `reconcile` from
+`apps/worker/src/reconcile.ts` with a **stub chain port**: a live system can only ever be clean, so
+the disagreement is manufactured on the chain's side. The ledger's side cannot be corrupted at all
+(it is append-only by trigger), and the demo's own books are never touched:
+
+| Claim | Test | Enforced at |
+|---|---|---|
+| The three versions agree: a settled payment and a credited deposit, checked against receipts that carry the right Transfers, give one `ok` item each, no delta, and one run row written once with both its items | "finds the three versions agree…" | `reconcile`'s five steps: one `REPEATABLE READ` snapshot, the block `B = min(watcher cursor, final block)`, the chain reads outside any transaction, one item per row, then one INSERT of the run and its items together |
+| §10's "a settled payment with no event": the receipt succeeded and carries a Transfer for another amount, so that item is a `mismatch` naming both numbers, the run is a `mismatch`, and the deposit's item is still `ok` | "flags a settled payment the chain never carried…" | `findSettlementLog` in `packages/chain/src/usdc.ts`, over the receipt for the hash stored on the payment. A status check alone passes this |
+| A release whose proof is not true: the `reversal` names a transaction the chain says succeeded, so it is a `mismatch`. v1's open item, closed | "flags a release whose proof names a transaction that did not revert…" | `checkPayment`'s reversal rule: the receipt must be `reverted`, in the exact block the proof names, with no Transfer of that amount in its logs. The proof is read, never trusted |
+
 Whether the transfer is final and carries the official Transfer event, or reverted in a final
 block, is decided before this, by `paidVerdict` in `packages/chain/src/usdc.ts`, whose three
 tests run in `pnpm test`.
 
 Three notes on what a green suite does NOT say:
 
-- **Invariant 5 is proved as far as the books go.** The release cannot be written without its
-  evidence, and evidence and entries commit together. Whether the hash inside a proof really
-  reverted in the block it names is checked by reconciliation in Phase 10, not here.
+- **Invariant 5 is proved in both halves now.** The release cannot be written without its
+  evidence, and evidence and entries commit together (`release.db.test.ts`); whether the hash
+  inside a proof really reverted in the block it names is `reconciliation.db.test.ts`'s third
+  claim, and the reconciler checks it against the chain on every run.
 - **Invariant 4 is proved against a fixture table the test creates.** `payments` moves through
   the same helper, and the rest of the `cancel` rule — status RESERVED, no stored hash, read under
   the payment row lock — is `cancel.db.test.ts`'s.

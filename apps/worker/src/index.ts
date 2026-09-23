@@ -4,10 +4,11 @@ import { readTemporalConfig, type TemporalConfig } from '@payments/domain'
 import * as activities from './activities'
 import { closeWorkerPool } from './db'
 
-/** The two workflows that never end. One id each: one watcher and one dispatcher, whoever starts the worker. */
+/** The three workflows that never end. One id each, whoever starts the worker. */
 const LOOPS = [
   { workflowType: 'WatcherWorkflow', workflowId: 'watcher' },
   { workflowType: 'DispatcherWorkflow', workflowId: 'dispatcher' },
+  { workflowType: 'ReconcilerWorkflow', workflowId: 'reconciler' },
 ] as const
 
 async function main(): Promise<void> {
@@ -38,7 +39,7 @@ async function main(): Promise<void> {
 
     stopOnSignal(worker)
 
-    // Before the first poll, so both loops are up by the time the queue is being served. It is
+    // Before the first poll, so every loop is up by the time the queue is being served. It is
     // also the only thing that revives one somebody terminated: nothing else watches the watchers.
     await startLoops(config)
 
