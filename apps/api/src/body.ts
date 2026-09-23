@@ -9,6 +9,7 @@
 
 import { BadRequestException } from '@nestjs/common'
 import { USDC_DECIMALS, toMinorFromDecimal, type MinorUnits } from '@payments/ledger'
+import { getAddress, type Address } from 'viem'
 
 /** The longest description a list shows without turning a row into a paragraph. */
 export const MAX_DESCRIPTION_LENGTH = 200
@@ -36,6 +37,19 @@ export function readId(body: unknown, name: string, refusal: string): string {
     throw new BadRequestException(refusal)
   }
   return value
+}
+
+/**
+ * An address, checksummed on the way in by viem: stored one way everywhere, so the allowlist and
+ * an invoice's destination are comparable as plain text (`0005_partners.sql` says why).
+ */
+export function readAddress(body: unknown, name: string, refusal: string): Address {
+  const value = field(body, name)
+  try {
+    return getAddress(typeof value === 'string' ? value.trim() : '')
+  } catch {
+    throw new BadRequestException(refusal)
+  }
 }
 
 /** A decimal string in whole USDC, like every amount on the wire. A JSON number is refused: it is a float. */

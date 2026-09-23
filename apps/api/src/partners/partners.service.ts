@@ -131,6 +131,14 @@ export class PartnersService implements OnApplicationBootstrap {
           `INSERT INTO watched_addresses (address, role, partner_id) VALUES ($1, 'deposit', $2)`,
           [partner.depositAddress, partner.id],
         )
+        // And the company may pay it from now on: registering the payout address here is what
+        // `0013_allowlist.sql` backfilled for the partners that already existed.
+        await client.query(
+          // DO NOTHING rather than fail: an address somebody had already added by hand is on the
+          // list, which is all this statement wants.
+          'INSERT INTO allowlist (address, label, partner_id) VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING',
+          [partner.payoutAddress, partner.name, partner.id],
+        )
 
         return partner
       })

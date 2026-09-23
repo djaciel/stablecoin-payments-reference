@@ -82,8 +82,8 @@ describe('two payments racing for the same money', () => {
 describe('two payments racing at the payment door', () => {
   it('reserves one and records the other as FAILED insufficient_funds, with one reserve in the books', async () => {
     await withLedgerTransaction(pool, (client) => seedRace(client))
-    // Two invoices of 1,000 to one partner: the door checks the allowlist, and the allowlist is
-    // the payout addresses of active partners.
+    // Two invoices of 1,000 to one partner, whose payout address the seed also puts on the
+    // allowlist: the door reads that table, and an address missing from it never reaches the race.
     const invoices = await seedInvoices(pool)
 
     // Different keys, because these are two payments and not one clicked twice — the gate under

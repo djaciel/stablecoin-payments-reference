@@ -4,7 +4,7 @@ import type { AuditStep, DepositSummary, PaymentReview, PaymentSummary, PaymentT
 import { getPaymentTimeline, readTransfers, resumePayment } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { CopyButton } from '../app/AddressLine'
-import { REASONS } from './PayablesScreen'
+import { REASONS, TO_AN_ADDRESS } from './PayablesScreen'
 
 /**
  * Every payment, and each one's story step by step. The story is the audit log read back and
@@ -158,7 +158,7 @@ function ReviewQueue({ payments }: { readonly payments: readonly PaymentSummary[
                     <Link to={`/admin/transfers/${reference}`}>{reference}</Link>
                   </td>
                   <td className="is-number">{amount} USDC</td>
-                  <td>{partnerName ?? 'no partner'}</td>
+                  <td>{partnerName ?? TO_AN_ADDRESS}</td>
                   <td>{whereItWas(review)}</td>
                   <td>
                     <code>{review.step}</code>
@@ -249,7 +249,7 @@ function PaymentTable({ payments }: { readonly payments: readonly PaymentSummary
                   {payment.status === 'REVIEW' && <span className="cell-note">No proof either way, so the money stays reserved.</span>}
                 </td>
                 <td className="is-number">{payment.amount} USDC</td>
-                <td>{payment.partnerName ?? 'no partner'}</td>
+                <td>{payment.partnerName ?? TO_AN_ADDRESS}</td>
                 <td className="is-mono">
                   {payment.transaction !== undefined && (
                     <a href={payment.transaction.explorerUrl} target="_blank" rel="noreferrer">
@@ -298,7 +298,7 @@ function Story({ timeline }: { readonly timeline: PaymentTimeline }) {
   return (
     <section className="panel">
       <h2 className="card-title">
-        {payment.reference} · {payment.partnerName ?? 'no partner'}
+        {payment.reference} · {payment.partnerName ?? TO_AN_ADDRESS}
       </h2>
       <dl className="figures">
         <div className="figure">
@@ -431,7 +431,7 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
             rows: [step],
             text: (
               <>
-                Reserved went down by {payment.amount} USDC and this invoice's debt to {payment.partnerName ?? 'the partner'} was
+                Reserved went down by {payment.amount} USDC and this invoice's debt to {payment.partnerName ?? 'that address'} was
                 cleared (Dr Partner debt / Cr Reserved), ledger transaction <code>{context.ledgerTransactionId}</code>.
               </>
             ),

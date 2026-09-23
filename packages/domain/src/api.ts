@@ -157,6 +157,22 @@ export interface Payables {
   readonly ledger: LedgerFigures
 }
 
+/** One address the company may pay, with the words somebody wrote next to it. */
+export interface AllowlistedAddress {
+  readonly address: string
+  readonly label: string
+  /** The partner it belongs to. Null for an address somebody typed. */
+  readonly partnerName: string | null
+}
+
+/**
+ * What `GET /allowlist` and `POST /allowlist` answer: every address the payment door will accept,
+ * the partners' first and then the typed ones, newest first.
+ */
+export interface Allowlist {
+  readonly addresses: readonly AllowlistedAddress[]
+}
+
 /** One invoice a partner owes the company, as both sides list it. */
 export interface ReceivableSummary {
   readonly id: string

@@ -12,6 +12,7 @@ import {
   type AccountCode,
   type MinorUnits,
 } from '@payments/ledger'
+import type { Address } from 'viem'
 import { transactionView } from '../payments/read-payments'
 
 /** Defined here and not in the module, for the same cycle reason as `PARTNERS_SERVICE`. */
@@ -48,7 +49,8 @@ export interface PayablesOverview {
 }
 
 export interface NewPayable {
-  readonly partnerId: string
+  /** Who it is owed to: a partner, or an address somebody typed. Exactly one, checked in the controller. */
+  readonly owedTo: { readonly partnerId: string } | { readonly destination: Address }
   readonly amountMinor: MinorUnits
   readonly description: string
 }
@@ -102,18 +104,25 @@ export class PayablesService {
   /**
    * One transaction: the invoice and its debt. The row, the `payable` movement and the audit
    * line commit together, or a refusal anywhere leaves none of them behind.
+   *
+   * With a destination instead of a partner it is the ad-hoc "pay to an address": the same row
+   * with no partner on it, the same debt, and the same payment door later. Whether that address
+   * may be paid is the payment's question, not the invoice's.
    */
   async create(input: NewPayable): Promise<string> {
     const client = await this.pool.connect()
     try {
       return await inTransaction(client, async () => {
-        const partner = await readActivePartner(client, input.partnerId)
+        const owed =
+          'partnerId' in input.owedTo
+            ? await readActivePartner(client, input.owedTo.partnerId)
+            : { id: null, name: null, payout_address: input.owedTo.destination }
 
         const inserted = await client.query<{ id: string }>(
           `INSERT INTO payables (partner_id, destination, amount_minor, currency, description)
            VALUES ($1, $2, $3, $4, $5)
            RETURNING id`,
-          [partner.id, partner.payout_address, input.amountMinor.toString(), CURRENCY, input.description],
+          [owed.id, owed.payout_address, input.amountMinor.toString(), CURRENCY, input.description],
         )
         const id = inserted.rows[0]?.id
         if (id === undefined) {
@@ -130,9 +139,10 @@ export class PayablesService {
           context: {
             amountMinor: input.amountMinor,
             currency: CURRENCY,
-            partnerId: partner.id,
-            partnerName: partner.name,
-            destination: partner.payout_address,
+            // A typed destination has no partner to name, and the log says what happened, not
+            // what was missing.
+            ...(owed.id === null ? {} : { partnerId: owed.id, partnerName: owed.name }),
+            destination: owed.payout_address,
             ledgerTransactionId,
           },
         })

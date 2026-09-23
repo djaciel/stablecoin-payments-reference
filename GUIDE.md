@@ -837,6 +837,48 @@ pnpm experiment:crash                 # ~4 min, prints the worker's restart coun
 pnpm experiment:stuck                 # ~5 min, arms, escalates, disarms, resumes
 ```
 
+## Pay to an address: who you may pay (§4, §11)
+
+One of §4's validations is that the destination is allowed, and until now the demo took "allowed" to
+mean "a partner's payout address". It is a table now, one anybody can read and add to, and an
+invoice can be written to an address somebody typed: same invoice, same debt, same payment door.
+
+- `migrations/0013_allowlist.sql` — the table (the address, a label, the partner it belongs to when
+  it belongs to one) and the backfill that puts every existing partner's payout address on it, so
+  no invoice written before today becomes unpayable.
+- `apps/api/src/payments/create-payment.ts` — step 3 of the door, now one
+  `SELECT 1 FROM allowlist`. The partner check above it applies only to an invoice that has a
+  partner: one written to an address has no account that could be inactive.
+- `apps/api/src/allowlist/allowlist.controller.ts` — `GET /allowlist` and `POST /allowlist`
+  `{ address, label }`, add-only: 400 for a malformed address, 409 for one already there, and the
+  whole list back so the screen shows it at once. A controller and no service, because the list has
+  no rules of its own.
+- `apps/api/src/payables/payables.controller.ts` + `payables.service.ts` — `POST /payables` takes a
+  partner **or** a destination, exactly one. With a destination the invoice has no partner and
+  carries the address as it was typed; the debt it posts is the same one.
+- `apps/api/src/body.ts` — `readAddress`: viem's `getAddress` or one 400, so every address is stored
+  checksummed and the door's comparison cannot miss for a difference of case.
+- `apps/api/src/partners/partners.service.ts` — creating a partner registers its payout address on
+  the allowlist, which is what the migration backfilled for the two partners that already existed.
+- `apps/ui/src/admin/PayToAddressScreen.tsx` — the new tab: the form, the refusal in the api's own
+  words, **Add to allowlist** and then **Pay again** with a new key, and the addresses the company
+  may pay, with the one line about what this list is in a real system.
+- `apps/api/src/experiments/race.ts` and `tests/db/helpers/database.ts` — the two seeds that write
+  invoices without going through the api: both add the allowlist row next to the partner, or every
+  payment they set up would be refused.
+
+See it: open `/admin/pay-to-address`, paste the partner wallet's address from Start, 0.02 and a
+note, and press **Create and pay**. The invoice is written (Partner debt goes up by the amount) and
+the payment is refused: `destination_not_allowlisted`, nothing reserved, and the invoice sits OPEN
+on Payables reading "Pay to an address". Add the address with a label and press **Pay again**: the
+same invoice, a new key, and this time the money is reserved and sent.
+
+```
+curl -s localhost:3000/allowlist                                     # three addresses
+curl -s -X POST localhost:3000/allowlist -H 'content-type: application/json' \
+  -d '{"address":"0xnope","label":"Typo"}'                           # 400, nothing written
+```
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -850,6 +892,9 @@ pnpm experiment:stuck                 # ~5 min, arms, escalates, disarms, resume
   and Pay, with each invoice's payment on its row.
 - `apps/ui/src/admin/ReceivablesScreen.tsx` — the invoices partners owe, the two figures they
   move, and no Pay button: these are paid from the other side.
+- `apps/ui/src/admin/PayToAddressScreen.tsx` — paying an address somebody typed: the invoice
+  first, the refusal when that address is not on the allowlist, the one click that fixes it, and
+  the list of addresses the company may pay.
 - `apps/ui/src/partner/PartnerHome.tsx` — the partner's side: what it owes, the address it pays
   at, and the shared wallet it pays from, labelled demo scaffolding. The chosen partner lives in
   the address bar, so a reload keeps it.

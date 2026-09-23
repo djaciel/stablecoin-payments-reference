@@ -52,6 +52,9 @@ const PAYOUT_ADDRESS = '0x1111111111111111111111111111111111111111'
 /**
  * One partner and two invoices of §7's 1,000 each, the Partner debt `seedArticle` put on the books.
  * Written straight to the tables: these tests are about payments, not about how invoices are made.
+ *
+ * The allowlist row goes in with the partner, the way `POST /partners` writes it: without it the
+ * payment door refuses every one of these invoices with `destination_not_allowlisted`.
  */
 export async function seedInvoices(pool: Pool): Promise<{ first: string; second: string }> {
   const partner = await pool.query<{ id: string }>(
@@ -59,6 +62,10 @@ export async function seedInvoices(pool: Pool): Promise<{ first: string; second:
      VALUES ('Bluefin Studio', 1, '0x2222222222222222222222222222222222222222', $1) RETURNING id`,
     [PAYOUT_ADDRESS],
   )
+  await pool.query(`INSERT INTO allowlist (address, label, partner_id) VALUES ($1, 'Bluefin Studio', $2)`, [
+    PAYOUT_ADDRESS,
+    partner.rows[0]?.id,
+  ])
   const payables = await pool.query<{ id: string }>(
     `INSERT INTO payables (partner_id, destination, amount_minor, description)
      VALUES ($1, $2, $3, 'March logistics'), ($1, $2, $3, 'April logistics') RETURNING id`,
@@ -73,12 +80,16 @@ export async function seedInvoices(pool: Pool): Promise<{ first: string; second:
 
 /** One partner with its own deposit address, which is what attributes money arriving at it. */
 export async function seedPartner(pool: Pool, name: string, index: number, depositAddress: string): Promise<string> {
+  const payoutAddress = `0x${String(index).repeat(40).slice(0, 40)}`
   const result = await pool.query<{ id: string }>(
     `INSERT INTO partners (name, derivation_index, deposit_address, payout_address)
      VALUES ($1, $2, $3, $4) RETURNING id`,
-    [name, index, depositAddress, `0x${String(index).repeat(40).slice(0, 40)}`],
+    [name, index, depositAddress, payoutAddress],
   )
-  return requireId(result.rows[0], 'the partner was not written')
+  const id = requireId(result.rows[0], 'the partner was not written')
+  // With the partner, like `POST /partners`: the company may pay the address it just wrote down.
+  await pool.query('INSERT INTO allowlist (address, label, partner_id) VALUES ($1, $2, $3)', [payoutAddress, name, id])
+  return id
 }
 
 /** One invoice a partner owes, written straight to the table: these tests are about deposits. */

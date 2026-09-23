@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { AllowlistController } from './allowlist/allowlist.controller'
 import { DbModule } from './db/db.module'
 import { DemoScaffoldingModule } from './demo-scaffolding/demo-scaffolding.module'
 import { DepositsController } from './deposits/deposits.controller'
@@ -26,6 +27,6 @@ import { TreasuryModule } from './treasury/treasury.module'
  */
 @Module({
   imports: [DbModule, DemoScaffoldingModule, PartnersModule, PayablesModule, ReceivablesModule, TemporalModule, TreasuryModule],
-  controllers: [DepositsController, ExperimentsController, HealthController, PaymentsController, RaceController],
+  controllers: [AllowlistController, DepositsController, ExperimentsController, HealthController, PaymentsController, RaceController],
 })
 export class AppModule {}

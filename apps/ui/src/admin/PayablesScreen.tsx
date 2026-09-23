@@ -8,12 +8,15 @@ import { AddressLine, CopyButton } from '../app/AddressLine'
 /** Small on purpose: every invoice paid here spends real testnet USDC from the treasury. */
 const DEFAULT_AMOUNT = '0.50'
 
+/** What an invoice or a payment with no partner reads, wherever one shows: it is a destination, not a gap. */
+export const TO_AN_ADDRESS = 'Pay to an address'
+
 /** Why a payment failed, in the article's words. The api's code stays on screen under it. */
 export const REASONS: Record<PaymentFailureReason, string> = {
   insufficient_funds: 'Available was less than this amount.',
   payable_not_open: 'The invoice was already being paid.',
   partner_inactive: 'The partner was not active.',
-  destination_not_allowlisted: 'The payout address was not on the allowlist.',
+  destination_not_allowlisted: 'The destination was not on the allowlist.',
   amount_out_of_range: 'The amount was outside the payment limits.',
   compliance_rejected: 'The compliance check refused the destination.',
   reverted: 'The transfer reached the chain and reverted.',
@@ -122,7 +125,7 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
 
   return (
     <section className="card">
-      <h2 className="card-title">{invoice.partnerName ?? 'no partner'}</h2>
+      <h2 className="card-title">{invoice.partnerName ?? TO_AN_ADDRESS}</h2>
       <p className="card-value">{invoice.description}</p>
       <dl className="figures">
         <Figure label="Amount">{invoice.amount} USDC</Figure>
@@ -175,7 +178,11 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
         </p>
       )}
 
-      <p className="address-sub">You pay them here (their payout address, copied when the invoice was created)</p>
+      <p className="address-sub">
+        {invoice.partnerName === null
+          ? 'You pay here (the address typed when the invoice was created)'
+          : 'You pay them here (their payout address, copied when the invoice was created)'}
+      </p>
       <AddressLine address={invoice.destination.address} explorerUrl={invoice.destination.explorerUrl} />
 
       {asking && (

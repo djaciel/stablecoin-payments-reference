@@ -11,7 +11,7 @@
  * variable.
  */
 
-import type { Deposits, Experiments, Health, PartnerPaymentReceipt, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, RaceResult, Receivables, Treasury } from '@payments/domain'
+import type { Allowlist, Deposits, Experiments, Health, PartnerPaymentReceipt, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, RaceResult, Receivables, Treasury } from '@payments/domain'
 
 const API_BASE_PATH = '/api'
 
@@ -36,9 +36,24 @@ export function getPayables(): Promise<Payables> {
   return read<Payables>('/payables')
 }
 
-/** Answers with the whole screen, so the new invoice and the higher Partner debt show at once. */
-export function createPayable(invoice: { partnerId: string; amount: string; description: string }): Promise<Payables> {
+/**
+ * Writes one invoice: for a partner, or to an address somebody typed. Answers with the whole
+ * screen, so the new invoice and the higher Partner debt show at once.
+ */
+export function createPayable(
+  invoice: { amount: string; description: string } & ({ partnerId: string } | { destination: string }),
+): Promise<Payables> {
   return send<Payables>('/payables', invoice)
+}
+
+/** Every address the payment door will accept, the partners' first. */
+export function getAllowlist(): Promise<Allowlist> {
+  return read<Allowlist>('/allowlist')
+}
+
+/** Answers with the whole list, so the panel shows the address without a second read. A 409 throws with its sentence. */
+export function addToAllowlist(address: { address: string; label: string }): Promise<Allowlist> {
+  return send<Allowlist>('/allowlist', address)
 }
 
 export function getReceivables(): Promise<Receivables> {

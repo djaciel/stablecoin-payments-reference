@@ -114,17 +114,22 @@ async function createSandboxDatabase(demo: Pool): Promise<void> {
 async function resetAndSeed(sandbox: Pool): Promise<readonly string[]> {
   return withClient(sandbox, (client) =>
     inTransaction(client, async () => {
-      await client.query('TRUNCATE ledger_entries, ledger_transactions, audit_log, payments, payables, partners RESTART IDENTITY CASCADE')
+      await client.query('TRUNCATE allowlist, ledger_entries, ledger_transactions, audit_log, payments, payables, partners RESTART IDENTITY CASCADE')
       await client.query('UPDATE ledger_accounts SET balance_minor = 0')
       await seedRace(client)
 
-      // The payment door's allowlist is the payout addresses of active partners, so the race needs
-      // one partner and two invoices pointing at it.
+      // One partner, two invoices pointing at it, and its payout address on the allowlist the
+      // payment door reads: without that row both attempts would be refused before the race.
       const partner = await client.query<{ id: string }>(
         `INSERT INTO partners (name, derivation_index, deposit_address, payout_address)
          VALUES ($1, 1, $2, $3) RETURNING id`,
         [PARTNER.name, PARTNER.depositAddress, PARTNER.payoutAddress],
       )
+      await client.query('INSERT INTO allowlist (address, label, partner_id) VALUES ($1, $2, $3)', [
+        PARTNER.payoutAddress,
+        PARTNER.name,
+        partner.rows[0]?.id,
+      ])
       const invoices = await client.query<{ id: string }>(
         `INSERT INTO payables (partner_id, destination, amount_minor, description)
          VALUES ($1, $2, $3, 'Race: the first of two'), ($1, $2, $3, 'Race: the second of two') RETURNING id`,

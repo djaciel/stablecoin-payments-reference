@@ -7,6 +7,8 @@
 // or NestJS belongs in the package named after it.
 export type {
   AddressBalance,
+  Allowlist,
+  AllowlistedAddress,
   AuditStep,
   DepositSummary,
   Deposits,

@@ -68,12 +68,14 @@ export async function createPayment(client: PoolClient, request: PaymentRequest)
   if (locked.status !== 'OPEN') {
     return fail(client, intent, 'payable_not_open')
   }
-  if (locked.partner_status !== 'active') {
+  // Only when the invoice has a partner: one written to an address somebody typed has no account
+  // that could be inactive, and whether that address may be paid is the next check's business.
+  if (locked.partner_status !== null && locked.partner_status !== 'active') {
     return fail(client, intent, 'partner_inactive')
   }
-  // For now the allowlist IS the payout addresses of active partners; it gets its own table when
-  // payments to any address arrive.
-  const allowed = await client.query(`SELECT 1 FROM partners WHERE status = 'active' AND payout_address = $1`, [destination])
+  // The allowlist is its own table (`0013`), so this asks the one question it answers. Any admin
+  // may add a row through `POST /allowlist`; in a real system that is a reviewed control (§11).
+  const allowed = await client.query('SELECT 1 FROM allowlist WHERE address = $1', [destination])
   if (allowed.rowCount === 0) {
     return fail(client, intent, 'destination_not_allowlisted')
   }

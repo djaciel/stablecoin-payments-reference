@@ -4,6 +4,7 @@ import type { Experiments } from '@payments/domain'
 import { BLACKHOLE_WHERE, BreakItScreen, type ExperimentsContext } from '../admin/BreakItScreen'
 import { PartnersScreen } from '../admin/PartnersScreen'
 import { PayablesScreen } from '../admin/PayablesScreen'
+import { PayToAddressScreen } from '../admin/PayToAddressScreen'
 import { ReceivablesScreen } from '../admin/ReceivablesScreen'
 import { StartScreen } from '../admin/StartScreen'
 import { TransfersScreen } from '../admin/TransfersScreen'
@@ -42,6 +43,7 @@ export function App() {
             <Route path="partners" element={<PartnersScreen />} />
             <Route path="payables" element={<PayablesScreen />} />
             <Route path="receivables" element={<ReceivablesScreen />} />
+            <Route path="pay-to-address" element={<PayToAddressScreen />} />
             <Route path="transfers" element={<TransfersScreen />} />
             {/* A payment's story has its own address, so an invoice row can link straight to it. */}
             <Route path="transfers/:reference" element={<TransfersScreen />} />
@@ -94,6 +96,9 @@ function AdminScreens() {
         </NavLink>
         <NavLink to="/admin/receivables" className={navClass}>
           Receivables
+        </NavLink>
+        <NavLink to="/admin/pay-to-address" className={navClass}>
+          Pay to an address
         </NavLink>
         <NavLink to="/admin/transfers" className={navClass}>
           Transfers
