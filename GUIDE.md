@@ -248,6 +248,8 @@ lost answer safe: the same key always gets the same payment back.
 - `apps/ui/src/admin/PayablesScreen.tsx` — Pay and its confirmation. The browser makes one key
   per attempt and keeps it across clicks, so a double click cannot pay twice; after a
   refusal, the next attempt gets a new key.
+- `apps/ui/src/admin/BreakItScreen.tsx` — the "Double click" card presses this door twice at once,
+  on purpose: see "The double click" below for what the two answers show.
 
 See it: press Pay on `/admin/payables` and Reserved goes up in the api's answer, before
 anything is signed; only then is the payment signed, sent and settled. Pay an invoice larger
@@ -722,6 +724,40 @@ pnpm experiment:crash              # the same story, with that count before and 
 docker compose logs -f worker      # "killing this worker on purpose", then "worker: started at …"
 ```
 
+## The double click: two calls, one key, one payment (§9)
+
+The nervous second click, on purpose: the same invoice is paid twice at the same instant, with one
+idempotency key. The api answers both, one saying it recorded the payment and the other handing back
+that same payment, and the books move once. Nothing is armed for this one, because the failure is
+two requests and not an injected fault; what it rests on is the unique index in "The payment API"
+above, already pinned by `tests/db/payments.db.test.ts`.
+
+- `apps/ui/src/api/client.ts` — `doubleClick`: the one place the browser really makes two calls,
+  with nothing awaited between them, and each answer carries its status code because the codes are
+  the evidence.
+- `apps/ui/src/admin/BreakItScreen.tsx` — the "Double click" card (no badge and no switch: it arms
+  nothing) and the one new seam in the runner, `fire`, the step that turns the invoice into a
+  payment; every other card leaves it at its default of one call. The runner also refuses to start
+  while another payment is still moving, since these runs break things for real.
+- `scripts/experiments/double-click.ts` — `pnpm experiment:double-click`: the same two calls from a
+  terminal, with the payment rows, the reserve entries and Available before and after.
+- `scripts/experiments/stuck.ts` — `pnpm experiment:stuck`: §9's stuck one over the flag from "No
+  proof either way" above, armed, escalated to REVIEW with the money held, disarmed, resumed, settled.
+- `scripts/experiments/harness.ts` — what the two new commands needed: a POST that hands the status
+  code back with the body, the books in one read, the invoice a run writes for itself, and the
+  check every command now starts with (`crash.ts` too): nothing else in flight.
+
+See it (real testnet USDC, about four minutes): press **Run it** on "Double click" at
+`/admin/break-it`. The card shows the invoice, then both answers, `201 PAY-XXXX RESERVED` and
+`200 PAY-XXXX RESERVED` with the same reference, then "One payment, one reserve", and it follows
+that one payment to SETTLED with one transfer on the explorer.
+
+```
+pnpm experiment:double-click                          # the same story, from a terminal
+pnpm experiment:stuck                                 # REVIEW with the money held, then Resume
+curl -s localhost:3000/payments/PAY-XXXX/timeline     # one created row, one reserved row
+```
+
 ## The screens
 
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
@@ -741,15 +777,15 @@ docker compose logs -f worker      # "killing this worker on purpose", then "wor
 - `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
   Resume, each one's story step by step, and below them the money that arrived.
 - `apps/ui/src/admin/BreakItScreen.tsx` — the failures you can cause on purpose: one Run it per
-  card, and the switch under it; a red banner on every admin screen while one is armed.
-- `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint.
-  The shapes of the answers are in `packages/domain/src/api.ts`, which the api writes with
-  and the browser reads.
+  card, with a switch under the cards that arm a flag; a red banner on every admin screen while one
+  is armed.
+- `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint, plus
+  `doubleClick`, which calls one of them twice at once. The shapes of the answers are in
+  `packages/domain/src/api.ts`, which the api writes with and the browser reads.
 
 Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-Treasury fundings on the Transfers screen; the other two failures of §9, the double click and the
-race, as Run it cards of their own; and reconciliation (§10) arrive in later phases. Each will add
-its entry here when it lands.
+Treasury fundings on the Transfers screen; the last failure of §9, the race, as a Run it card of its
+own; and reconciliation (§10) arrive in later phases. Each will add its entry here when it lands.

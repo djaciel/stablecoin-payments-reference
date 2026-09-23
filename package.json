@@ -15,7 +15,9 @@
     "test:db": "vitest run --config vitest.db.config.mts",
     "db:migrate": "tsx packages/db/src/migrate.ts",
     "ledger:seed": "tsx scripts/ledger-seed.ts",
-    "experiment:crash": "tsx scripts/experiments/crash.ts"
+    "experiment:crash": "tsx scripts/experiments/crash.ts",
+    "experiment:double-click": "tsx scripts/experiments/double-click.ts",
+    "experiment:stuck": "tsx scripts/experiments/stuck.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import type { AuditStep, Experiments, Payables, PaymentTimeline, PaymentView } from '@payments/domain'
-import { died, field, get, heading, post, put, section, step, waitUntilResting } from './harness'
+import type { AuditStep, Experiments, PaymentTimeline, PaymentView } from '@payments/domain'
+import { died, field, heading, nothingElseInFlight, post, put, section, step, waitUntilResting, writeOwnInvoice } from './harness'
 
 /**
  * §9's crash, end to end: arm the flag, pay a small invoice of this script's own, and let the
@@ -28,6 +28,7 @@ const WORKER = 'stablecoin-payments-reference-worker-1'
 
 async function main(): Promise<void> {
   heading(NAME, 'the worker dies after signing, and the payment finishes itself')
+  await nothingElseInFlight()
 
   const before = workerLife()
   section('The worker before the run')
@@ -56,17 +57,8 @@ async function main(): Promise<void> {
 
 /** The door the Pay button presses: an invoice of this run's own, then one `POST /payments`. */
 async function payOwnInvoice(): Promise<string> {
-  const partner = (await get<Payables>('/payables')).partners[0]
-  if (partner === undefined) {
-    throw new Error('there is no partner to invoice. Add one on /admin/partners.')
-  }
-  const invoice = (await post<Payables>('/payables', { partnerId: partner.id, amount: AMOUNT, description: DESCRIPTION })).payables[0]
-  if (invoice === undefined) {
-    throw new Error('the api did not answer with the invoice it had just written')
-  }
-  step(`invoice for ${AMOUNT} USDC to ${partner.name}`)
-
-  const payment = await post<PaymentView>('/payments', { payableId: invoice.id }, { 'idempotency-key': crypto.randomUUID() })
+  const payableId = await writeOwnInvoice(AMOUNT, DESCRIPTION)
+  const payment = await post<PaymentView>('/payments', { payableId }, { 'idempotency-key': crypto.randomUUID() })
   if (payment.status === 'FAILED') {
     throw new Error(`the payment was refused: ${payment.reason ?? 'no reason given'}`)
   }

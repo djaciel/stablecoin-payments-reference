@@ -72,11 +72,32 @@ export function payReceivable(receivableId: string): Promise<PartnerPaymentRecei
  * own sentence when it sent one.
  */
 export async function payPayable(payableId: string, idempotencyKey: string): Promise<PaymentView> {
+  return (await postPayment(payableId, idempotencyKey)).payment
+}
+
+/** One answer to `POST /payments`, code and all: which call recorded the payment is in the code. */
+export interface PaymentAnswer {
+  readonly code: number
+  readonly payment: PaymentView
+}
+
+/**
+ * §9's double click: the same invoice paid twice at the same instant, with ONE key. The two
+ * requests are in flight before either answers (nothing is awaited between them), which is the
+ * only thing that makes this a double click and not two payments in a row. Both answers come
+ * back with their status code, because the codes are the evidence: one recorded the payment
+ * (201), the other found it already there and answered with it (200).
+ */
+export function doubleClick(payableId: string, idempotencyKey: string): Promise<[PaymentAnswer, PaymentAnswer]> {
+  return Promise.all([postPayment(payableId, idempotencyKey), postPayment(payableId, idempotencyKey)])
+}
+
+async function postPayment(payableId: string, idempotencyKey: string): Promise<PaymentAnswer> {
   const response = await write('POST', '/payments', { payableId }, { 'idempotency-key': idempotencyKey })
   if (!response.ok && response.status !== 422) {
     throw new Error(await refusalMessage(response))
   }
-  return (await response.json()) as PaymentView
+  return { code: response.status, payment: (await response.json()) as PaymentView }
 }
 
 export function getPayments(): Promise<Payments> {

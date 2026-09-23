@@ -1,5 +1,5 @@
 import { rpcHost } from '@payments/chain'
-import type { PaymentSummary, PaymentTimeline } from '@payments/domain'
+import type { LedgerFigures, Payables, PaymentSummary, PaymentTimeline, Payments } from '@payments/domain'
 
 /**
  * What every `pnpm experiment:*` command runs on: the api client it drives the demo with, and
@@ -27,19 +27,82 @@ export function put<T>(path: string, body: unknown): Promise<T> {
   return call<T>('PUT', path, body)
 }
 
+/** What a call answered when the code is part of the evidence: the double click's 201 and 200. */
+export interface Answer<T> {
+  readonly code: number
+  readonly body: T
+}
+
+/**
+ * A `POST` that hands the status code back with the body. A refusal at the door (422) is an answer
+ * too, the way the browser's client reads it: the api recorded that payment as FAILED and its body
+ * says why. Anything else still throws.
+ */
+export async function postAnswering<T>(path: string, body: unknown, headers: Record<string, string>): Promise<Answer<T>> {
+  const answer = await ask<T>('POST', path, body, headers)
+  if (answer.code >= 300 && answer.code !== 422) {
+    throw refusal('POST', path, answer)
+  }
+  return answer
+}
+
 /** A refusal comes back as the api's own sentence, which is what the person running this needs. */
 async function call<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
+  const answer = await ask<T>(method, path, body, headers)
+  if (answer.code >= 300) {
+    throw refusal(method, path, answer)
+  }
+  return answer.body
+}
+
+async function ask<T>(method: string, path: string, body: unknown, headers: Record<string, string>): Promise<Answer<T>> {
   const response = await fetch(`${apiUrl()}${path}`, {
     method,
     headers: { 'content-type': 'application/json', ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
   const answer: unknown = await response.json().catch(() => undefined)
-  if (!response.ok) {
-    const message = typeof answer === 'object' && answer !== null ? (answer as { message?: unknown }).message : undefined
-    throw new Error(`${method} ${path} answered ${String(response.status)}: ${typeof message === 'string' ? message : 'no reason given'}`)
+  return { code: response.status, body: answer as T }
+}
+
+function refusal(method: string, path: string, answer: Answer<unknown>): Error {
+  const message = typeof answer.body === 'object' && answer.body !== null ? (answer.body as { message?: unknown }).message : undefined
+  return new Error(`${method} ${path} answered ${String(answer.code)}: ${typeof message === 'string' ? message : 'no reason given'}`)
+}
+
+/** The three figures the books show above the invoices, from the screen's own read. */
+export async function books(): Promise<LedgerFigures> {
+  return (await get<Payables>('/payables')).ledger
+}
+
+/**
+ * The invoice a run writes for itself, to the first partner on the screen: the same door the Break
+ * it cards press, and the amount stays small because this is real testnet money.
+ */
+export async function writeOwnInvoice(amount: string, description: string): Promise<string> {
+  const partner = (await get<Payables>('/payables')).partners[0]
+  if (partner === undefined) {
+    throw new Error('there is no partner to invoice. Add one on /admin/partners.')
   }
-  return answer as T
+  const invoice = (await post<Payables>('/payables', { partnerId: partner.id, amount, description })).payables[0]
+  if (invoice === undefined) {
+    throw new Error('the api did not answer with the invoice it had just written')
+  }
+  step(`invoice for ${amount} USDC to ${partner.name}`)
+  return invoice.id
+}
+
+/**
+ * A run wants the demo to itself. A command that breaks something breaks it for every payment in
+ * flight (a killed worker costs each of them one of its five attempts, an armed flag catches
+ * whatever moves next), and one that breaks nothing still needs its evidence to be about its own
+ * payment. So a run refuses to start while a payment is moving; REVIEW and the ends are resting.
+ */
+export async function nothingElseInFlight(): Promise<void> {
+  const moving = (await get<Payments>('/payments')).payments.find((payment) => !isResting(payment))
+  if (moving !== undefined) {
+    throw new Error(`${moving.reference} is still ${moving.status}: wait until nothing else is moving, then run this again`)
+  }
 }
 
 /** How often the timeline is asked for, and how long before a script stops waiting for an end. */
