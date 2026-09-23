@@ -15,7 +15,7 @@ export type ItemOutcome = 'ok' | 'explained' | 'mismatch' | 'unchecked'
 
 /** One line of a run: what was checked, what it costs the comparison, and why, in words. */
 export interface ReconciliationItem {
-  readonly subjectType: 'payment' | 'deposit'
+  readonly subjectType: 'payment' | 'deposit' | 'global'
   readonly subjectId: string
   readonly outcome: ItemOutcome
   /** Books minus chain at B. Null when this item contributes nothing. */
@@ -47,6 +47,8 @@ export interface DepositFacts {
   readonly blockNumber: bigint
   readonly status: string
   readonly matchedBy: string | null
+  /** The watcher's own last word when a second look at the chain disagreed with this row. */
+  readonly mismatchedReason: string | null
 }
 
 /** One ledger transaction as the check reads it: its kind, its amount and its evidence. */
@@ -280,6 +282,12 @@ export function checkDeposit(money: DepositFacts, ledger: readonly LedgerFacts[]
     if (ledger.length > 0) {
       return item('mismatch', `it is not credited, and yet the books hold ${kindsOf(ledger)} for it`)
     }
+    // The one state where the system already knows something is wrong: the watcher looked again
+    // and the chain no longer backed this row up. No number goes with it, because the row's own
+    // amount and block are exactly what could not be confirmed.
+    if (money.mismatchedReason !== null) {
+      return item('mismatch', `${seen}, and the watcher's second look at the chain disagreed: ${asMoney(money.mismatchedReason)}`)
+    }
     // Whether this is a difference depends entirely on which side of the run's block it falls,
     // so with no block pinned the question cannot be put at all.
     if (block === undefined) {
@@ -325,6 +333,118 @@ export function checkDeposit(money: DepositFacts, ledger: readonly LedgerFacts[]
   return item('ok', `${formatMinor(money.amountMinor)} arrived at ${money.depositAddress} in block ${money.blockNumber.toString()} and is credited${attribution}`)
 }
 
+/** The three accounts with a counterpart on the chain. Nothing else is in the identity. */
+export interface BookFigures {
+  readonly available: bigint
+  readonly reserved: bigint
+  readonly deposits: bigint
+}
+
+/** One watched address and what the chain held at it, at B — or why that could not be read. */
+export interface AddressBalance {
+  readonly address: string
+  readonly label: string
+  readonly amountMinor?: bigint
+  readonly why?: string
+}
+
+/** What the global item is about, spelled out rather than coded: it is also its `subject_id`. */
+export const WHOLE_TREASURY = 'treasury + deposit addresses'
+
+/**
+ * Article section 10's second check, and the one the phase exists for: the money the books say
+ * the company has, against the stablecoin it holds on chain at one fixed block, with what was in
+ * flight at that block subtracted rather than argued about.
+ *
+ *     books − chain at B − what the items above explain = 0
+ *
+ * The middle term is a sum of the deltas the per-payment and per-deposit items already computed;
+ * nothing is recomputed here, so a difference can never be counted twice.
+ */
+export function checkGlobal(
+  books: BookFigures,
+  balances: readonly AddressBalance[],
+  items: readonly ReconciliationItem[],
+  block: bigint | undefined,
+): ReconciliationItem {
+  const booksTotal = books.available + books.reserved + books.deposits
+  const explained = items.reduce((total, item) => total + (item.deltaMinor ?? 0n), 0n)
+  const item = (outcome: ItemOutcome, detail: string, evidence?: Record<string, unknown>): ReconciliationItem => ({
+    subjectType: 'global',
+    subjectId: WHOLE_TREASURY,
+    outcome,
+    // The identity is not a movement: what it carries is a remainder, and that lives in `detail`.
+    deltaMinor: null,
+    detail,
+    ...(evidence === undefined ? {} : { evidence }),
+  })
+
+  if (block === undefined) {
+    return item('unchecked', 'this run pinned no block, so what the company holds on chain cannot be compared with its books')
+  }
+  // Partitioned once, so the guard below and the sum further down cannot disagree: an address the
+  // chain did not answer for is simply not in `held`, and nothing later can read it as a zero the
+  // identity would then blame on the books.
+  const held = balances.flatMap((balance) =>
+    balance.amountMinor === undefined ? [] : [{ address: balance.address, label: balance.label, amountMinor: balance.amountMinor }],
+  )
+  const unreadable = balances.filter((balance) => balance.amountMinor === undefined)
+  const first = unreadable[0]
+  if (first !== undefined) {
+    // One address is enough to name the problem and the rest are counted: a node that is behind
+    // refuses every address with the same sentence, and a demo may watch a dozen of them.
+    return item(
+      'unchecked',
+      `what the company holds on chain could not be read at block ${block.toString()}. ${first.label} (${first.address}): ${first.why ?? 'not read'}${andMore(unreadable.length - 1, 'the same way')}`,
+    )
+  }
+
+  // The other half of the same honesty, and the one that is easy to miss: an item the chain could
+  // not answer for carries no delta, so its difference would silently drop out of the sum and turn
+  // up as a remainder. A chain that did not answer is never a mismatch, so the identity is not
+  // computed at all.
+  const unanswered = items.filter((movement) => movement.outcome === 'unchecked')
+  const unknown = unanswered[0]
+  if (unknown !== undefined) {
+    return item(
+      'unchecked',
+      `what is left over cannot be told at block ${block.toString()}: the chain did not answer for ${unknown.subjectId}${andMore(unanswered.length - 1, 'like it')}, so what they explain is unknown and any remainder would be guesswork`,
+    )
+  }
+
+  const chainTotal = held.reduce((total, balance) => total + balance.amountMinor, 0n)
+  const remainder = booksTotal - chainTotal - explained
+  const evidence = {
+    blockNumber: block.toString(),
+    books: { ...minorFigures(books), total: booksTotal.toString() },
+    chain: {
+      total: chainTotal.toString(),
+      addresses: held.map((balance) => ({ ...balance, amountMinor: balance.amountMinor.toString() })),
+    },
+    explained: explained.toString(),
+    remainder: remainder.toString(),
+  }
+  const totals = `the books hold ${formatMinor(booksTotal)}, the chain held ${formatMinor(chainTotal)} at block ${block.toString()}, and what was in flight explains ${formatMinor(explained)}`
+
+  if (remainder === 0n) {
+    return item('ok', `${totals}: nothing is left over`, evidence)
+  }
+  const leans =
+    remainder > 0n
+      ? `the books hold ${formatMinor(remainder)} more than the chain and the movements explain`
+      : `the chain holds ${formatMinor(-remainder)} more than the books and the movements explain`
+  return item('mismatch', `${totals}, and ${leans}`, evidence)
+}
+
+/** Name one and count the rest: a node that is not answering says the same thing about everything. */
+function andMore(rest: number, like: string): string {
+  return rest > 0 ? `, and ${String(rest)} more ${like}` : ''
+}
+
+function minorFigures(books: BookFigures): Record<string, string> {
+  return { available: books.available.toString(), reserved: books.reserved.toString(), deposits: books.deposits.toString() }
+}
+
 /**
  * What the books must say, checked as a set: those kinds, each exactly once, each for the amount.
  * Returns the sentence naming what was expected and what was found, or nothing when they agree.
@@ -366,16 +486,24 @@ export function checksummed(address: string): Address | undefined {
  * sentence saying what was found instead when it is not. A settled payment must have it, a
  * reverted one must not, and a deposit must have it at the exact position its row recorded.
  *
- * The chain package writes its amounts in minor units, and every standalone run of digits in that
- * message is one; the lookarounds keep the substitution off the digits inside an address or a hash.
  */
 function transferMissing(logs: LandedTransaction['logs'], expected: ExpectedTransfer): string | undefined {
   try {
     findSettlementLog(logs, expected)
     return undefined
   } catch (mismatch) {
-    return chainErrorMessage(mismatch).replace(/(?<![\w.])\d+(?![\w.])/g, (amount) => formatMinor(BigInt(amount)))
+    return asMoney(chainErrorMessage(mismatch))
   }
+}
+
+/**
+ * The chain package writes its amounts in minor units, and every standalone run of digits in one
+ * of its messages is one; the lookarounds keep the substitution off the digits inside an address
+ * or a hash. Used on anything written by that package and then shown to a person, including the
+ * sentence the watcher stored when it refused to credit a deposit.
+ */
+function asMoney(message: string): string {
+  return message.replace(/(?<![\w.])\d+(?![\w.])/g, (amount) => formatMinor(BigInt(amount)))
 }
 
 function kindsOf(facts: readonly LedgerFacts[]): string {

@@ -6,7 +6,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { createPayment } from '../../apps/api/src/payments/create-payment'
 import { recordDetected, settleDeposit } from '../../apps/worker/src/deposits'
 import { reconcile, type ChainFacts } from '../../apps/worker/src/reconcile'
-import type { ReconciliationItem } from '../../apps/worker/src/reconcile-items'
+import { WHOLE_TREASURY, type ReconciliationItem } from '../../apps/worker/src/reconcile-items'
 import { reversePayment } from '../../apps/worker/src/reverse'
 import { settlePayment } from '../../apps/worker/src/settle'
 import { resetDatabase, seedInvoices, seedPartner, seedWatchedAddress, testPool, withClient } from './helpers/database'
@@ -39,6 +39,9 @@ const PAYMENT_HASH = '0x97a4d339d0f1f82f7bde40e64c71fc2ccd8305a7fdde8add2ef2dec4
 const DEPOSIT_HASH = '0x4241c0af0c2828d6f118fd99b035f7b6840dea186c3e6b0ef591cbf1f9eee394' as const
 const DEPOSIT_LOG_INDEX = 25
 
+/** The smallest difference the identity can be wrong by, and still be wrong. */
+const ONE_CENT = toMinor(1) / 100n
+
 const pool = testPool()
 let payableId: string
 let northwind: string
@@ -66,18 +69,88 @@ describe('a reconciliation run', () => {
     // reached the books and never reached the chain, so both sides agree by having nothing.
     const refused = await refusedAtTheDoor()
 
-    const run = await reconcile(pool, stubChain({ [PAYMENT_HASH]: paidReceipt(), [DEPOSIT_HASH]: arrivedReceipt(toMinor(1)) }))
+    const receipts = { [PAYMENT_HASH]: paidReceipt(), [DEPOSIT_HASH]: arrivedReceipt(toMinor(1)) }
+    const run = await reconcile(pool, stubChain(receipts, { [TREASURY]: toMinor(9_000), [NORTHWIND_DEPOSIT]: toMinor(1) }))
 
     expect(run.outcome).toBe('clean')
     expect(run.blockNumber).toBe(CURSOR)
-    expect(outcomesOf(run.items)).toEqual({ [reference]: 'ok', [refused]: 'ok', [depositId]: 'ok' })
+    expect(outcomesOf(run.items)).toEqual({ [reference]: 'ok', [refused]: 'ok', [depositId]: 'ok', [WHOLE_TREASURY]: 'ok' })
     expect(itemFor(run.items, refused).detail).toBe('refused at the door: no money moved and nothing was signed')
     // Null, not zero: a delta is the money in flight, and nothing here is.
-    expect(run.items.map((item) => item.deltaMinor)).toEqual([null, null, null])
+    expect(run.items.map((item) => item.deltaMinor)).toEqual([null, null, null, null])
 
     // Written once, whole: one run row, and every item on it.
     const stored = await storedRun()
-    expect(stored).toEqual({ runs: 1, items: 3, outcome: 'clean', block: CURSOR.toString(), checked: 3, explained: 0, mismatched: 0 })
+    expect(stored).toEqual({ runs: 1, items: 4, outcome: 'clean', block: CURSOR.toString(), checked: 4, explained: 0, mismatched: 0 })
+  })
+
+  /** §10's "compare them at a fixed block, so the payments in flight explain the difference". */
+  it('is still clean when a payment in flight explains the whole difference', async () => {
+    const reference = await reserveAndSend()
+
+    // The books hold 10,000 (9,000 available and the 1,000 reserved for this payment); the chain
+    // moved that 1,000 in a block at or below B. Nothing is wrong: it is a payment in flight.
+    const run = await reconcile(pool, stubChain({ [PAYMENT_HASH]: paidReceipt() }, { [TREASURY]: toMinor(9_000) }))
+
+    expect(run.outcome).toBe('clean')
+    const inFlight = itemFor(run.items, reference)
+    expect(inFlight.outcome).toBe('explained')
+    expect(inFlight.deltaMinor).toBe(toMinor(1_000))
+    expect(inFlight.detail).toContain(`the transfer landed in block ${PAYMENT_BLOCK.toString()}`)
+
+    const identity = itemFor(run.items, WHOLE_TREASURY)
+    expect(identity.outcome).toBe('ok')
+    expect(identity.deltaMinor).toBeNull()
+    expect(identity.evidence).toMatchObject({
+      blockNumber: CURSOR.toString(),
+      books: { available: toMinor(9_000).toString(), reserved: toMinor(1_000).toString(), deposits: '0', total: toMinor(10_000).toString() },
+      chain: { total: toMinor(9_000).toString() },
+      explained: toMinor(1_000).toString(),
+      remainder: '0',
+    })
+  })
+
+  /**
+   * The failure this phase promises never to produce: a chain that did not answer reported as
+   * "something is unexplained". The unread receipt belongs to the one payment whose difference
+   * would have balanced the identity, so without the guard the remainder is its whole amount.
+   */
+  it('says the chain did not answer instead of flagging a mismatch', async () => {
+    const reference = await reserveAndSend()
+
+    const node = { ...stubChain({}, { [TREASURY]: toMinor(9_000) }), receiptOf: () => Promise.reject(new Error('the node did not answer')) }
+    const run = await reconcile(pool, node)
+
+    expect(run.outcome).toBe('incomplete')
+    expect(run.items.map((item) => item.outcome)).not.toContain('mismatch')
+    expect(itemFor(run.items, reference).outcome).toBe('unchecked')
+
+    const identity = itemFor(run.items, WHOLE_TREASURY)
+    expect(identity.outcome).toBe('unchecked')
+    expect(identity.detail).toContain(reference)
+    expect(identity.detail).toContain('cannot be told')
+    // No figures either: a remainder nobody can compute must not be written down as one.
+    expect(identity.evidence).toBeUndefined()
+    expect(await storedRun()).toMatchObject({ outcome: 'incomplete', checked: 2, mismatched: 0 })
+  })
+
+  it('flags what nothing explains, with all four numbers in the sentence', async () => {
+    await settledPayment()
+
+    // The same world with nothing in flight, and a treasury one cent short of what the books say.
+    const short = toMinor(9_000) - ONE_CENT
+    const run = await reconcile(pool, stubChain({ [PAYMENT_HASH]: paidReceipt() }, { [TREASURY]: short }))
+
+    expect(run.outcome).toBe('mismatch')
+    const identity = itemFor(run.items, WHOLE_TREASURY)
+    expect(identity.outcome).toBe('mismatch')
+    // Books, chain, what was in flight, and what is left over, as money rather than minor units.
+    expect(identity.detail).toContain(formatMinor(toMinor(9_000)))
+    expect(identity.detail).toContain(formatMinor(short))
+    expect(identity.detail).toContain(formatMinor(0n))
+    expect(identity.detail).toContain(formatMinor(ONE_CENT))
+    expect(identity.detail).toContain('the books hold')
+    expect(await storedRun()).toMatchObject({ outcome: 'mismatch', checked: 2, mismatched: 1 })
   })
 
   it('will not say nothing was signed about a refused payment whose row carries a hash', async () => {
@@ -88,7 +161,8 @@ describe('a reconciliation run', () => {
     // it cannot exist at all.
     await pool.query(`UPDATE payments SET tx_hash = $2, signed_tx = '0x02', nonce = 9 WHERE reference = $1`, [refused, PAYMENT_HASH])
 
-    const run = await reconcile(pool, stubChain({}))
+    // The books and the chain agree at 10,000, so the only thing this run can flag is that row.
+    const run = await reconcile(pool, stubChain({}, { [TREASURY]: toMinor(10_000) }))
 
     const flagged = itemFor(run.items, refused)
     expect(flagged.outcome).toBe('mismatch')
@@ -103,24 +177,25 @@ describe('a reconciliation run', () => {
     // The receipt succeeded and carries a Transfer, for somebody else's amount: section 10's
     // "a settled payment with no event", which a status check alone would call fine.
     const wrongAmount = paidReceipt(toMinor(999))
-    const run = await reconcile(pool, stubChain({ [PAYMENT_HASH]: wrongAmount, [DEPOSIT_HASH]: arrivedReceipt(toMinor(1)) }))
+    const receipts = { [PAYMENT_HASH]: wrongAmount, [DEPOSIT_HASH]: arrivedReceipt(toMinor(1)) }
+    const run = await reconcile(pool, stubChain(receipts, { [TREASURY]: toMinor(9_000), [NORTHWIND_DEPOSIT]: toMinor(1) }))
 
     expect(run.outcome).toBe('mismatch')
-    expect(outcomesOf(run.items)).toEqual({ [reference]: 'mismatch', [depositId]: 'ok' })
+    expect(outcomesOf(run.items)).toEqual({ [reference]: 'mismatch', [depositId]: 'ok', [WHOLE_TREASURY]: 'ok' })
     const flagged = itemFor(run.items, reference)
     expect(flagged.detail).toContain('settled in the books')
     // Both numbers, as money rather than as minor units.
     expect(flagged.detail).toContain(formatMinor(toMinor(1_000)))
     expect(flagged.detail).toContain(formatMinor(toMinor(999)))
     expect(flagged.detail).not.toContain(toMinor(1_000).toString())
-    expect(await storedRun()).toMatchObject({ outcome: 'mismatch', checked: 2, mismatched: 1 })
+    expect(await storedRun()).toMatchObject({ outcome: 'mismatch', checked: 3, mismatched: 1 })
   })
 
   it('flags a release whose proof names a transaction that did not revert', async () => {
     const reference = await reversedPayment()
 
     // The books released the money on the word of this hash. The chain says it succeeded.
-    const run = await reconcile(pool, stubChain({ [PAYMENT_HASH]: paidReceipt() }))
+    const run = await reconcile(pool, stubChain({ [PAYMENT_HASH]: paidReceipt() }, { [TREASURY]: toMinor(10_000) }))
 
     expect(run.outcome).toBe('mismatch')
     const flagged = itemFor(run.items, reference)
@@ -211,11 +286,19 @@ async function settledDeposit(amount: MinorUnits): Promise<string> {
   return id
 }
 
-/** The chain port with no network behind it: the run asks it exactly two questions. */
-function stubChain(receipts: Readonly<Record<string, LandedTransaction>>): ChainFacts {
+/**
+ * The chain port with no network behind it: the run asks it exactly three questions. The
+ * balances are what the world holds at B, so the identity is set here and not asserted from the
+ * books — which is the whole point of checking one against the other.
+ */
+function stubChain(
+  receipts: Readonly<Record<string, LandedTransaction>>,
+  balances: Readonly<Record<string, MinorUnits>> = {},
+): ChainFacts {
   return {
     finalBlock: () => Promise.resolve(FINAL_BLOCK),
     receiptOf: (hash) => Promise.resolve(receipts[hash]),
+    usdcBalanceAt: (address) => Promise.resolve(balances[address] ?? 0n),
   }
 }
 

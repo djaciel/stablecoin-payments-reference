@@ -1,6 +1,6 @@
 import { explorerTransactionUrl } from '@payments/chain'
 import type { Pool } from '@payments/db'
-import type { ReconciliationItemView, ReconciliationRunSummary, ReconciliationRunView } from '@payments/domain'
+import type { ReconciliationIdentity, ReconciliationItemView, ReconciliationRunSummary, ReconciliationRunView } from '@payments/domain'
 import { formatMinor } from '@payments/ledger'
 
 /**
@@ -37,7 +37,8 @@ export async function findRun(pool: Pool, id: string): Promise<ReconciliationRun
     'SELECT subject_type, subject_id, outcome, delta_minor, detail, evidence FROM reconciliation_items WHERE run_id = $1 ORDER BY id',
     [id],
   )
-  return { run: toRunSummary(row), items: items.rows.map(toItemView) }
+  const identity = toIdentity(items.rows.find((item) => item.subject_type === 'global'))
+  return { run: toRunSummary(row), items: items.rows.map(toItemView), ...(identity === undefined ? {} : { identity }) }
 }
 
 interface RunRow {
@@ -58,7 +59,50 @@ interface ItemRow {
   readonly outcome: ReconciliationItemView['outcome']
   readonly delta_minor: string | null
   readonly detail: string
-  readonly evidence: { readonly txHash?: string } | null
+  readonly evidence: (ItemEvidence & Partial<IdentityEvidence>) | null
+}
+
+interface ItemEvidence {
+  readonly txHash?: string
+}
+
+/** The global item's evidence, as the worker wrote it: minor units, like everything stored. */
+interface IdentityEvidence {
+  readonly books: { readonly available: string; readonly reserved: string; readonly deposits: string; readonly total: string }
+  readonly chain: { readonly total: string; readonly addresses: readonly { address: string; label: string; amountMinor: string }[] }
+  readonly explained: string
+  readonly remainder: string
+}
+
+/**
+ * The three lines the screen reads out loud, taken from the run's own record and never from a
+ * fresh read of the books: the figures have to be the ones that block was compared against.
+ *
+ * Absent when the run has no figures to show — no block pinned, or the chain unreadable at it.
+ */
+function toIdentity(item: ItemRow | undefined): ReconciliationIdentity | undefined {
+  const evidence = item?.evidence
+  if (evidence?.books === undefined || evidence.chain === undefined || evidence.explained === undefined || evidence.remainder === undefined) {
+    return undefined
+  }
+  return {
+    books: {
+      available: money(evidence.books.available),
+      reserved: money(evidence.books.reserved),
+      deposits: money(evidence.books.deposits),
+      total: money(evidence.books.total),
+    },
+    chain: {
+      total: money(evidence.chain.total),
+      addresses: evidence.chain.addresses.map((held) => ({ address: held.address, label: held.label, amount: money(held.amountMinor) })),
+    },
+    explained: money(evidence.explained),
+    remainder: money(evidence.remainder),
+  }
+}
+
+function money(minorUnits: string): string {
+  return formatMinor(BigInt(minorUnits))
 }
 
 function toRunSummary(row: RunRow): ReconciliationRunSummary {

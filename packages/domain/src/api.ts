@@ -437,7 +437,7 @@ export interface ReconciliationRunSummary {
 /** One thing a run checked: a payment, a deposit, or the whole treasury. */
 export interface ReconciliationItemView {
   readonly subject: 'payment' | 'deposit' | 'global'
-  /** A payment reference, a deposit id, or `global`. */
+  /** A payment reference, a deposit id, or what the identity covers: `treasury + deposit addresses`. */
   readonly subjectId: string
   readonly outcome: 'ok' | 'explained' | 'mismatch' | 'unchecked'
   /** Books minus chain at the run's block, in whole USDC. Absent when it contributes nothing. */
@@ -448,10 +448,30 @@ export interface ReconciliationItemView {
   readonly explorerUrl?: string
 }
 
+/** One address the run compared, and what the chain held at it at the run's block. */
+export interface ReconciliationAddressView {
+  readonly address: string
+  readonly label: string
+  readonly amount: string
+}
+
+/**
+ * The one identity, exactly as the run recorded it: books, chain at the block it pinned, what
+ * was in flight, and what is left over. Everything in whole USDC.
+ */
+export interface ReconciliationIdentity {
+  readonly books: { readonly available: string; readonly reserved: string; readonly deposits: string; readonly total: string }
+  readonly chain: { readonly total: string; readonly addresses: readonly ReconciliationAddressView[] }
+  readonly explained: string
+  readonly remainder: string
+}
+
 /** What `GET /reconciliation/runs/:id` answers: one run and every line of it. */
 export interface ReconciliationRunView {
   readonly run: ReconciliationRunSummary
   readonly items: readonly ReconciliationItemView[]
+  /** Absent when the run pinned no block, or could not read what the company holds at it. */
+  readonly identity?: ReconciliationIdentity
 }
 
 /** What `GET /reconciliation/runs` answers: the latest runs, newest first. */

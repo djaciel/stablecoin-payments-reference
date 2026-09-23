@@ -11,7 +11,7 @@
  * variable.
  */
 
-import type { Allowlist, Deposits, Experiments, Health, PartnerPaymentReceipt, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, RaceResult, Receivables, Treasury } from '@payments/domain'
+import type { Allowlist, Deposits, Experiments, Health, PartnerPaymentReceipt, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, RaceResult, Receivables, ReconciliationRunView, ReconciliationRuns, Treasury } from '@payments/domain'
 
 const API_BASE_PATH = '/api'
 
@@ -170,6 +170,24 @@ export function fundPartnerWallet(): Promise<PartnerWalletFunding> {
  */
 export function runRace(): Promise<RaceResult> {
   return send<RaceResult>('/experiments/race', undefined)
+}
+
+/** The last twenty runs of the check, newest first. Each one carries its counts, not its items. */
+export function getReconciliationRuns(): Promise<ReconciliationRuns> {
+  return read<ReconciliationRuns>('/reconciliation/runs')
+}
+
+/** One run with every line of it, and the three figures it compared. */
+export function getReconciliationRun(id: string): Promise<ReconciliationRunView> {
+  return read<ReconciliationRunView>(`/reconciliation/runs/${encodeURIComponent(id)}`)
+}
+
+/**
+ * Asks for a run now. The api answers 202 as soon as the workflow is started, because a run
+ * takes as long as the chain takes; the screen's next polls are what show it.
+ */
+export function runReconciliation(): Promise<{ startedAs: string; temporalUrl: string }> {
+  return send<{ startedAs: string; temporalUrl: string }>('/reconciliation/run', undefined)
 }
 
 /** The failure-injection flags the Break it screen switches. */

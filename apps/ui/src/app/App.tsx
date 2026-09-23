@@ -6,6 +6,7 @@ import { PartnersScreen } from '../admin/PartnersScreen'
 import { PayablesScreen } from '../admin/PayablesScreen'
 import { PayToAddressScreen } from '../admin/PayToAddressScreen'
 import { ReceivablesScreen } from '../admin/ReceivablesScreen'
+import { ReconciliationScreen } from '../admin/ReconciliationScreen'
 import { StartScreen } from '../admin/StartScreen'
 import { TransfersScreen } from '../admin/TransfersScreen'
 import { getExperiments } from '../api/client'
@@ -47,6 +48,7 @@ export function App() {
             <Route path="transfers" element={<TransfersScreen />} />
             {/* A payment's story has its own address, so an invoice row can link straight to it. */}
             <Route path="transfers/:reference" element={<TransfersScreen />} />
+            <Route path="reconciliation" element={<ReconciliationScreen />} />
             <Route path="break-it" element={<BreakItScreen />} />
           </Route>
           <Route path="/partner" element={<PartnerSide />} />
@@ -102,6 +104,9 @@ function AdminScreens() {
         </NavLink>
         <NavLink to="/admin/transfers" className={navClass}>
           Transfers
+        </NavLink>
+        <NavLink to="/admin/reconciliation" className={navClass}>
+          Reconciliation
         </NavLink>
         {/* Red while a switch is armed, so the demo control says so from wherever you are. */}
         <span className={armed.length > 0 ? 'sub-nav-lab is-armed' : 'sub-nav-lab'}>

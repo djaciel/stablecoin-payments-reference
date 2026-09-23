@@ -32,6 +32,8 @@ export type {
   Payments,
   RaceAttempt,
   RaceResult,
+  ReconciliationAddressView,
+  ReconciliationIdentity,
   ReconciliationItemView,
   ReconciliationRunSummary,
   ReconciliationRunView,

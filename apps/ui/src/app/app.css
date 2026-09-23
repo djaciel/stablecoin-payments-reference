@@ -465,3 +465,20 @@ a {
   border-color: var(--bad);
   color: var(--bad);
 }
+
+/* Section 10's three lines, meant to be read out loud: the label on the left, the arithmetic on
+   the right. Wider than a card's figures, because each line is a sum and then its total. */
+.panel .figures.is-identity {
+  max-width: none;
+  margin-top: 0.9rem;
+}
+
+.is-identity .figure {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0.4rem 1.5rem;
+}
+
+.is-identity dt {
+  min-width: 15rem;
+}

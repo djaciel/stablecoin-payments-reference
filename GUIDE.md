@@ -1000,9 +1000,8 @@ what was asked for, what was recorded, what happened. It reports and never repai
   true. A live system is always clean, so the mismatch is manufactured on the chain's side.
   `tests/db/README.md` indexes the three, next to the invariant they finish proving.
 
-Two things the check deliberately does not look at. **Gas is never posted to the books** and the
-comparison is stablecoin-only, so a fee can never show up as a difference. And the article's rhythm
-is **daily**; here it is every ten minutes, so a reader can watch a run appear on its own.
+One thing the check deliberately does not look at: **gas is never posted to the books**, and the
+comparison is stablecoin-only, so a fee can never show up as a difference.
 
 See it:
 
@@ -1016,6 +1015,53 @@ That last one is the point of the phase: one sentence per payment and per deposi
 ones a naive check would call alerts. A reverted payout says the transaction its proof names really
 reverted in that block, a cancelled one says nothing was ever signed, a payment refused at the door
 says no money moved, and money nobody invoiced says so instead of being flagged.
+
+## Books against the chain at one block (§10)
+
+The second check, and the one finance cares about: everything the company holds, as one number on
+each side. Available plus Reserved plus what has arrived at the deposit addresses, against the
+stablecoin at the treasury and those same addresses at the block the run pinned. What was in flight
+at that block is subtracted rather than argued about, and what is left over must be zero.
+
+- `apps/worker/src/reconcile-items.ts` — `checkGlobal`: the identity itself, in four figures
+  (`books − chain at B − what the items explain = remainder`). It SUMS the deltas the per-payment
+  and per-deposit items already carry, so a difference can never be counted twice.
+- `apps/worker/src/reconcile.ts` — the balances at B, one per watched address, through
+  `ChainFacts.usdcBalanceAt`; the three book figures read inside the same snapshot as the rows; and
+  the retry that a load-balanced node makes necessary. A read that still fails leaves the item
+  `unchecked` and the run `incomplete` — never a mismatch, and never a second look at `latest`.
+- `packages/domain/src/api.ts` — `ReconciliationIdentity`: the four figures as decimal strings,
+  absent when a run has none to show.
+- `apps/api/src/reconciliation/read-reconciliation.ts` — where those figures come from: the global
+  item's own evidence, so the screen shows what that block was compared against and never a fresh
+  read of today's books next to an old block.
+- `apps/ui/src/admin/ReconciliationScreen.tsx` — the screen: the three lines, every movement with
+  its sentence and its onchain evidence, the runs before this one, and **Run now**.
+- `apps/ui/src/app/App.tsx` — the **Reconciliation** tab, after Transfers.
+- `apps/ui/src/api/client.ts` — `getReconciliationRuns`, `getReconciliationRun`,
+  `runReconciliation` (which answers 202: the screen's next poll is what shows the run).
+- `tests/db/reconciliation.db.test.ts` — the three claims that pin §10's fixed block: a payment in
+  flight explains the difference exactly and the run is still clean; a cent nothing explains is a
+  mismatch whose sentence carries all four numbers; and a receipt the chain would not answer for
+  leaves the whole identity `unchecked` rather than unexplained. `tests/db/README.md` indexes them.
+
+Two accounts still have no reader anywhere: `revenue:services` and `expense:services` are in the
+books and in psql, and nowhere else. They are accruals, so they are outside this identity by
+design — like `partner:receivable`, an invoice nobody has paid is not money on any chain.
+
+See it: open `/admin/reconciliation` and press **Run now**. The books and the chain agree, at the
+block the run pinned. Then pay a small invoice on `/admin/payables` and keep pressing Run now while
+it goes through. Around finality there are a few seconds where one side has moved and the other has
+not, and the run explains it instead of flagging it: `+0.02` while the books still hold money the
+chain has already moved, or `-0.02` while the books have settled and the block this run pinned is
+still before the transfer. Either way the run stays clean and the third line adds up. A few seconds,
+because here the watcher's cursor (which fixes the block) and the payment's own finality check both
+move off the same final block; with the article's daily rhythm the same difference is visible all
+day.
+
+```
+curl -s localhost:3000/reconciliation/runs/<id> | jq '.identity'
+```
 
 ## The screens
 
@@ -1039,6 +1085,9 @@ says no money moved, and money nobody invoiced says so instead of being flagged.
 - `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
   Resume, the payments waiting for their time with Cancel next to each one, each payment's story
   step by step, and below them the money that arrived.
+- `apps/ui/src/admin/ReconciliationScreen.tsx` — the books against the chain at one fixed block,
+  in three lines a person can read out loud, then every payment and every deposit with the sentence
+  that explains it, then the runs before this one. **Run now** asks for another.
 - `apps/ui/src/admin/BreakItScreen.tsx` — the failures you can cause on purpose, five cards with
   one Run it each, in the article's order: the double click, the race, the crash after signing and
   the node that does not answer (§9's four), then the revert (§6). The three that inject a fault
@@ -1052,6 +1101,6 @@ Open `http://localhost:5173/admin`.
 
 ## Not here yet
 
-Treasury fundings on the Transfers screen, and the Reconciliation screen with the one global
-identity (books against the chain at a fixed block), arrive in later phases. Each will add its
-entry here when it lands.
+Treasury fundings still have no row of their own on the Transfers screen: the watcher posts them
+and the Start screen shows their result. A later phase decides whether that is a line in `docs/` or
+a row on a screen, and it will add its entry here when it lands.
