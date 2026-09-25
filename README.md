@@ -214,8 +214,9 @@ pnpm test        # the pure tests; no Docker
 pnpm test:db     # against the stack's Postgres, in a payments_test database of its own
 ```
 
-`pnpm test` covers the seed and the key derivation, the rule that decides a transfer happened, and
-the migration runner. `pnpm test:db` covers the ledger's rules and the payment's state changes
+`pnpm test` covers the seed and the key derivation, the rule that decides a transfer happened, the
+migration runner, and that the repo still uses the article's states, account names, reference
+format and figures. `pnpm test:db` covers the ledger's rules and the payment's state changes
 against a real Postgres, concurrent payments included, so a rule someone breaks fails there first.
 
 ## Where to look next
@@ -237,4 +238,4 @@ against a real Postgres, concurrent payments included, so a rule someone breaks 
 
 ## License
 
-MIT.
+MIT, see [LICENSE](LICENSE).

@@ -129,8 +129,8 @@ export async function WatcherWorkflow(): Promise<void> {
 }
 
 /**
- * The dispatcher: every ten seconds, any RESERVED or SENT payment without a running
- * `PaymentWorkflow` gets one. The rule and its query are in `dispatcher.ts`.
+ * The dispatcher: every ten seconds, any RESERVED or SENT payment whose time has come and has no
+ * running `PaymentWorkflow` gets one. The rule and its query are in `dispatcher.ts`.
  */
 export async function DispatcherWorkflow(): Promise<void> {
   await forever('dispatcher', CHAIN_INTERVAL, dispatchPayments)

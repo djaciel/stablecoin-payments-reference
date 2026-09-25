@@ -108,6 +108,8 @@ then sent" below) and the new run signs and sends nothing.
 - `tests/db/race.db.test.ts` — §9's race: two payments of 1,000 against 1,500 at the same
   instant, one reserved, one rejected, available ends at 500. Next to it, a canary that
   proves the test really runs two things at once.
+- `packages/domain/src/vocabulary.test.ts`: the article's words kept true in the repo's own files:
+  the six states, `PAY-` and four digits, the three account names, and the 10,000 / 1,000 / 1,500.
 
 ### When it fails, where is the money? The two release doors (§6)
 
@@ -442,7 +444,8 @@ only that: Created, Reserved, Signed, Sent, Paid, Settled, each with the fact th
 - `packages/ledger/src/audit.ts` — everything the log can say, in one place: who acts, what a row
   is about, each subject's events. Every writer names its rows with these; stored values never change.
 - `apps/api/src/payments/read-payments.ts` — the payment reads: one payment, the latest hundred for
-  the list, and one payment's audit rows plus its invoice's, in one snapshot. No chain reads.
+  the list, and one payment's audit rows plus its invoice's, in one snapshot. No chain reads. The
+  Temporal link is offered only once a run certainly exists (something signed, or in flight and due).
 - `apps/api/src/payments/payments.controller.ts` — `GET /payments` and
   `GET /payments/:reference/timeline` (404 for an unknown reference).
 - `packages/domain/src/api.ts` — `Payments`, `PaymentSummary`, `PaymentTimeline`, `AuditStep`: what

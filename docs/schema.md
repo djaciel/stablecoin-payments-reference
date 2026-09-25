@@ -54,8 +54,10 @@ positive while the company owes.
 | `revenue:services` | internal, no screen reads it | revenue | credit | yes |
 | `demo:partner-funding` | internal, labelled demo scaffolding | expense | debit | yes |
 
-Available, Reserved and Partner debt are the article's three. Reconciliation compares Available +
-Reserved + Deposits with the chain; the other six have no counterpart on the chain.
+Available, Reserved and Partner debt are the article's three. Partner debt is one total for every
+partner: what each one is owed comes from its invoices (the Partners screen), not from an account
+of its own. Reconciliation compares Available + Reserved + Deposits with the chain; the other six
+have no counterpart on the chain.
 
 ## Posting kinds
 

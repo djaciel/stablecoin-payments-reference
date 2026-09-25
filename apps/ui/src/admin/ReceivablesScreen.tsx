@@ -51,8 +51,8 @@ function Books({ ledger }: { readonly ledger: ReceivableFigures }) {
       <p className="card-note">
         An invoice here adds to Partner receivables (Dr <code>partner:receivable</code> / Cr{' '}
         <code>revenue:services</code>): money a partner owes you, written down the moment you invoice it. It is not a
-        payment, so Available and Reserved do not move. They move when the money actually arrives at that partner's
-        deposit address.
+        payment, so no money moves. When the money arrives at that partner's deposit address, Deposits goes up and
+        Partner receivables goes down; Available does not move, because the money stays on that address.
       </p>
     </section>
   )

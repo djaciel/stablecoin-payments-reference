@@ -67,13 +67,23 @@ export async function paymentTimeline(pool: Pool, reference: string): Promise<Pa
           ORDER BY id`,
         [AUDIT_SUBJECTS.payment, reference, AUDIT_SUBJECTS.invoice, payment.payableId],
       )
-      // Only a payment whose money was reserved is ever dispatched: a refused one has no workflow to link.
-      const reserved = steps.rows.some((row) => row.subject_type === AUDIT_SUBJECTS.payment && row.event === PAYMENT_EVENTS.reserved)
-      return { payment, steps: steps.rows.map(toStep), ...(reserved ? { workflowUrl: workflowUrl(reference) } : {}) }
+      return { payment, steps: steps.rows.map(toStep), ...(hasRun(payment, steps.rows) ? { workflowUrl: workflowUrl(reference) } : {}) }
     })
   } finally {
     client.release()
   }
+}
+
+const IN_FLIGHT: readonly PaymentView['status'][] = ['RESERVED', 'SENT', 'REVIEW']
+
+/**
+ * Link to Temporal only when a run certainly exists: something was signed, or the payment is in
+ * flight and its time has come. A refused payment, or a scheduled one cancelled before its time, never ran.
+ */
+function hasRun(payment: PaymentSummary, steps: readonly AuditRow[]): boolean {
+  const signed = steps.some((row) => row.subject_type === AUDIT_SUBJECTS.payment && row.event === PAYMENT_EVENTS.signed)
+  const due = payment.executeAt === undefined || Date.parse(payment.executeAt) <= Date.now()
+  return signed || (IN_FLIGHT.includes(payment.status) && due)
 }
 
 export function toView(row: PaymentRow): PaymentView {

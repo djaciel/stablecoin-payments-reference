@@ -411,7 +411,7 @@ export interface PaymentTimeline {
   readonly steps: readonly AuditStep[]
   /**
    * The payment's runs in the Temporal UI, found by workflow id: a payment can have more than one.
-   * Absent when it was refused before its money was reserved, because no workflow ever ran for it.
+   * Absent when no workflow ever ran for it: refused at the door, or scheduled and not yet due or cancelled.
    */
   readonly workflowUrl?: string
 }
