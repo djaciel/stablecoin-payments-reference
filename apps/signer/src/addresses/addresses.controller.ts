@@ -29,7 +29,7 @@ export class AddressesController {
    *
    * The body is validated by hand. Nest's `ValidationPipe` reads the DTO class from
    * decorator metadata that tsx does not emit, so a `@Body() dto: Dto` here would be
-   * accepted without a single check running (spec assumption 18).
+   * accepted without a single check running.
    */
   // POST because the index travels in a body, not because anything is created: the
   // address existed the moment the seed did. 200, therefore, not Nest's default 201.

@@ -3,32 +3,21 @@ import type { PoolClient } from 'pg'
 /** Where a client stands: outside a transaction, inside a healthy one, or inside a dead one. */
 export type TransactionState = 'none' | 'open' | 'aborted'
 
-const NOT_IN_TRANSACTION = '25P01'
-const IN_FAILED_TRANSACTION = '25P02'
-
 /**
- * Asks Postgres what state the client's transaction is in.
- *
- * `SAVEPOINT` is the probe, and it answers all three cases in one round trip: it succeeds
- * inside a healthy transaction, fails with `25P01` outside one, and fails with `25P02` when
- * the transaction is still open but already aborted. Releasing it immediately leaves nothing
- * behind. There is no cheaper question — `pg_current_xact_id_if_assigned()` answers a
- * different one, since a transaction that has not written yet has no id.
+ * Reads where the client's transaction stands: `pg` keeps the status Postgres sends after every
+ * statement (`I` idle, `T` open, `E` aborted).
  */
 export async function transactionState(client: PoolClient): Promise<TransactionState> {
-  try {
-    await client.query('SAVEPOINT transaction_probe; RELEASE SAVEPOINT transaction_probe')
+  // A failed query rejects before its status arrives; the empty query waits for it, errors never.
+  await client.query('')
+  const status = client.getTransactionStatus()
+  if (status === 'T') {
     return 'open'
-  } catch (error) {
-    const code = (error as { code?: string }).code
-    if (code === NOT_IN_TRANSACTION) {
-      return 'none'
-    }
-    if (code === IN_FAILED_TRANSACTION) {
-      return 'aborted'
-    }
-    throw error
   }
+  if (status === 'E') {
+    return 'aborted'
+  }
+  return 'none'
 }
 
 /** Is this client inside a transaction the caller opened, and is that transaction usable? */

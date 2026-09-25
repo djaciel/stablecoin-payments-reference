@@ -34,7 +34,7 @@ export class PaymentsController {
     @Res({ passthrough: true }) response: StatusCodeSetter,
   ): Promise<PaymentView> {
     // Validated by hand, one condition and one 400 each: tsx emits no decorator metadata, so
-    // `ValidationPipe` would check nothing here (spec assumption 18).
+    // `ValidationPipe` would check nothing here.
     const request = { idempotencyKey: readIdempotencyKey(header), payableId: readPayableId(body), executeAt: readExecuteAt(body) }
 
     const outcome = await this.inOneTransaction((client) => createPayment(client, request))

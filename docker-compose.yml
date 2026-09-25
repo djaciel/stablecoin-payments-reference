@@ -34,8 +34,8 @@ services:
     environment:
       # Temporal keeps its own databases in the same Postgres instance, and connects with
       # its own role (see docker/postgres-init/01-roles.sql). That role can create its two
-      # databases and cannot connect to `payments` at all: the separation the spec asks for
-      # is enforced by permissions, not by everyone agreeing to stay in their lane.
+      # databases and cannot connect to `payments` at all: the separation is enforced by
+      # permissions, not by everyone agreeing to stay in their lane.
       DB: postgres12 # the plugin name for every Postgres from 12 up, including 16
       DB_PORT: '5432'
       POSTGRES_SEEDS: postgres
@@ -43,6 +43,9 @@ services:
       POSTGRES_PWD: temporal
       DBNAME: temporal
       VISIBILITY_DBNAME: temporal_visibility
+      # Keep finished runs 30 days instead of 24 hours, so a payment's run can still be opened.
+      # Read only when the namespace is first created, on an empty volume.
+      DEFAULT_NAMESPACE_RETENTION: 720h
     ports:
       # Localhost only, same reasoning as postgres: anyone who reaches this port can start
       # and cancel workflows, with no authentication in front of it.

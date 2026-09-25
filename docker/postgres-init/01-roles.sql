@@ -1,7 +1,7 @@
 -- Runs once, the first time the postgres volume is created.
 --
--- Temporal shares the Postgres INSTANCE with the application, which the spec allows, but
--- it has no business reading the payments schema. Sharing one superuser between them made
+-- Temporal shares the Postgres INSTANCE with the application, but it has no business
+-- reading the payments schema. Sharing one superuser between them made
 -- the separation a matter of configuration; this makes it a matter of permissions.
 
 -- Temporal creates its own `temporal` and `temporal_visibility` databases at startup, so

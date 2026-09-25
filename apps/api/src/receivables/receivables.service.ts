@@ -19,7 +19,7 @@ import {
 /** Defined here and not in the module, for the same cycle reason as `PAYABLES_SERVICE`. */
 export const RECEIVABLES_SERVICE = Symbol('RECEIVABLES_SERVICE')
 
-/** The books are USDC-only (spec assumption 2). */
+/** The books are USDC-only. */
 const CURRENCY = 'USDC'
 
 /** Missing, malformed or nobody's: the same mistake, so the same sentence. */

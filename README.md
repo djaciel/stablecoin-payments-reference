@@ -1,9 +1,8 @@
 # Stablecoin Payments Reference
 
-The runnable companion to the 57Blocks article "New to Blockchain? How to Build a Stablecoin
-Payment System Inside Your Product". It shows what sits around a stablecoin payment: a
-double-entry ledger, explicit payment states, a durable workflow, deposits matched to partners,
-reconciliation against the chain, and failures you can cause on purpose. It is not a product, not
+The runnable companion to an article on stablecoin payments. It shows what sits around a
+stablecoin payment: a double-entry ledger, explicit payment states, a durable workflow, deposits
+matched to partners, reconciliation against the chain, and failures you can cause on purpose. It is not a product, not
 a library and not an ERC20 tutorial. It runs on a public testnet (Base Sepolia) with test USDC only.
 
 ## What you need
@@ -106,6 +105,7 @@ Books show, with six decimals.
    final, which takes minutes.
 5. On the story, **The transfer on Base Sepolia** opens the real transaction in the explorer, and
    **Its runs in Temporal** opens the workflow that ran the steps (`http://localhost:8080`).
+   Temporal keeps finished runs for 30 days; the payment's story stays in the database for good.
 
 What the Books say along the way:
 

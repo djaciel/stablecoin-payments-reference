@@ -23,7 +23,8 @@ const FROM_THE_QUEUE = 'cancelled from the scheduled queue'
 export async function cancelPayment(client: PoolClient, reference: string, reason?: string): Promise<CancelOutcome> {
   // 1. The invoice first, `reverse`'s query and `createPayment`'s order: cancel reopens it, and
   //    taking it before the ledger's account locks is why two payments on one invoice queue
-  //    instead of deadlocking. NO KEY UPDATE for the same reason they use it (T-13).
+  //    instead of deadlocking. NO KEY UPDATE because a payment's foreign key check holds a
+  //    share lock on this row, and FOR UPDATE would wait on it.
   const invoice = await client.query<{ id: string }>(
     `SELECT id FROM payables WHERE id = (SELECT payable_id FROM payments WHERE reference = $1) FOR NO KEY UPDATE`,
     [reference],
@@ -49,7 +50,7 @@ export async function cancelPayment(client: PoolClient, reference: string, reaso
   }
   const invoiceId = invoice.rows[0]?.id
   if (invoiceId === undefined) {
-    // Unreachable: every payment is written against an invoice, an ad-hoc one included (T-29).
+    // Unreachable: every payment is written against an invoice, an ad-hoc one included.
     throw new Error(`${reference}: no invoice to reopen`)
   }
 

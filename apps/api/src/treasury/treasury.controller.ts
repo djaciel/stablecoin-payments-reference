@@ -60,7 +60,7 @@ export class TreasuryController {
 
   /**
    * Two transactions out of the treasury and one entry in the books, all of it while this
-   * request is open (spec assumption 15): the answer IS the receipt, which is what makes the
+   * request is open: the answer IS the receipt, which is what makes the
    * modal on the Start screen able to show both hashes without polling for them.
    *
    * The service refuses with a 422 when the treasury is short or the chain disagrees with

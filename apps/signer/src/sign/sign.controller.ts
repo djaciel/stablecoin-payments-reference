@@ -8,7 +8,7 @@ import type { KeysService } from '../keys/keys.service'
  * Signing, and nothing else. The treasury's key is in this process and the network is not:
  * every number a transaction needs — the nonce, the gas, the fees — is given to the signer by
  * the caller, because a service that can be asked to sign must not also be able to look up
- * what to sign (spec assumption 7).
+ * what to sign.
  *
  * The answer is the raw bytes plus their hash, and the hash is the point: it is computed from
  * the signature, so the transaction has its name before any node has heard of it. Whoever
@@ -93,7 +93,7 @@ export class SignController {
  *
  * Validated by hand because Nest's `ValidationPipe` reads the DTO class from decorator
  * metadata that tsx does not emit, so a `@Body() dto: Dto` here would be accepted without a
- * single check running (spec assumption 18).
+ * single check running.
  */
 function readSigningRequest(body: unknown, amountField: 'amountMinor' | 'valueWei'): SigningRequest {
   const fields: Record<string, unknown> = typeof body === 'object' && body !== null ? { ...body } : {}

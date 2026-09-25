@@ -11,7 +11,7 @@ import { statusCodeOf } from '../payments/payments.controller'
  * and Available never crosses into negative.
  *
  * It runs against a sandbox database of its own, because Available in the demo is real testnet
- * money and this race needs two payments whose sum exceeds it (spec assumption 10). The sandbox is
+ * money and this race needs two payments whose sum exceeds it. The sandbox is
  * created and migrated on demand by the real runner over the real files, and emptied and reseeded
  * on every run, so the figures are the article's every time.
  */

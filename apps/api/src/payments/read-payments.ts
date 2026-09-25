@@ -16,7 +16,7 @@ const LIST_LIMIT = 100
 
 /**
  * A payment signed and never sent: RESERVED with a hash, or REVIEW that came from there. It holds
- * the treasury's next nonce (spec assumption 24); the REVIEW queue says so and "Fund partner
+ * the treasury's next nonce; the REVIEW queue says so and "Fund partner
  * wallet" refuses while one exists. `review_from_status` is set only in REVIEW (`0010`).
  */
 export const HOLDS_NONCE = "tx_hash IS NOT NULL AND (status = 'RESERVED' OR review_from_status = 'RESERVED')"

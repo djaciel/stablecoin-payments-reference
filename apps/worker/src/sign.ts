@@ -143,7 +143,8 @@ export async function signPayment(
 
     // 4. The signer, inside the transaction. Not the "no network inside a transaction" case: a
     //    compose-internal call with a 5 s timeout, and holding the row lock across it is what
-    //    keeps sign and cancel from interleaving (spec, Release rule).
+    //    keeps sign and cancel from interleaving, so cancel never releases money whose transfer
+    //    was just signed.
     const signed = await signTransfer({
       to: getAddress(locked.destination),
       amount: BigInt(locked.amount_minor),

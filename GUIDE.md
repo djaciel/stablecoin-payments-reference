@@ -1,9 +1,8 @@
 # Reader's map
 
-This repository is the runnable companion to the article *New to Blockchain? How to Build a
-Stablecoin Payment System Inside Your Product*. The article explains the design; this file
-tells you where each idea lives in the code, what to open, and how to watch it run. It is a
-map, not a manual: each entry is a few lines and points at one or two files.
+This repository is the runnable companion to the article. The article explains the design;
+this file tells you where each idea lives in the code, what to open, and how to watch it run. It
+is a map, not a manual: each entry is a few lines and points at one or two files.
 The tables, the states, the endpoints and the experiments are looked up in `docs/`, not here.
 
 Start with `docker compose up`. Everything below assumes the stack is running.
@@ -696,8 +695,8 @@ about the hash it stored, does not find it, and sends the same bytes: one transf
   directly); the `sign` activity exits, once that transaction has committed.
 - `apps/worker/src/experiments.ts` — `claimCrashAfterSigning`: one UPDATE takes the flag and
   switches it off, so the worker that comes back cannot sign and die again for ever.
-- `apps/worker/src/execute.ts` — the recovery, unchanged since Phase 5 ("Signed, then sent"
-  above): ask the network for the stored hash, and send the SAME bytes when it does not know them.
+- `apps/worker/src/execute.ts` — the recovery, the same one as in "Signed, then sent"
+  above: ask the network for the stored hash, and send the SAME bytes when it does not know them.
   This experiment causes the moment; that file is what survives it.
 - `apps/worker/src/index.ts` — `worker: started at <ISO>`, so the death and the rebirth read as
   two timestamps seconds apart in `docker compose logs worker`.

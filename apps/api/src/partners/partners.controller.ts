@@ -180,7 +180,7 @@ function toView(partner: Partner, depositUsdc: string | null, payoutUsdc: string
  *
  * Validated by hand: Nest's `ValidationPipe` reads the DTO class from decorator metadata
  * that tsx does not emit, so a `@Body() dto: Dto` here would be accepted without a single
- * check running (spec assumption 18).
+ * check running.
  */
 function readPartnerName(body: unknown): string {
   const raw: unknown = typeof body === 'object' && body !== null && 'name' in body ? body.name : undefined

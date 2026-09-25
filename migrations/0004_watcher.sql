@@ -17,7 +17,7 @@ CREATE TABLE watched_addresses (
   -- is a partner paying an invoice (a DETECTED deposit first, credited at finality).
   role       text        NOT NULL CHECK (role IN ('treasury', 'deposit')),
   -- Which partner a deposit address belongs to. NULL for the treasury. No foreign key yet:
-  -- the partners table arrives in T-10 and brings it.
+  -- the partners table arrives in 0005 and brings it.
   partner_id uuid,
   created_at timestamptz NOT NULL DEFAULT now()
 );

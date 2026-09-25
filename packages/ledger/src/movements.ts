@@ -4,9 +4,9 @@ import { writeTransaction } from './engine'
 import { ACCOUNTS, type LedgerTransactionId, type MinorUnits, type ReversalProof } from './types'
 
 /**
- * One function per row of the spec's posting table. No SQL of their own — the lock, the
- * zero-sum check and the typed rejections live in the engine — and each takes a client
- * because the caller owns the transaction.
+ * One function per posting kind (`docs/schema.md`). No SQL of their own: the lock, the
+ * zero-sum check and the typed rejections live in the engine. Each takes a client because
+ * the caller owns the transaction.
  *
  * `reversal` and `cancel` write the SAME entry pair and differ only in what justifies it.
  * What keeps a third door shut is not this file: it is the deferred trigger in
@@ -128,7 +128,7 @@ export function scaffoldingReference(txHash: string): string {
 /**
  * "Fund partner wallet": the one movement that takes money out of the treasury without being a
  * payment. Dr `demo:partner-funding` / Cr `treasury:available`, at the USDC amount the chain
- * carried — the gas that moved it is never posted (spec assumption 2), it goes to the audit log.
+ * carried — the gas that moved it is never posted, it goes to the audit log.
  *
  * It never touches `treasury:reserved`, so the release trigger has nothing to say about it.
  * Unlike `funding`, the audit row is the caller's to write: what makes this entry readable is

@@ -18,7 +18,7 @@ import { transactionView } from '../payments/read-payments'
 /** Defined here and not in the module, for the same cycle reason as `PARTNERS_SERVICE`. */
 export const PAYABLES_SERVICE = Symbol('PAYABLES_SERVICE')
 
-/** The books are USDC-only (spec assumption 2). */
+/** The books are USDC-only. */
 const CURRENCY = 'USDC'
 
 /** Missing, malformed or nobody's: the same mistake, so the same sentence. */

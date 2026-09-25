@@ -35,7 +35,7 @@ import type { PartnerKeysService } from './partner-keys.service'
 /** Defined here and not in the module, for the same cycle reason as `RECEIVABLES_SERVICE`. */
 export const PARTNER_PAYMENTS_SERVICE = Symbol('PARTNER_PAYMENTS_SERVICE')
 
-/** The invoices are USDC-only, like the books (spec assumption 2). */
+/** The invoices are USDC-only, like the books. */
 const CURRENCY = 'USDC'
 
 /** What every chain message in here is about, so they all name the same thing. */

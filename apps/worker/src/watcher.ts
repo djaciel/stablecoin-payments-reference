@@ -18,13 +18,13 @@ import { readReceipt } from './watch'
 /** The one scan there is today. `watcher_state` is keyed by it so a second one is a row. */
 export const SCAN_NAME = 'usdc-transfers'
 
-/** The books are USDC-only (spec assumption 2). Gas is never posted. */
+/** The books are USDC-only. Gas is never posted. */
 const CURRENCY = 'USDC'
 
 /**
  * `https://sepolia.base.org` refuses an `eth_getLogs` range wider than 1,001 blocks
- * (`-32614 eth_getLogs is limited to a 1,000 range`, measured again 2026-09-22; it took 10,000
- * when T-09 measured it). A caught-up watcher never comes near it — this is the ceiling that
+ * (`-32614 eth_getLogs is limited to a 1,000 range`, measured 2026-09-22; it used to take
+ * 10,000). A caught-up watcher never comes near it — this is the ceiling that
  * decides how fast one catches up after being rewound or restarted.
  */
 const MAX_RANGE_BLOCKS = 1_000n
@@ -285,7 +285,7 @@ function max(left: bigint, right: bigint): bigint {
 }
 
 /**
- * The adaptive skip (spec assumption 6): before the first funding every tick scans, afterwards
+ * The adaptive skip: before the first funding every tick scans, afterwards
  * only stale ones do — unless something is in flight. A partner's transfer waiting to be seen,
  * or a deposit waiting for finality, is exactly when a demo must not be asleep; and a catch-up
  * in progress overrides everything, because idling through it is the slow way.

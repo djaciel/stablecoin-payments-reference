@@ -2,7 +2,7 @@
  * The checks the api's write routes run on a request body, in one place.
  *
  * They are hand-written functions and not DTO decorators because `ValidationPipe` reads metadata
- * that tsx does not emit, and would silently check nothing (spec assumption 18). Each refusal is
+ * that tsx does not emit, and would silently check nothing. Each refusal is
  * one condition and one 400, and every caller passes its own sentence: what a person typed is
  * refused in the words of the screen they typed it on.
  */

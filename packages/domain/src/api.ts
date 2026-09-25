@@ -314,7 +314,7 @@ export function failedAfterReserving(reason: PaymentFailureReason | undefined): 
 /**
  * One payment, as `POST /payments` and `GET /payments/:reference` answer it. `reason` is present
  * only when the payment FAILED. A replay answers with the code of the first attempt's outcome and
- * the payment as it is now (spec assumption 19).
+ * the payment as it is now.
  */
 export interface PaymentView {
   /** `PAY-XXXX`, the article's format. */
@@ -349,7 +349,7 @@ export interface RaceAttempt {
 
 /**
  * What `POST /experiments/race` answers: §9's race with the article's own figures, run against a
- * sandbox database (spec assumption 10), which is why `database` is part of the evidence.
+ * sandbox database, which is why `database` is part of the evidence.
  */
 export interface RaceResult {
   readonly database: string
@@ -382,7 +382,7 @@ export interface PaymentReview {
   readonly at: string
   /**
    * Only for a payment signed and never sent: it holds this treasury nonce, and every payout signed
-   * after it waits until it goes out (spec assumption 24).
+   * after it waits until it goes out.
    */
   readonly nonce?: number
 }

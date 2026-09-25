@@ -22,9 +22,9 @@ import { TreasuryModule } from './treasury/treasury.module'
  * provides something (`db/` provides the pool, `signer/` provides the HTTP client). A
  * folder that is just a controller is registered here, because a module whose whole body
  * is `controllers: [OneController]` is a file to open, read and close again for nothing.
- * A controller that grows a service gets its module then, not before — which is exactly
- * what happened to `treasury/` in T-09: it now registers the watched address and reads the
- * last funding, so it owns its controller and brings its own dependencies with it.
+ * A controller that grows a service gets its module then, not before, like `treasury/`:
+ * it registers the watched address and reads the last funding, so it owns its controller
+ * and brings its own dependencies with it.
  */
 @Module({
   imports: [DbModule, DemoScaffoldingModule, PartnersModule, PayablesModule, ReceivablesModule, TemporalModule, TreasuryModule],

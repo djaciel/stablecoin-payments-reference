@@ -108,8 +108,7 @@ async function generateSeedFile(file: string): Promise<string> {
   await writeFile(file, `${mnemonic}\n`, { encoding: 'utf8', mode: SEED_FILE_MODE, flag: 'wx' })
 
   // `mode` above applies only when the file is created, and the process umask can still
-  // narrow it. An explicit chmod is the only way to know what the permissions are
-  // (v1 lesson, drift log "T-04").
+  // narrow it. An explicit chmod is the only way to know what the permissions are.
   await chmod(file, SEED_FILE_MODE)
 
   return mnemonic

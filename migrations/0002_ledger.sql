@@ -75,7 +75,7 @@ CREATE TABLE ledger_entries (
   direction      text        NOT NULL CHECK (direction IN ('debit', 'credit')),
   -- Always positive: which way the money moves is the direction column's job.
   amount_minor   bigint      NOT NULL CHECK (amount_minor > 0),
-  -- The ledger is USDC-only (spec assumption 2), so nothing checks an entry against its
+  -- The ledger is USDC-only, so nothing checks an entry against its
   -- account's currency yet.
   currency       text        NOT NULL,
   created_at     timestamptz NOT NULL DEFAULT now()

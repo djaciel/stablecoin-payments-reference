@@ -54,11 +54,11 @@ const BALANCE_READ_WAIT_MS = 1_500
 /**
  * The real one. The receipt read is `watch`'s, so both steps ask the chain the same question.
  *
- * The retries behind the spec's "could not be read after retries" are viem's own three per call,
- * its default, which is why nothing below loops: a read that still fails is reported as
- * `unchecked` or `incomplete`, never guessed at and never re-asked at `latest`. The balance read
- * is the exception `fund-partner-wallet.service.ts` already makes, and for its reason: the
- * endpoint is load balanced, so the node answering may still be behind the block B was pinned to.
+ * The retries are viem's own three per call, its default, which is why nothing below loops: a
+ * read that still fails is reported as `unchecked` or `incomplete`, never guessed at and never
+ * re-asked at `latest`. The balance read is the exception `fund-partner-wallet.service.ts`
+ * already makes, and for its reason: the endpoint is load balanced, so the node answering may
+ * still be behind the block B was pinned to.
  */
 export function chainFacts(): ChainFacts {
   const chain = createChainClient()

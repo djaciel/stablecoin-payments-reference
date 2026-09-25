@@ -85,7 +85,7 @@ export class PartnersService implements OnApplicationBootstrap {
   /**
    * Every partner with the three figures the screen puts next to its two addresses. One query:
    * the sums come from the invoice tables, which are the per-partner view of three ledger
-   * accounts that stay whole (spec assumption 1), so nothing here asks the chain.
+   * accounts that stay whole, so nothing here asks the chain.
    */
   async list(): Promise<Partner[]> {
     const result = await this.pool.query<PartnerRow>(

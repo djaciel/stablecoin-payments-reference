@@ -20,7 +20,7 @@ CREATE TABLE partners (
   -- how a watcher misses money.
   deposit_address  text        NOT NULL,
   -- The partner's own money. It never appears on the company's books; the allowlist row it
-  -- also gets, so the company may pay it, arrives with the allowlist in Phase 8.
+  -- also gets, so the company may pay it, arrives with the allowlist in 0013.
   payout_address   text        NOT NULL,
   -- Read by the "is this partner active" validation when payments arrive. Nothing changes it
   -- yet, so every partner is active.

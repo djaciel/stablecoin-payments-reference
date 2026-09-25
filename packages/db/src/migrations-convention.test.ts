@@ -9,7 +9,7 @@ import { migrationsDirectory, orderMigrationFiles } from './migrate'
 //
 // The regex only matches transaction control *as a statement* — at the start of a line or
 // right after a `;`, and closed by its own `;` — because plpgsql function bodies use
-// `BEGIN … END` as a block keyword and those arrive with Phase 2. `BEGIN` opening a block
+// `BEGIN … END` as a block keyword (0002 has them). `BEGIN` opening a block
 // is never followed by a semicolon, so it does not match here.
 const TRANSACTION_CONTROL = /(?:^|;)\s*(?:START\s+TRANSACTION|(?:BEGIN|COMMIT|ROLLBACK)(?:\s+(?:TRANSACTION|WORK))?\s*;)/im
 

@@ -39,7 +39,7 @@ import type { TreasuryService } from './treasury.service'
 /** Defined here and not in the module, for the same cycle reason as `TREASURY_SERVICE`. */
 export const FUND_PARTNER_WALLET_SERVICE = Symbol('FUND_PARTNER_WALLET_SERVICE')
 
-/** The books are USDC-only (spec assumption 2). Gas is onchain and in the audit log, never here. */
+/** The books are USDC-only. Gas is onchain and in the audit log, never here. */
 const CURRENCY = 'USDC'
 
 /**
@@ -178,7 +178,7 @@ export class FundPartnerWalletService {
   /**
    * One condition, one 422: a payment signed and not sent. Step 3 asks the chain for the pending
    * nonce, which does not know that payment, so these two transactions would take its nonce and it
-   * could never land (spec assumption 24).
+   * could never land.
    */
   private async refuseIfNonceHeld(): Promise<void> {
     const held = await this.pool.query<{ reference: string; status: string; nonce: number }>(

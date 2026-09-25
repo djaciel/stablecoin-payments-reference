@@ -14,7 +14,7 @@ import { mnemonicToAccount } from 'viem/accounts'
  */
 
 /**
- * Index 0 is the treasury, in both seeds (see the spec's key model). It is never handed
+ * Index 0 is the treasury, in both seeds. It is never handed
  * out as a deposit or payout address, so partner indexes start at 1.
  */
 export const TREASURY_ADDRESS_INDEX = 0

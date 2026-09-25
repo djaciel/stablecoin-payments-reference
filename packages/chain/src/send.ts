@@ -82,7 +82,7 @@ export interface TransactionCost {
 
 /**
  * What running one transaction cost, from the receipt and never from the difference between two
- * balance reads (v1's lesson: a lagging node makes that subtraction report zero). Both halves,
+ * balance reads (a lagging node makes that subtraction report zero). Both halves,
  * because an L2 charges for execution and for storing the bytes on Ethereum separately, and
  * which of the two is larger changes with traffic on either chain.
  */

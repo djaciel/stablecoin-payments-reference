@@ -17,7 +17,7 @@ import {
  * `tests/db/deposits.db.test.ts` calls them directly — the shape `settle.ts` uses.
  */
 
-/** The books are USDC-only (spec assumption 2). */
+/** The books are USDC-only. */
 const CURRENCY = 'USDC'
 
 /** How a deposit found the invoice it paid, stored on the row so a screen never has to guess. */
