@@ -4,6 +4,7 @@ This repository is the runnable companion to the article *New to Blockchain? How
 Stablecoin Payment System Inside Your Product*. The article explains the design; this file
 tells you where each idea lives in the code, what to open, and how to watch it run. It is a
 map, not a manual: each entry is a few lines and points at one or two files.
+The tables, the states, the endpoints and the experiments are looked up in `docs/`, not here.
 
 Start with `docker compose up`. Everything below assumes the stack is running.
 
@@ -1098,9 +1099,3 @@ curl -s localhost:3000/reconciliation/runs/<id> | jq '.identity'
   `packages/domain/src/api.ts`, which the api writes with and the browser reads.
 
 Open `http://localhost:5173/admin`.
-
-## Not here yet
-
-Treasury fundings still have no row of their own on the Transfers screen: the watcher posts them
-and the Start screen shows their result. A later phase decides whether that is a line in `docs/` or
-a row on a screen, and it will add its entry here when it lands.

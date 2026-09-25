@@ -223,14 +223,16 @@ against a real Postgres, concurrent payments included, so a rule someone breaks 
 - [`GUIDE.md`](GUIDE.md): the map. For each section of the article, which files to open and how
   to watch them run.
 - `docs/`, the reference:
-  - [`docs/schema.md`](docs/schema.md): the tables, the accounts, and how to read the ledger and
-    the audit log with `psql`.
-  - [`docs/states.md`](docs/states.md): the states of payments, deposits and invoices.
-  - [`docs/api.md`](docs/api.md): every endpoint and every answer.
+  - [`docs/schema.md`](docs/schema.md): the tables, the accounts, the guards the database
+    enforces, and how to read the ledger and the audit log with `psql` or export a reconciliation
+    run as CSV.
+  - [`docs/states.md`](docs/states.md): the states of payments, deposits, invoices and
+    reconciliation runs, and what each move does to the books.
+  - [`docs/api.md`](docs/api.md): every endpoint of the api and the signer, and every answer.
   - [`docs/experiments.md`](docs/experiments.md): the five cards and four commands, and what each
     must show.
   - [`docs/integration-points.md`](docs/integration-points.md): where a real system plugs in auth,
-    compliance, custody and fiat.
+    compliance, custody and fiat, and what a single-node demo leaves open.
 - The article: why it is built this way.
 
 ## License
