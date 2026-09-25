@@ -182,8 +182,9 @@ services:
       TEMPORAL_UI_PORT: ${TEMPORAL_UI_PORT:-}
     ports:
       # Localhost only. Running this on a shared machine and wanting the API reachable is
-      # a deliberate change, not a default.
-      - '127.0.0.1:3000:3000'
+      # a deliberate change, not a default. Set API_PORT if you already have something on 3000;
+      # the ui is unaffected, it reaches the api inside this network.
+      - '127.0.0.1:${API_PORT:-3000}:3000'
     volumes:
       # The schema is read from your working copy, not from the image. Without this, adding
       # a migration and running `docker compose up` starts a container built before the file
