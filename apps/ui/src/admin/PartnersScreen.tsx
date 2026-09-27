@@ -56,7 +56,6 @@ export function PartnersScreen() {
                   <AddressBlock
                     heading="Internal partner address (They pay you here)"
                     address={partner.deposit}
-                    emptyNote="Nothing paid in yet."
                   />
                   <AddressBlock
                     heading="Partner external address (You pay them here)"
@@ -82,22 +81,11 @@ export function PartnersScreen() {
 interface AddressBlockProps {
   readonly heading: string
   readonly address: AddressBalance
-  readonly emptyNote?: string
   /** The partner's own wallet is its business, not the company's: no balance for it. */
   readonly showBalance?: boolean
 }
 
-function AddressBlock({ heading, address, emptyNote, showBalance = true }: AddressBlockProps) {
-  // Three states, not two: unknown is not zero. When the RPC is down the note has to say the
-  // balance could not be read, or the screen quietly claims nobody has paid.
-  const note = !showBalance
-    ? undefined
-    : address.usdc === null
-      ? 'Balance unknown: the chain could not be read.'
-      : Number(address.usdc) === 0
-        ? emptyNote
-        : undefined
-
+function AddressBlock({ heading, address, showBalance = true }: AddressBlockProps) {
   return (
     <div className="address-block">
       <p className="address-sub">{heading}</p>
@@ -106,11 +94,11 @@ function AddressBlock({ heading, address, emptyNote, showBalance = true }: Addre
         <dl className="figures">
           <div className="figure">
             <dt>USDC balance</dt>
+            {/* Unknown is not zero: when the chain cannot be read, say so instead of 0. */}
             <dd>{address.usdc === null ? 'unknown' : formatUsdc(address.usdc)}</dd>
           </div>
         </dl>
       )}
-      {note !== undefined && <p className="card-note">{note}</p>}
     </div>
   )
 }
