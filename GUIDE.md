@@ -1,1104 +1,207 @@
 # Reader's map
 
-This repository is the runnable companion to the article. The article explains the design;
-this file tells you where each idea lives in the code, what to open, and how to watch it run. It
-is a map, not a manual: each entry is a few lines and points at one or two files.
-The tables, the states, the endpoints and the experiments are looked up in `docs/`, not here.
+The article explains the design. This file tells you where each idea lives in the code and how to see it run, section by section. Tables, states and endpoints are in [`docs/`](docs/).
 
-Start with `docker compose up`. Everything below assumes the stack is running.
+Everything below assumes `docker compose up` is running. Commands that start with `pnpm` run on your machine and need Node 22 (not 24) and `pnpm install`.
 
-## What does what
+## The five libraries
 
-Five libraries carry the whole demo; nothing is hand-rolled underneath them.
+Nothing is hand-rolled under these:
 
-- **viem** talks to the blockchain: it generates the seed phrase and derives addresses in
-  the signer, creates the client to Base Sepolia, reads balances, decodes the USDC transfer
-  events, and signs and broadcasts transactions.
-- **Temporal** (server + TypeScript SDK) is the durable workflow engine: it runs the payment
-  steps, retries them and resumes them after a crash, and runs the scheduled jobs.
-- **PostgreSQL** with **node-postgres** holds the books; the ledger rules are plain SQL
-  (triggers and constraints), with no ORM in between.
-- **NestJS** is the shape of the two services with HTTP routes, the api and the signer.
+- **viem** talks to the chain: seeds and addresses, balances, transfer events, signing and sending.
+- **Temporal** runs the payment's steps, retries them, and picks up after a crash.
+- **PostgreSQL** with **node-postgres** holds the books; the ledger rules are plain SQL, no ORM.
+- **NestJS** shapes the two HTTP services, the api and the signer.
 - **React + Vite** is the browser app.
 
-## The system in one picture (article §3)
-
-`docker-compose.yml` is the picture. Seven services, one per box in the article: Postgres
-(the books), Temporal and its web UI (the durable workflow engine), `api` (the door),
-`worker` (runs the workflow), `signer` (the only key holder), `ui` (the screens). Read the
-comments next to each service for what waits on what and why no port of the signer is
-published.
-
-## The signing service, the only component that touches the key (§3, §11)
-
-- `apps/signer/src/keys/keys.service.ts` — generates the company seed on first start into
-  `./.keys/company/` (never printed, never leaves this file) and derives accounts from it:
-  index 0 is the treasury, index n is the deposit address for partner n.
-- `packages/chain/src/derive.ts` — the derivation itself: seed + index → account, the path
-  every wallet uses.
-- `packages/chain/src/signer-client.ts` — how the api and the worker ask the signer for an
-  address or a signature without ever seeing the seed.
-
-See it: `curl localhost:3000/treasury` prints the treasury address; the same address is in
-`docker compose logs signer`. `docker compose down -v && docker compose up` keeps it, because
-the seed lives on your disk, not in a volume.
-
-## Two seeds, and the partners between them (§8)
-
-You know who paid by where the money came in, never by who sent it. That is why each partner
-has a deposit address derived from the company seed: the address IS the attribution. The
-other side of the pair, the payout address, belongs to the partner and comes from a second
-seed this demo only holds because one machine has to play both sides.
-
-- `apps/api/src/demo-scaffolding/partner-keys.service.ts` — the partner seed, generated into
-  `./.keys/partner/` on first start. In the api and never in the signer, on purpose; the file
-  says why, and so does the label on every address it produces.
-- `apps/api/src/partners/partners.service.ts` — creating a partner: the next index, the
-  deposit address from the signer, the payout address from the partner seed, and the row that
-  tells the watcher to watch the deposit address — one transaction, or nothing.
-- `migrations/0005_partners.sql` — the table, and the two addresses each partner carries.
-- `apps/ui/src/admin/PartnersScreen.tsx` — both address families side by side, with balances.
-
-See it: open `http://localhost:5173/admin/partners`, add a partner, and watch its deposit
-address appear in `SELECT * FROM watched_addresses` and in the watcher's next tick without a
-restart. Send test USDC to a deposit address: it shows up on `/admin/transfers` within a tick,
-and the books only move once its block can no longer be replaced ("Money that arrived", below).
-
-## The durable workflow engine (§3, and the crash in §9)
-
-- `apps/worker/src/workflows.ts` — `PaymentWorkflow`, the recipe: `sign`, `execute`, `watch`
-  on a durable timer until the payment is paid, then `settle`. Each step gets the payment's
-  reference and nothing else, and a worker that dies mid-run picks up from Temporal's history.
-  Every step has 5 attempts; one that gives up sends the payment to REVIEW ("No proof either way" below).
-- `apps/worker/src/activities.ts` — the list of steps the worker runs, one file per step.
-- `apps/worker/src/index.ts` — starts the worker. On shutdown an in-flight step is cancelled
-  and simply runs again as attempt 2: every step re-reads the row and skips what is done.
-- `docs/dev/restart-survival.md` — the drill, on a real payment: the worker stopped while the
-  payment waits for finality, started again, and the history showing `sign` and `execute` ran
-  once. Also what Docker restarts on its own and what it does not.
-- A worker you stop by hand is the operator's version. The one where the process dies on its own,
-  at the worst moment, is "Crash after signing" below.
-
-See it: follow the drill in `docs/dev/restart-survival.md`, or press Pay on a small invoice and
-open the payment's runs in the Temporal UI (the Temporal link on its story, built by
-`packages/domain/src/temporal.ts`): `sign`, `execute`, the `watch` checks with a 10 s timer
-between them, then `settle`. Start it again once it has settled (the command is under "Signed,
-then sent" below) and the new run signs and sends nothing.
-
-## The books: two entries before the money moves (§5, §6, §7)
-
-- `migrations/0002_ledger.sql` — the whole rulebook in one file: the three tables (accounts,
-  transactions, entries), the chart of accounts (`treasury:available`, `treasury:reserved`,
-  `partner:payable` and the rest), the kinds of transaction, and the guards the database
-  enforces itself: a posted entry cannot be edited or deleted, every transaction sums to
-  zero, `treasury:available` never goes negative, and reserved money goes back to available
-  only through a reversal with proof or a cancel.
-- `packages/ledger/src/engine.ts` — the engine that writes a transaction: locks the accounts in
-  a fixed order, checks the sum is zero before writing, replays the entries against the
-  running balance so a negative is caught with the amounts, and refuses to run outside a
-  transaction.
-- `packages/ledger/src/errors.ts` — the three things the engine can answer with:
-  insufficient funds, not zero-sum, rejected by the database.
-- `packages/ledger/src/movements.ts` — the article's movements, one function per row of its
-  tables: `reserve` (available → reserved, §5) and `settle` (reserved out, partner debt
-  cleared, §7). They add no SQL of their own; the engine does the writing.
-- `packages/ledger/src/seed.ts` — the article's opening figures (Available 10,000, Partner
-  debt 1,000) and the race's 1,500, posted as real balanced transactions.
-- `tests/db/race.db.test.ts` — §9's race: two payments of 1,000 against 1,500 at the same
-  instant, one reserved, one rejected, available ends at 500. Next to it, a canary that
-  proves the test really runs two things at once.
-- `packages/domain/src/vocabulary.test.ts`: the article's words kept true in the repo's own files:
-  the six states, `PAY-` and four digits, the three account names, and the 10,000 / 1,000 / 1,500.
-
-### When it fails, where is the money? The two release doors (§6)
-
-Reserved money goes back to available in exactly two ways, and the database refuses every
-other one whatever it is called: `reversal`, with proof that the transaction reverted
-onchain, and `cancel`, only before anything was signed. Both write their reason to the audit
-log in the same database transaction as the entries.
-
-- `packages/ledger/src/movements.ts` — `reversal` (proof required by the type) and `cancel`
-  (a reason required), next to `reserve` and `settle`. `apps/worker/src/reverse.ts` is the
-  reversal's caller, on a transfer that reverted onchain;
-  `apps/api/src/payments/cancel-payment.ts` is the cancel's, on a payment nobody signed.
-- `migrations/0015_cancel_needs_no_hash.sql` — the second door's condition in the database: a
-  `cancel` is refused when a payment with that reference exists and carries a hash. It never
-  demands that a payment exist, because the article's own ledger fixture has none.
-- `migrations/0003_audit_log.sql` + `packages/ledger/src/audit.ts` — the append-only log
-  every step writes to. An audit log you can edit is not an audit log; the trigger says so.
-- `packages/db/src/guarded-update.ts` — how a state changes: one `UPDATE … WHERE status =
-  expected`, exactly one row or a typed refusal. Every payment transition later uses it.
-- `tests/db/release.db.test.ts` — the rule tried from every side: with proof, without
-  proof, disguised as a settle, and by cancel. `tests/db/README.md` — the index: five
-  invariants → the file that defends each → where the database enforces it.
-
-See it: `pnpm ledger:seed --release=reversal` and `--release=cancel` print the release and
-its audit line; `pnpm ledger:seed --walkthrough` prints the article's three snapshots (§5 →
-reserve → §7 settle) from a fresh ledger; `pnpm ledger:seed --race` prints the 1,500 opening.
-`pnpm test:db` runs the tests against a real Postgres (`tests/db/README.md` explains the
-harness and lists which test defends which rule). Or break a rule by hand:
-`docker compose exec postgres psql -U payments -d payments -c "UPDATE ledger_accounts SET balance_minor = -1 WHERE code = 'treasury:available'"`
-is refused by the database.
-
-### The invoice that becomes a debt (§5, §7)
-
-The company owes a partner from the moment an invoice exists, so the books move when it is
-created, not when it is paid: one transaction writes the invoice and Dr `expense:services` /
-Cr `partner:payable`, the article's Partner debt. Either both exist or neither does.
-
-- `migrations/0006_payables.sql` — the invoices the company owes. The destination is copied
-  from the partner at creation, because what was promised is the address it was promised to.
-- `apps/api/src/payables/payables.service.ts` — creating an invoice in one transaction (the
-  row, the debt, the audit line), and the one read the screen needs.
-- `apps/api/src/payables/payables.controller.ts` — `GET /payables` and `POST /payables`, with
-  the checks on what a person typed.
-- `packages/ledger/src/movements.ts` — `payable`, the movement that puts the debt on the
-  books, named by the invoice so it can only be posted once.
-- `packages/ledger/src/money.ts` — `toMinorFromDecimal`: the one place a typed "0.50" becomes
-  exact minor units, with no floating point. `money.test.ts` pins it.
-- `apps/api/src/config.ts` — the numbers a reader might change: the invoice and payment
-  limits, and the compliance mock's denylist.
-
-See it: create an invoice on `/admin/payables` and watch Partner debt go up there and on the
-Start screen, while Available and Reserved do not move.
-
-### The invoice a partner owes you (§8)
-
-Money coming in starts before any money moves: somebody has to say which invoice a payment
-will settle. Writing one puts the accrual on the books in the same transaction (Dr
-`partner:receivable` / Cr `revenue:services`), and the partner sees it next to the one address
-it pays at, which is what will say the money is its own.
-
-- `migrations/0011_receivables.sql` — the invoices a partner owes. `partner_id` is never null
-  (the attribution needs it) and `payment_tx_hash` is unique: one transaction pays one invoice.
-- `apps/api/src/receivables/receivables.service.ts` — creating one in a single transaction (the
-  row, the accrual, the audit line with the deposit address), and the one read the screen needs.
-- `apps/api/src/receivables/receivables.controller.ts` — `GET /receivables` and
-  `POST /receivables`, with the checks on what a person typed.
-- `apps/api/src/receivables/receivables.module.ts` — the three of them wired to the pool, the
-  same shape as `payables/`.
-- `packages/ledger/src/movements.ts` — `receivable`, the mirror image of `payable`: the books'
-  first credit to revenue, named by the invoice so it can only be posted once.
-- `packages/ledger/src/audit.ts` — `receivable` joins the subjects and gets its own events. The
-  comment says why the company's own invoices keep the older name `invoice`.
-- `apps/api/src/partners/partners.controller.ts` — `GET /partners/view`: the whole partner screen
-  in one read (the selector's list, the selected partner, what it owes, both addresses).
-- `apps/api/src/body.ts` — the checks both invoice screens run on what a person typed, in one
-  place: an id, an amount in whole USDC, a description. Hand-written, and the file says why.
-
-See it: write an invoice for a partner on `/admin/receivables`, watch Partner receivables go up
-while Available, Reserved and Partner debt do not move, then open `/partner`, pick that partner
-and read the same invoice next to the address it pays at.
-
-## Paying from the other side (§8)
-
-One machine plays both parts here, so the partner's wallet is signed for in the api, with a second
-seed the signing service never sees. The hash goes on the invoice before the bytes are broadcast,
-which is what lets the company attribute the deposit by hash instead of by guesswork, and the
-company's books do not move at all: they move when its own watcher sees the money arrive.
-
-- `apps/api/src/demo-scaffolding/partner-payments.service.ts` — the flow in seven numbered steps:
-  one payment at a time (one wallet, one nonce), refuse before anything is signed, sign, store the
-  hash and turn the invoice PAYING, broadcast, then check the receipt against the official contract.
-- `apps/api/src/demo-scaffolding/demo-scaffolding.controller.ts` — `POST /demo/partner-payments`
-  `{ receivableId }`: 404 unknown, 409 while another payment is in flight, 422 refused with what
-  the chain said and the invoice open again.
-- `apps/api/src/demo-scaffolding/demo-scaffolding.module.ts` — the partner seed and this service,
-  wired to the pool and the chain client. The signer is not among its dependencies, on purpose.
-- `packages/chain/src/send.ts` — the two steps every broadcast in this repo takes, shared by the
-  treasury and the partner: send the bytes, check the network kept their name, wait for the receipt.
-- `apps/api/src/receivables/receivables.service.ts` — one SELECT for every read of an invoice, and
-  the deposit address on it: the address IS the attribution, so it travels with the row.
-- `packages/ledger/src/audit.ts` — `payment-refused` next to `payment-sent`: an invoice that goes
-  back to OPEN says in the log why, with the chain's own sentence.
-- `packages/domain/src/api.ts` — `PartnerPaymentReceipt`: the invoice, the transfer, the fee in the
-  network's own currency, and what the wallet holds after.
-- `apps/ui/src/partner/PartnerHome.tsx` — Pay on each open invoice, the confirmation that says what
-  a real partner would do instead, and the receipt with its explorer link.
-- `apps/ui/src/admin/ReceivablesScreen.tsx` — the company's side of the same invoice: PAYING, with
-  the transaction the partner recorded, before the watcher has seen anything.
-- `apps/ui/src/api/client.ts` — `payReceivable`, which waits out the transaction because the answer
-  is the evidence.
-
-See it (this sends real testnet USDC): on `/partner` pick a partner with an open invoice, press
-**Pay**, read the three steps and confirm. The row turns PAYING with its hash, the explorer shows one
-Transfer from the shared wallet to that partner's deposit address, and the Books on `/admin` are
-exactly where they were.
-
-```
-docker compose exec postgres psql -U payments -d payments \
-  -c "SELECT status, payment_tx_hash FROM receivables"        # PAYING, with the hash
-docker compose logs --tail=40 worker                          # seen at a deposit address, not posted
-```
-
-## The payment API: one key, one payment (§4, §5, §9)
-
-A payment is created, checked and has its money set aside in one database transaction,
-before anything is signed. The idempotency key is what makes a double click, a retry or a
-lost answer safe: the same key always gets the same payment back.
-
-- `apps/api/src/payments/create-payment.ts` — the heart, in six steps read top to bottom:
-  record the intent (CREATED), lock the invoice, run the checks, reserve the money, then
-  RESERVED or FAILED with a reason. It never opens its own transaction; the caller owns it.
-- `migrations/0007_payments.sql` — the payments table. Its unique index on the idempotency
-  key IS the whole mechanism: a second request with the same key waits for the first one to
-  commit, then gets its answer.
-- `apps/api/src/payments/payments.controller.ts` — `POST /payments` (the `idempotency-key`
-  header plus `{ payableId }`) and `GET /payments/:reference`, and which outcome gets which
-  code: 201 created, 200 replay, 409 same key with a different body, 422 refused.
-- `apps/api/src/payments/compliance.ts` — a mock, and marked as one: the place where a real
-  compliance provider plugs in.
-- `tests/db/payments.db.test.ts` — the three claims, against a real Postgres: the same request
-  twice writes nothing new, the same key with a different body is refused, and two parallel
-  calls with one key make one payment.
-- `apps/ui/src/admin/PayablesScreen.tsx` — Pay and its confirmation. The browser makes one key
-  per attempt and keeps it across clicks, so a double click cannot pay twice; after a
-  refusal, the next attempt gets a new key.
-- `apps/ui/src/admin/BreakItScreen.tsx` — the "Double click" card presses this door twice at once,
-  on purpose: see "The double click" below for what the two answers show.
-
-See it: press Pay on `/admin/payables` and Reserved goes up in the api's answer, before
-anything is signed; only then is the payment signed, sent and settled. Pay an invoice larger
-than Available and read the refusal on its row. From the shell, send the same key twice and
-read the same reference back (it pays the invoice with real testnet USDC, so pick a small one):
-
-```
-curl -s -X POST localhost:3000/payments -H 'idempotency-key: try-1' \
-  -H 'content-type: application/json' -d '{"payableId":"<an OPEN invoice id from /payables>"}'
-```
-
-## The chain: a receipt is not a payment (§7)
-
-- `packages/chain/src/clients.ts` — the one client that talks to Base Sepolia (the public
-  RPC by default; `RPC_URL` only if you want your own) and the explorer links.
-- `packages/chain/src/usdc.ts` — the official USDC contract and `findSettlementLog`, the
-  article's rule in one function: the event must come from the official contract, to the
-  exact destination, for the exact amount — or it is not a payment. Its four tests are
-  built from a real transaction's log.
-- `apps/api/src/treasury/treasury.controller.ts` — `GET /treasury`: one read for the
-  Start screen, with the onchain balances pinned to one block next to the ledger figures.
-
-See it: `curl localhost:3000/treasury`. `docs/dev/faucets.md` explains how to fund the
-address it prints (you need testnet USDC and Base Sepolia ETH for gas).
-
-## The watcher: the books follow the chain
-
-The chain does not tell you when money arrives; something has to look. One Temporal
-workflow that never ends does it — tick, wait ten seconds, tick again — asking the USDC
-contract, in one request, for transfers to the addresses the database says to watch, only
-in blocks that are already final, so nothing it posts can be undone.
-
-- `apps/worker/src/watcher.ts` — one tick, top to bottom: final block → range → the logs →
-  one `funding` entry per transfer to the treasury, exactly once (the transaction hash and log
-  index are the reference, and the database refuses a second one) → cursor moved in the same
-  database transaction. A transfer to a deposit address takes the other road, below.
-- `apps/worker/src/workflows.ts` — `WatcherWorkflow`: the loop, and the failed tick it
-  survives. `apps/worker/src/index.ts` starts it when the worker boots if it is not
-  already running, which is also the only thing that brings it back if you terminate it.
-- `packages/chain/src/finality.ts` — what "final" means here (the chain's `safe` tag).
-- `migrations/0004_watcher.sql` — the two small tables: which addresses to watch, and
-  how far the watcher has read.
-
-See it: fund the treasury, wait a few ticks, and the Start screen's two halves agree.
-`docker compose logs -f worker` shows every tick. Open `http://localhost:8080/namespaces/default/workflows/watcher` and
-there is one entry, id `watcher`, running since the worker started.
-
-## The one movement that is not a payment (§5)
-
-"Fund partner wallet" moves USDC and gas from the treasury to the wallet the partners pay
-from. It is demo plumbing, not a payment — and it is still posted to the books, under a label
-that says what it is. Gas never reaches the books at all; it goes to the audit log.
-
-- `apps/signer/src/sign/sign.controller.ts` — the signer learns to sign: an ERC-20 transfer
-  and a plain ether one. It is told the nonce and the gas fields because it talks to no node,
-  and it answers with the raw bytes plus the hash, which exists before anything is broadcast.
-- `apps/api/src/treasury/fund-partner-wallet.service.ts` — the steps, in order: refuse while a payment
-  is signed and not sent (it would take that payment's nonce), read the balances, refuse if short,
-  fetch nonce and fees, sign both and broadcast both, check the USDC receipt against the official
-  contract, post one entry, answer with both hashes.
-- `packages/ledger/src/movements.ts` — `scaffolding`: Dr `demo:partner-funding` / Cr
-  `treasury:available`, named by the transaction hash so the same one cannot post twice.
-
-See it: `curl -s -X POST localhost:3000/treasury/fund-partner-wallet`, or the button on
-`/partner`. Then `SELECT kind, reference FROM ledger_transactions ORDER BY created_at DESC
-LIMIT 1` and the audit row next to it, which carries the gas the books refuse to hold. The
-watcher posts nothing for it: it looks for money arriving, and this is money leaving.
-
-## Signed, then sent: the hash before the broadcast (§7)
-
-`sign` stores the hash, the signed bytes and the nonce on the payment row (still RESERVED)
-before anything leaves; `execute` asks the network for that hash and sends the same bytes only
-if it does not know them, so a retry or a crash (§9) can never pay twice.
-
-- `apps/worker/src/sign.ts` — the `sign` step, numbered: read the payment, read the nonce and
-  fees from the chain, lock the row and the treasury's nonce, ask the signer, store and commit.
-- `apps/worker/src/execute.ts` — the `execute` step: the bytes from the row, the network asked
-  by hash, the same bytes sent if it does not know them, then RESERVED → SENT.
-- `migrations/0008_payment_signing.sql` — the three columns, and the table refusing a SENT
-  payment without a hash, a hash without its bytes, and two payments on one nonce.
-- `apps/worker/src/workflows.ts` — `PaymentWorkflow` calls `sign` then `execute`, with the
-  reference and nothing else; 5 attempts each, then REVIEW with the money still reserved.
-- `apps/worker/src/config.ts` — the gas headroom and the fee cap a payout is signed with; the
-  signed bytes are never re-priced.
-- `packages/chain/src/signer-client.ts` — how the worker asks the signer to sign. It holds no key.
-- `docker-compose.yml` — the worker waits for the signer and knows its URL, and never holds the seed.
-- `tests/db/signing.db.test.ts` — two claims against a real Postgres, with a signer that really
-  signs: a payment is signed once however many ask at once, and two payments signed together
-  get two nonces.
-- `apps/api/src/payments/read-payments.ts` — `GET /payments/:reference` carries the hash and
-  its explorer link once the payment is signed.
-- `apps/api/src/payables/payables.service.ts` — the Payables read carries it too, for each
-  invoice's payment.
-- `packages/domain/src/api.ts` — `PaymentView.transaction`: the hash and its explorer link,
-  present once signed.
-- `apps/ui/src/admin/PayablesScreen.tsx`: the invoice row shows the hash with its explorer
-  link, and the payment's status.
-
-See it (this sends real testnet USDC from the treasury): press Pay on a small invoice on
-`/admin/payables`; its workflow runs on to SETTLED ("Paid" below). While it waits for finality,
-its row shows SENT with the hash, and
-`SELECT at, event, context->>'txHash' FROM audit_log WHERE subject_id = 'PAY-XXXX' ORDER BY id`
-shows `signed` before `sent`, with the same hash. Start it again once it has settled:
-
-```
-docker compose exec temporal temporal workflow start --address temporal:7233 \
-  --task-queue payments --type PaymentWorkflow --workflow-id PAY-XXXX --input '"PAY-XXXX"'
-```
-
-`sign` answers "already signed", `execute` "nothing to send: SETTLED", and nothing is sent. Until the
-payment settles, the Start screen's onchain USDC is lower than Available + Reserved: the money
-has left, and the books wait for finality and the Transfer event.
-
-## Paid: finality and the event, then the books (§7)
-
-A payment is paid only when its block is final AND its receipt carries the official contract's
-Transfer event, exact amount and destination; the event alone is not enough. Then the books, the
-payment and the invoice move in one transaction, which posts once however often it runs.
-
-- `packages/chain/src/usdc.ts` — `paidVerdict`, the whole rule in one place, next to
-  `findSettlementLog`: not landed, not final, reverted, or paid.
-- `packages/chain/src/usdc.test.ts` — both conditions pinned with a real log: the right event
-  above the final block is not paid yet; at the final block it is.
-- `apps/worker/src/watch.ts` — `watch`, one check and no writes: the receipt, the final block
-  (`safe`, never `latest`), the verdict. Reverted in a final block: FAILED (the "FAILED with proof"
-  entry below). Final with the wrong event: REVIEW, the money stays reserved.
-- `apps/worker/src/settle.ts` — the `settle` step: lock the invoice, then Dr Partner debt / Cr
-  Reserved, SENT → SETTLED, the invoice PAID, and the evidence in the audit log, all or nothing.
-- `apps/worker/src/workflows.ts` — the loop: `watch`, a durable 10 s timer, `watch` again, until
-  paid (then `settle`), reverted (then `reverse`), or 30 minutes without a final answer (then REVIEW).
-- `tests/db/settlement.db.test.ts` — §7's figures on a real payment row, settled twice: Available
-  9,000, Reserved 0, Partner debt 0, one `settle` in the ledger. Indexed in `tests/db/README.md`.
-- `docs/dev/restart-survival.md` — the same wait, with the worker stopped in the middle of it.
-- `apps/ui/src/admin/PayablesScreen.tsx`: a settled payment's row shows SETTLED, with its hash.
-
-See it (this sends real testnet USDC): press Pay on a small invoice on `/admin/payables`, then
-
-```
-docker compose logs -f worker   # watch: not final … → watch: paid → settle: settled
-```
-
-The Start screen and `curl localhost:3000/treasury` then agree again: onchain USDC equals
-Available plus Reserved, Reserved and Partner debt are down by the payment, and Available did not
-move. The invoice on `/admin/payables` is PAID.
-
-## From the click to the chain: dispatch after COMMIT (§3, §4)
-
-Pay commits the payment with its money reserved, and only then starts its workflow: a refusal is
-always in the api's answer, and no workflow exists for a payment that rolled back. A start that
-fails is picked up within ten seconds by a second loop, and the workflow id is the reference, so
-starting twice is harmless.
-
-- `apps/api/src/payments/payments.controller.ts` — `POST /payments`: the transaction commits,
-  then a RESERVED payment is dispatched, on a 201 and on a replay. The answer does not change.
-- `apps/api/src/payments/dispatch.ts` — `dispatchPayment`: the start, with a 3 s deadline; a
-  failure is one warning naming the reference, and the payment stays committed.
-- `apps/api/src/temporal/temporal.module.ts` — the api's Temporal client, connected lazily so the
-  api takes payments while Temporal is down; closed on shutdown.
-- `packages/domain/src/temporal.ts` — what the api and the worker share: where Temporal is, the
-  workflow's name, and how it is started (id = reference; a running one is attached to).
-- `apps/worker/src/dispatcher.ts` — the dispatcher's tick, with its rule and query at the top:
-  every RESERVED or SENT payment has a running workflow. REVIEW is left for a human.
-- `apps/worker/src/workflows.ts` — `DispatcherWorkflow`: the watcher's loop with another tick
-  (tick, a durable 10 s timer, a fresh run after an hour).
-- `apps/worker/src/index.ts` — starts both loops at boot, or attaches to them if they are running.
-- `docker-compose.yml` — the api knows Temporal's address and waits for it at startup.
-- `apps/ui/src/admin/PayablesScreen.tsx` — the Pay dialog says what happens now: reserved first,
-  then signed and sent, and the row follows it.
-- `docs/dev/restart-survival.md` — the drill now starts by pressing Pay.
-
-See it (this sends real testnet USDC): press Pay on a small invoice on `/admin/payables` and its
-row goes RESERVED → SENT with the hash → SETTLED; finality takes minutes. In
-`http://localhost:8080/namespaces/default/workflows` there are two workflows that never end,
-`watcher` and `dispatcher`, and one `PaymentWorkflow` per payment, named by its reference. For the
-dispatcher: `docker compose stop temporal`, press Pay (still 201 RESERVED, and `docker compose logs
-api` has the warning), `docker compose start temporal`, and `docker compose logs worker` says
-`dispatcher: started PAY-XXXX (RESERVED, had no running workflow)`.
-
-## The payment's story: the audit log on screen (§3, §7)
-
-Every step writes its row to the audit log in the same transaction as what it did, so reading the
-rows back tells the payment's story as it happened, with nothing added. The Transfers screen does
-only that: Created, Reserved, Signed, Sent, Paid, Settled, each with the fact that proves it.
-
-- `packages/ledger/src/audit.ts` — everything the log can say, in one place: who acts, what a row
-  is about, each subject's events. Every writer names its rows with these; stored values never change.
-- `apps/api/src/payments/read-payments.ts` — the payment reads: one payment, the latest hundred for
-  the list, and one payment's audit rows plus its invoice's, in one snapshot. No chain reads. The
-  Temporal link is offered only once a run certainly exists (something signed, or in flight and due).
-- `apps/api/src/payments/payments.controller.ts` — `GET /payments` and
-  `GET /payments/:reference/timeline` (404 for an unknown reference).
-- `packages/domain/src/api.ts` — `Payments`, `PaymentSummary`, `PaymentTimeline`, `AuditStep`: what
-  the list and the story answer.
-- `packages/domain/src/temporal.ts` — `workflowUrl`, the one place the link to a payment's runs in
-  the Temporal UI is built (by workflow id: a payment can have more than one run).
-- `docker-compose.yml` — the api gets `TEMPORAL_UI_PORT`, so that link uses the port your browser reaches.
-- `apps/ui/src/admin/TransfersScreen.tsx` — the list, and the story: each row in the article's
-  words with its raw event name under it; Paid and Settled are two lines from one `settled` row.
-- `apps/ui/src/app/App.tsx` — the Transfers tab, and `/admin/transfers/:reference`: each payment's
-  story has its own address, so an invoice row links straight to it.
-- `apps/ui/src/api/usePolling.ts` — the story stops asking once the payment is SETTLED or FAILED.
-- `apps/ui/src/admin/PayablesScreen.tsx` — an invoice's payment reference opens its story.
-
-See it (this sends real testnet USDC): press Pay on a small invoice on `/admin/payables` and click
-its reference. Reserved is there at once, Signed and Sent within seconds, Paid and Settled after
-finality, without a reload (keep the tab in front: a hidden tab pauses polling).
-`curl localhost:3000/payments/<its reference>/timeline` is the same story as data.
-
-## Breaking it on purpose: a revert you can switch on (§6, §9)
-
-§6: a transfer that reached the chain and reverted is the proof that nothing moved. One switch makes
-the next payment's transaction do exactly that, on the real network, for the price of its gas; until
-that revert is final, the payment waits SENT with its money reserved.
-
-- `migrations/0009_settings.sql` — the `settings` table: one row per failure-injection flag. An
-  absent row is off.
-- `packages/domain/src/experiments.ts` — every flag in one place: its key, what it does, and the
-  `Experiments` shape the api answers; the screen sends only the flag it switches.
-- `apps/api/src/experiments/experiments.controller.ts` — `GET` and `PUT /settings/experiments`; the
-  api stores the flags and never acts on one, so Pay and the Start screen work the same while one is armed.
-- `apps/api/src/app.module.ts` — registers that controller (it has no service, so no module).
-- `apps/worker/src/experiments.ts` — `claimRevertNextPayment`: one UPDATE takes the flag and switches
-  it off, so exactly one payment gets it.
-- `apps/worker/src/sign.ts` — the claim, inside the transaction that stores the hash (a rollback leaves
-  the flag armed); the `signed` row records the gas signed and what the payout would have had.
-- `apps/worker/src/config.ts` — `REVERT_GAS_LIMIT` (30,000): enough for a node to accept the
-  transaction, too little for the USDC contract to finish, so it is included and reverts.
-- `packages/chain/src/usdc.test.ts` — a real reverted receipt: `reverted` once its block is final, not
-  final one block before. A revert that is not final proves nothing yet.
-- `apps/ui/src/admin/BreakItScreen.tsx` — each card's **Run it**: its own 0.01 USDC invoice, armed,
-  paid, followed to the end, the flag off again, and the evidence on the card. The switch is the long way.
-- `apps/ui/src/app/App.tsx` — the Break it tab, the one poll of the flags, and the red banner every admin
-  screen shows while one is armed.
-- `apps/ui/src/api/client.ts` — `getExperiments` and `setExperiments` (a PUT).
-- `apps/ui/src/admin/TransfersScreen.tsx` — the Signed line says when the gas limit was set too low on
-  purpose, with both numbers.
-
-See it (real testnet gas, no USDC moves): press **Run it** on "Revert a payment" at
-`/admin/break-it`. The card names each stage as it reaches it: the invoice, armed, "Paid as PAY-XXXX",
-then "Sent, waiting for the network". Minutes later, when the revert's block is final, it ends with the
-evidence: FAILED `reverted`, the transaction on the explorer (out of gas, no Transfer), and the money
-back in Available with the invoice payable again. The next entry is what the api did in between; the
-switch under the card is the long way, for paying an invoice of your own in Invoices to pay.
-
-## When it fails: FAILED with proof, and the invoice payable again (§6)
-
-A transfer that reached the chain and reverted is the one failure the chain itself proves, once its
-block is final. Only then does the payment end FAILED, and in the same transaction the money goes back
-to Available with that proof next to the entries and the invoice opens again. Partner debt stays: the
-company still owes the invoice.
-
-- `apps/worker/src/watch.ts` — a reverted receipt in a final block is an answer now, `reverted`, with
-  the hash, its block and the final block. A final transaction without the expected event goes to REVIEW.
-- `apps/worker/src/reverse.ts` — the `reverse` step, `settle`'s mirror: the invoice lock first, then
-  SENT → FAILED `reverted`, the `reversal` with its proof, the invoice OPEN with no payment on it. Posts once.
-- `apps/worker/src/workflows.ts` — the watch loop ends on `paid` or `reverted`: `paid` goes to `settle`,
-  `reverted` to `reverse`.
-- `apps/worker/src/activities.ts` — lists `reverse` with the other steps.
-- `packages/ledger/src/audit.ts` — the invoice's new `reopened` event.
-- `packages/domain/src/api.ts` — the `reverted` reason, and `failedAfterReserving`: the one rule that
-  tells a failure after the reserve from a refusal at the door, for the api and the screen alike.
-- `apps/api/src/payments/payments.controller.ts` — a replay answers the code of the request's first
-  outcome with the payment as it is now: a payment that reverted later replays 200 with FAILED `reverted`.
-- `apps/ui/src/admin/PayablesScreen.tsx`: a reverted payment's row shows FAILED and why;
-  the idempotency key ends with any answer, so Pay on the reopened invoice sends a new one.
-- `apps/ui/src/admin/TransfersScreen.tsx` — the story's Failed line (the block, and that it is final),
-  the Released line (Reserved back to Available, with the proof), and the invoice OPEN again.
-- `apps/ui/src/admin/BreakItScreen.tsx` — the revert card says where the money goes once the revert is final.
-- `tests/db/failure.db.test.ts` — §6's FAILED on a real payment row, reversed twice: Available 10,000,
-  Reserved 0, Partner debt 1,000, one `reversal` with its proof, the invoice payable again with a new
-  key. Indexed in `tests/db/README.md`.
-
-See it (real testnet gas, no USDC moves): after the previous entry's revert, wait for finality (minutes)
-and open the payment's story: Failed, then Released with the proof, and the invoice OPEN again;
-`curl localhost:3000/treasury` has Available back and Reserved at 0. In the worker's log:
-
-```
-docker compose logs worker | grep reverse   # PAY-XXXX reverse: reversed (ledger transaction …), the invoice is open again
-```
-
-The first request again, with the key on the story's Created line and the `payableId` from
-`curl localhost:3000/payments/<reference>`, answers 200 with `"status":"FAILED","reason":"reverted"` and
-writes nothing:
-
-```
-curl -i -X POST localhost:3000/payments -H 'content-type: application/json' \
-  -H 'idempotency-key: <that key>' -d '{"payableId":"<the invoice id>"}'
-```
-
-Then press Pay on the same invoice: a new key, a new reference, and this time it settles.
-
-## No proof either way: REVIEW, with the money held (§6, §9)
-
-§9's stuck one: "the retries run out, the payment escalates to manual review with all the context".
-A step out of attempts, a step failing in a way retrying cannot help, or 30 minutes of checks with no
-final answer all end in `escalate`: the payment goes to REVIEW with the reason written down, and no
-money moves, because nothing proves the transfer can no longer land.
-
-- `apps/worker/src/workflows.ts` — the bounds (5 attempts a step, 180 checks of finality), the one
-  `catch` that sends a step that gave up to `escalate`, and the three endings: settle, reverse, escalate.
-- `apps/worker/src/escalate.ts` — the `escalate` step: RESERVED or SENT → REVIEW under the row lock,
-  with an `escalated` audit row (step, attempts, last error, hash, nonce). No ledger call, on purpose.
-- `migrations/0010_payment_review.sql` — `review_from_status`: a REVIEW always knows where it came
-  from (resume goes back there), and only a REVIEW has one.
-- `apps/worker/src/watch.ts` — a final transaction without the expected event will never be paid, so
-  it is not retried; and "Node not responding" is checked right before the chain is asked.
-- `apps/worker/src/execute.ts` — a payment in REVIEW is left alone ("a human resumes it"); the same
-  check before the network is asked.
-- `apps/worker/src/experiments.ts` — `failIfNodeBlackholed`: read on every attempt, so disarming it
-  lets the very next attempt through.
-- `apps/worker/src/activities.ts` — lists `escalate` with the other steps.
-- `packages/domain/src/experiments.ts` — the `experiment.blackhole_rpc` flag, `{ enabled, step }`,
-  `execute` (before the broadcast) or `watch` (after it).
-- `apps/api/src/experiments/experiments.controller.ts` — `PUT /settings/experiments` now changes
-  only the flags it is sent, so switching one never re-arms the other.
-- `apps/ui/src/admin/BreakItScreen.tsx` — the "Node not responding" card: where it bites, and a Run it
-  that arms the flag for its own invoice and switches it off again once its payment is in REVIEW.
-- `apps/ui/src/api/client.ts` — `setExperiments` takes only the flags that change.
-- `apps/ui/src/app/App.tsx` — the banner names whichever flag is armed.
-- `packages/ledger/src/audit.ts` — the payment's new `escalated` event.
-- `apps/ui/src/admin/TransfersScreen.tsx` — the story's Escalated line (which step gave up and why);
-  the REVIEW queue says the money stays reserved.
-- `apps/ui/src/admin/PayablesScreen.tsx`: the invoice row of a payment in REVIEW shows REVIEW,
-  signed or not.
-- `tests/db/failure.db.test.ts` — §6's REVIEW next to its FAILED: escalated twice, Available 9,000,
-  Reserved 1,000, the invoice PAYING, nothing posted but the reserve. Indexed in `tests/db/README.md`.
-
-See it (this sends real testnet USDC): on `/admin/break-it` press **Run it** on "Node not
-responding" (it always arms `watch`, after the broadcast). About 15 s after Sent the card ends with REVIEW, its money still in
-Reserved; its story on Transfers has an Escalated line saying `watch` ran out of its 5 attempts. The
-explorer shows the transfer landed, while `curl localhost:3000/treasury` still has it in Reserved
-(onchain is below Available + Reserved).
-
-```
-docker compose logs worker | grep -E 'watch: attempt|escalate'   # attempt 1…5 FAILED, then SENT → REVIEW
-```
-
-Disarm it: the payment stays in REVIEW, and the dispatcher leaves it there for a human.
-
-## Resume: back from REVIEW with the same bytes (§7, §9)
-
-§9: "the $1,000 stay reserved until there is proof". Resume is how an operator hands a payment in
-REVIEW back once the cause is gone: it returns to where it was, with its money untouched, and its
-workflow looks for the proof again. If the bytes never left, it sends the SAME signed bytes (§7), never
-a new signature.
-
-- `apps/api/src/payments/resume-payment.ts` — `resumePayment`: under the row lock, REVIEW → where it
-  was (`review_from_status`, then cleared) and a `resumed` row. No ledger call: the money stays reserved.
-- `apps/api/src/payments/payments.controller.ts` — `POST /payments/:reference/resume`: 404 unknown,
-  409 not in REVIEW, 200 with the payment; committed first, then dispatched exactly as Pay.
-- `apps/worker/src/execute.ts` — the resumed run asks the network for the stored hash; a SENT payment
-  whose bytes it did not have gets the same bytes again and its own `sent` row (`resent: true`).
-- `apps/api/src/payments/read-payments.ts` — what the queue shows for each payment in REVIEW (where it
-  was, the step, its last error, since when), and `HOLDS_NONCE`: signed and never sent.
-- `apps/api/src/treasury/fund-partner-wallet.service.ts` — refuses (422) first, before the signer or
-  the chain is asked, while a payment holds a nonce: its pending-nonce read would take it and strand it.
-- `packages/domain/src/api.ts` — `PaymentReview`, with `nonce` only where it is really held.
-- `packages/ledger/src/audit.ts` — the payment's new `resumed` event.
-- `apps/ui/src/admin/TransfersScreen.tsx` — the REVIEW queue above the list, oldest first, with Resume;
-  the story's Resume, its Resumed line, and a re-send's Sent line.
-- `apps/ui/src/api/client.ts` — `resumePayment` (a POST; a 409 shows its sentence).
-- `apps/ui/src/admin/BreakItScreen.tsx`: a run that ends in REVIEW gets its own Resume on the card.
-- `tests/db/failure.db.test.ts` — §6's REVIEW continues through resume: SENT again, `review_from_status`
-  cleared, Reserved still 1,000, one `resumed` row; a second resume writes nothing. Indexed in
-  `tests/db/README.md`.
-
-See it (this sends real testnet USDC): the card only arms after the broadcast, so arm "before the
-broadcast" through the api (the first command below) and press **Pay** on an invoice. About 15 s later
-the payment is in the REVIEW queue on `/admin/transfers`, "holds nonce N"; the explorer does not know
-its hash, and "Fund partner wallet" on `/partner` is refused and names it. Disarm it (the second
-command), then press Resume: Sent carries the same hash as Signed, then Paid and Settled after finality.
-
-```
-curl -s -X PUT localhost:3000/settings/experiments -H 'content-type: application/json' -d '{"blackholeRpc": {"enabled": true, "step": "execute"}}'
-curl -s -X PUT localhost:3000/settings/experiments -H 'content-type: application/json' -d '{"blackholeRpc": {"enabled": false, "step": "execute"}}'
-docker compose logs worker | grep -E 'sign:|execute:'   # already signed 0x… (nonce N), then sent 0x… (the same hash)
-curl -i -X POST localhost:3000/payments/<its reference>/resume   # once settled: 409, only a payment in REVIEW can be resumed
-```
-
-## Money that arrived: the address is the attribution (§8)
-
-Somebody paid you. Which invoice does it settle? Not the one whose amount matches, because two
-partners can owe the same figure on the same day. Each partner pays at an address of its own, so
-the money says whose it is by where it came in. And it is credited only when its block can no
-longer be replaced AND the official contract's transfer still says the exact amount at that exact
-address: until then it is a row on a screen, not money in the books.
-
-- `migrations/0012_deposits.sql` — one row per arriving transfer. `(tx_hash, log_index)` is unique,
-  so scanning a block twice cannot credit money twice; `partner_id` is on the row from the first
-  moment, because the address it arrived at is the attribution.
-- `apps/worker/src/deposits.ts` — the deposit half of a tick: record what was seen, list what is
-  final, credit it, and the matching rule in two SQL statements (the hash the partner recorded,
-  then the exact amount on its oldest open invoice, then `unmatched`).
-- `apps/worker/src/watcher.ts` — the tick, now two ranges: final blocks as before (fundings and
-  deposits), plus the unfinalized tail for the deposit addresses only, which writes DETECTED rows
-  and nothing else. Then the promotion pass, outside the transaction, that asks the chain again.
-- `packages/ledger/src/movements.ts` — `deposit`: Dr `deposits:onchain` / Cr `partner:receivable`,
-  named by the deposit row, so the same money can only be credited once.
-- `packages/ledger/src/audit.ts` — `deposit` joins the subjects, with `detected`, `settled` and
-  `mismatched`: the last one is a deposit whose second look disagreed, left DETECTED on purpose.
-- `apps/api/src/deposits/deposits.controller.ts` — `GET /deposits`: the latest, newest first, with
-  the partner, the address, how it was matched and the invoice it paid. A read and nothing else.
-- `apps/api/src/partners/partners.service.ts` — the three figures per partner in one query: what
-  they owe you, what you owe them, and what has arrived at their deposit address.
-- `apps/ui/src/admin/TransfersScreen.tsx` — the "Money that arrived" panel under the payments
-  table, and the sentence about what a deposit address costs: sweeping it into the treasury is a
-  transaction of its own, paid in the network's own currency.
-- `apps/ui/src/admin/PartnersScreen.tsx`: two of those figures (they owe you, you owe them) next
-  to each partner's two addresses, each with its USDC balance.
-- `apps/ui/src/api/client.ts` — `readTransfers`, which asks for payments and deposits together so
-  the screen keeps one "reading…" and one "unavailable".
-- `packages/domain/src/api.ts` — `DepositSummary`; a receivable now carries the deposit that paid
-  it, and a partner its three figures.
-- `tests/db/deposits.db.test.ts` — the three claims: credited only once the block cannot be
-  replaced, the address decides whose money it is (invoice or no invoice), and a second pass posts
-  nothing twice.
-
-See it: have a partner pay an invoice on `/partner`, then watch `/admin/transfers`. Within a tick
-the deposit is DETECTED and the books have not moved; a few minutes later it is SETTLED, the
-invoice is PAID, and Deposits went up. `/admin/partners` shows the USDC balance at that deposit
-address.
-
-```
-docker compose logs -f worker                      # detected ... credited, matched by hash
-curl -s localhost:3000/deposits | python3 -m json.tool
-```
-
-## Crash after signing: the worker dies and the payment finishes itself (§9)
-
-The worst moment to lose a process is between signing and broadcasting: the hash exists, and
-nobody knows whether the transfer went out. One switch makes that happen for real — the step
-commits the hash, the bytes and the nonce, then kills its own process. Nobody restarts anything.
-Docker brings the worker back, Temporal runs the step again, and the payment asks the network
-about the hash it stored, does not find it, and sends the same bytes: one transfer, no duplicate.
-
-- `apps/worker/src/sign.ts` — where the kill is, and where it is not: `signPayment` claims the
-  flag inside the transaction that stores the hash and never exits (the db suite calls it
-  directly); the `sign` activity exits, once that transaction has committed.
-- `apps/worker/src/experiments.ts` — `claimCrashAfterSigning`: one UPDATE takes the flag and
-  switches it off, so the worker that comes back cannot sign and die again for ever.
-- `apps/worker/src/execute.ts` — the recovery, the same one as in "Signed, then sent"
-  above: ask the network for the stored hash, and send the SAME bytes when it does not know them.
-  This experiment causes the moment; that file is what survives it.
-- `apps/worker/src/index.ts` — `worker: started at <ISO>`, so the death and the rebirth read as
-  two timestamps seconds apart in `docker compose logs worker`.
-- `packages/domain/src/experiments.ts` — `crashAfterSigning` and its `settings` key, next to the
-  other two flags. An absent row is off.
-- `apps/api/src/experiments/experiments.controller.ts` — the flag joins the partial PUT. The api
-  stores it and, as with the others, never acts on it.
-- `apps/ui/src/admin/BreakItScreen.tsx` — the "Crash after signing" card, and the one new seam in
-  the runner: `narrate`, which reads the stages a status cannot show out of the payment's own story.
-- `apps/ui/src/app/App.tsx` — the sentence the red banner adds while this one is armed.
-- `apps/ui/src/admin/TransfersScreen.tsx` — the `signed` row can now name more than one flag, so
-  the revert's line looks for its own name in the list.
-- `scripts/experiments/harness.ts` — what every `pnpm experiment:*` command runs on: the api
-  client it drives the demo with (`get`/`post`/`put`, follow a payment to its end) and the one
-  shape it prints evidence in.
-- `scripts/experiments/crash.ts` — `pnpm experiment:crash`: the same doors the card presses, plus
-  the one thing a browser cannot read, Docker's `RestartCount` either side of the death.
-- `docs/dev/restart-survival.md` — the drill (you stop the worker) next to the experiment (the
-  worker stops itself), and why Docker's restart policy only covers the second.
-
-See it (real testnet USDC, about four minutes; other payments in flight lose one attempt and carry
-on): press **Run it** on "Crash after signing" at `/admin/break-it`, or run the command. The
-card names the stages as it reaches them: the invoice, armed, "Paid as PAY-XXXX", "Signed 0x…,
-then the worker was killed with nothing sent", and half a minute later "The worker came back,
-asked the network about that hash, did not find it, and sent the same bytes", then SETTLED with
-one transfer on the explorer. In the Temporal UI the extra attempt is on `sign`, not on `execute`:
-`execute` had never run when the process died.
-
-```
-docker inspect -f '{{.RestartCount}} {{.State.StartedAt}}' stablecoin-payments-reference-worker-1
-pnpm experiment:crash              # the same story, with that count before and after
-docker compose logs -f worker      # "killing this worker on purpose", then "worker: started at …"
-```
-
-## The double click: two calls, one key, one payment (§9)
-
-The nervous second click, on purpose: the same invoice is paid twice at the same instant, with one
-idempotency key. The api answers both, one saying it recorded the payment and the other handing back
-that same payment, and the books move once. Nothing is armed for this one, because the failure is
-two requests and not an injected fault; what it rests on is the unique index in "The payment API"
-above, already pinned by `tests/db/payments.db.test.ts`.
-
-- `apps/ui/src/api/client.ts` — `doubleClick`: the one place the browser really makes two calls,
-  with nothing awaited between them, and each answer carries its status code because the codes are
-  the evidence.
-- `apps/ui/src/admin/BreakItScreen.tsx` — the "Double click" card (no badge and no switch: it arms
-  nothing) and the one new seam in the runner, `fire`, the step that turns the invoice into a
-  payment; every other card leaves it at its default of one call.
-- `scripts/experiments/double-click.ts` — `pnpm experiment:double-click`: the same two calls from a
-  terminal, with the payment rows, the reserve entries and Available before and after.
-- `scripts/experiments/stuck.ts` — `pnpm experiment:stuck`: §9's stuck one over the flag from "No
-  proof either way" above, armed, escalated to REVIEW with the money held, disarmed, resumed, settled.
-- `scripts/experiments/harness.ts` — what the two new commands needed: a POST that hands the status
-  code back with the body, the books in one read, the invoice a run writes for itself, and the
-  check the double click starts with: nothing else in flight.
-
-See it (real testnet USDC, about four minutes): press **Run it** on "Double click" at
-`/admin/break-it`. The card shows the invoice, then both answers, `201 PAY-XXXX RESERVED` and
-`200 PAY-XXXX RESERVED` with the same reference, then "One payment, one reserve", and it follows
-that one payment to SETTLED with one transfer on the explorer.
-
-```
-pnpm experiment:double-click                          # the same story, from a terminal
-pnpm experiment:stuck                                 # REVIEW with the money held, then Resume
-curl -s localhost:3000/payments/PAY-XXXX/timeline     # one created row, one reserved row
-```
-
-## The race: 1,500 against two of 1,000 (§9)
-
-Two payments arrive at the same instant, with different keys, and together they are worth more
-than Available. If both read the balance before the other one writes, both think they fit. The
-check and the lock live inside the same transaction, so one reserves and the other is refused for
-insufficient funds, and Available never crosses into negative.
-
-This is the one failure the demo's own money cannot show: the article's race starts at 1,500 and
-the treasury here holds a few dollars of real testnet USDC. So the race runs against a sandbox
-database of its own, with the article's figures, through the same payment door the Pay button
-presses. The demo's books do not move, and nothing is signed or sent.
-
-- `apps/api/src/experiments/race.ts` — the whole thing in seven numbered steps: the guard on the
-  database name, the sandbox created and migrated on demand, the reset and the seed, the latch,
-  and the two `createPayment` calls the answer is built from.
-- `apps/api/src/experiments/race.controller.ts` — `POST /experiments/race`, no body: the two
-  racing calls happen inside the api, because two requests from a browser cannot be made to
-  arrive at the same instant.
-- `apps/api/src/app.module.ts` — registers that controller (it has no service, so no module).
-- `apps/api/src/payments/payments.controller.ts` — `statusCodeOf` is exported here, so the race
-  answers 201 and 422 from the payment door's own rule instead of two literals written twice.
-- `packages/db/src/migrate.ts` and `packages/db/src/pool.ts` — each takes an optional connection
-  string now, so the sandbox is migrated and pooled without changing `DATABASE_URL` under a
-  running api.
-- `packages/domain/src/api.ts` — `RaceResult` and `RaceAttempt`: what the endpoint answers, with
-  the database it ran against as part of the evidence.
-- `apps/ui/src/api/client.ts` — `runRace`: one call and no body, the only endpoint the browser
-  asks to do the concurrency for it.
-- `apps/ui/src/admin/BreakItScreen.tsx` — the "The race" card and its own small runner next to
-  `useRun`: no invoice, no flag and no payment to follow.
-  The five cards are also reordered here into the article's order.
-- `tests/db/race.db.test.ts` — the same race twice: at the ledger engine, where the lock is, and
-  at the payment door, which is what this endpoint runs. Both claims are in the index in
-  `tests/db/README.md`.
-- `scripts/experiments/race.ts` — `pnpm experiment:race`: the same call from a terminal, and it
-  names the database it used.
-
-See it (it costs nothing and takes seconds): press **Run it** on "The race" at `/admin/break-it`.
-The card shows `201 PAY-XXXX RESERVED 1,000.0000` and `422 PAY-YYYY FAILED insufficient_funds
-1,000.0000`, one reserve, and Available 1,500 → 500. Then open `/admin` and see that the demo's
-own Available is exactly what it was.
-
-```
-pnpm experiment:race
-docker compose exec postgres psql -U payments -d payments_experiment \
-  -c "SELECT code, balance_minor FROM ledger_accounts WHERE code LIKE 'treasury%'"
-docker compose exec postgres psql -U payments -d payments \
-  -c "SELECT count(*) FROM ledger_transactions"   # the same before and after a run
-```
-
-## The four failures from one command (§9, §12)
-
-Every Break it card has a command that does the same thing from a terminal, because §12 promises
-the reader can run the four failures. They press the same api doors the buttons press, and they
-add one thing a browser cannot do: Docker's own count of how many times the worker has come back.
-Each prints one screen — what it did, the figures before, the outcome, the figures after, and the
-artefacts — and none of them ever prints an RPC URL or a key.
-
-- `scripts/experiments/harness.ts`, what all four run on. It holds the api client, the invoice a
-  run writes for itself, the pre-flights (the double click waits for nothing else moving, crash and
-  stuck refuse while their own flag is armed) and the one shape the evidence is printed in.
-- `scripts/experiments/double-click.ts` — `pnpm experiment:double-click`: two calls, one key, one
-  payment.
-- `scripts/experiments/race.ts` — `pnpm experiment:race`: the only one that spends nothing.
-- `scripts/experiments/crash.ts` — `pnpm experiment:crash`: the worker dies after signing, with
-  `RestartCount` either side.
-- `scripts/experiments/stuck.ts` — `pnpm experiment:stuck`: REVIEW with the money held, then
-  Resume.
-
-See it: all five cards run at once, since a card's flag breaks only its own invoice's payment.
-Three of the commands send
-real testnet USDC, 0.01 each, and take four to five minutes; the race takes seconds.
-
-```
-pnpm experiment:race                  # seconds, no money
-pnpm experiment:double-click          # ~4 min
-pnpm experiment:crash                 # ~4 min, prints the worker's restart count
-pnpm experiment:stuck                 # ~5 min, arms, escalates, disarms, resumes
-```
-
-## Pay to an address: who you may pay (§4, §11)
-
-One of §4's validations is that the destination is allowed, and until now the demo took "allowed" to
-mean "a partner's payout address". It is a table now, one anybody can read and add to, and an
-invoice can be written to an address somebody typed: same invoice, same debt, same payment door.
-
-- `migrations/0013_allowlist.sql` — the table (the address, a label, the partner it belongs to when
-  it belongs to one) and the backfill that puts every existing partner's payout address on it, so
-  no invoice written before today becomes unpayable.
-- `apps/api/src/payments/create-payment.ts` — step 3 of the door, now one
-  `SELECT 1 FROM allowlist`. The partner check above it applies only to an invoice that has a
-  partner: one written to an address has no account that could be inactive.
-- `apps/api/src/allowlist/allowlist.controller.ts` — `GET /allowlist` and `POST /allowlist`
-  `{ address, label }`, add-only: 400 for a malformed address, 409 for one already there, and the
-  whole list back so the screen shows it at once. A controller and no service, because the list has
-  no rules of its own.
-- `apps/api/src/payables/payables.controller.ts` + `payables.service.ts` — `POST /payables` takes a
-  partner **or** a destination, exactly one. With a destination the invoice has no partner and
-  carries the address as it was typed; the debt it posts is the same one.
-- `apps/api/src/body.ts` — `readAddress`: viem's `getAddress` or one 400, so every address is stored
-  checksummed and the door's comparison cannot miss for a difference of case.
-- `apps/api/src/partners/partners.service.ts` — creating a partner registers its payout address on
-  the allowlist, which is what the migration backfilled for the two partners that already existed.
-- `apps/ui/src/admin/PayToAddressScreen.tsx` — the new tab: the form, the refusal in the api's own
-  words, **Add to allowlist** and then **Pay again** with a new key, and the payments made from
-  this screen: waiting for their time (with Cancel), in flight, and done.
-- `apps/api/src/experiments/race.ts` and `tests/db/helpers/database.ts` — the two seeds that write
-  invoices without going through the api: both add the allowlist row next to the partner, or every
-  payment they set up would be refused.
-
-See it: open `/admin/pay-to-address`, paste the partner wallet's address from `/partner`, 0.02 and a
-note, and press **Create and pay**. The invoice is written (Partner debt goes up by the amount) and
-the payment is refused: `destination_not_allowlisted`, nothing reserved, and the invoice sits OPEN
-on Invoices to pay reading "Pay to" and the short address. Add the address with a label and press **Pay again**: the
-same invoice, a new key, and this time the money is reserved and sent.
-
-```
-curl -s localhost:3000/allowlist                                     # three addresses
-curl -s -X POST localhost:3000/allowlist -H 'content-type: application/json' \
-  -d '{"address":"0xnope","label":"Typo"}'                           # 400, nothing written
-```
-
-## Scheduled: reserved now, sent at its time (§5, §7)
-
-A payment can be promised for later, and §5's two entries happen when it is promised, not when the
-transfer leaves: the money goes from Available to Reserved at once, where nothing else can spend it,
-and nothing is signed until its time. It is the cheapest way to see that reserving and the chain are
-two different moments (§7) — here they are minutes apart, and both screens show the gap.
-
-- `migrations/0014_scheduled_payments.sql` — `payments.execute_at`: when the payment runs. Null
-  means now, which is what every payment nobody scheduled says.
-- `apps/api/src/config.ts` — `MAX_SCHEDULE_AHEAD_HOURS`, and why a demo caps it: a forgotten
-  scheduled payment holds real testnet money under Reserved.
-- `apps/api/src/body.ts` — `readExecuteAt`: an ISO time, in the future and at most that far ahead,
-  or one 400 that says so.
-- `apps/api/src/payments/create-payment.ts` — the door is untouched except for two lines: the time
-  is stored with the intent, and it joins the request fingerprint **only when it is there**, so a
-  body with no time hashes to exactly the bytes it always did and every key already recorded still
-  replays instead of answering 409.
-- `apps/api/src/payments/payments.controller.ts` — `POST /payments` starts the workflow only for a
-  payment whose time is absent or already past, on a 201 and on a replay. Everything else is the
-  dispatcher's.
-- `apps/api/src/payments/read-payments.ts` — `execute_at` joins the columns every payment read
-  selects, so the list, the one payment and the story all carry it.
-- `apps/worker/src/dispatcher.ts` — the one clause that makes scheduling work,
-  `AND (execute_at IS NULL OR execute_at <= now())`. Its rule reads "every RESERVED or SENT payment
-  whose time has come has a running workflow", and its tick is every ten seconds, which is exactly
-  how late a scheduled payment can be.
-- `packages/domain/src/api.ts` — `PaymentView.executeAt`, present only for a payment scheduled for
-  later: its money is already reserved.
-- `apps/ui/src/admin/PayToAddressScreen.tsx` — the **now / at a time** choice on the form, two
-  minutes ahead by default, and an answer that says which it was.
-- `apps/ui/src/admin/TransfersScreen.tsx` — the **Waiting for their time** panel: what is promised,
-  where it goes, when it runs and how long that is from now.
-- `apps/ui/src/api/client.ts` — `payPayable` sends the time, and leaves the field out for a payment
-  that runs now.
-
-See it: on `/admin/pay-to-address` paste the partner wallet's address from `/partner`, 0.02, a note, pick
-**At a time** and press **Create and pay**. The answer is RESERVED straight away: Start shows the
-amount under Reserved while the chain still shows the old balance, `/admin/transfers` lists it under
-**Waiting for their time** with the countdown, and the Temporal UI has no run for it at all. Within
-about ten seconds of its time the panel drops the row and the story gains Signed and Sent, minutes
-after Created and Reserved.
-
-```
-curl -s localhost:3000/payments/PAY-XXXX                  # executeAt, and no transaction yet
-docker compose logs --tail=40 worker | grep dispatcher    # started PAY-XXXX, at its time
-```
-
-## Cancel: the release with no chain proof (§6)
-
-Reserved money is released only with proof the transfer can no longer land. A payment nobody has
-signed yet is the one case where that proof is an absence: there are no signed bytes, so no node can
-ever include them. Cancelling one costs nothing at all, not even gas, and it is the only release in
-the repo that shows no transaction.
-
-- `apps/api/src/payments/cancel-payment.ts` — the door, in one transaction: the invoice locked
-  first (`reverse`'s order), then the payment's own row, and only under that lock are its status and
-  its hash read. A hash means bytes that can still land, so it refuses and writes nothing.
-- `migrations/0015_cancel_needs_no_hash.sql` — the same rule in the database, for whoever posts the
-  movement: the deferred release trigger now refuses a `cancel` whose payment carries a hash. It
-  cannot ask that the payment exist, or `pnpm ledger:seed --release=cancel` would break.
-- `apps/api/src/payments/payments.controller.ts` — `POST /payments/:reference/cancel`: 200 with the
-  payment FAILED `cancelled`, 404 unknown, 409 `cannot_cancel_after_signing`, 409 naming the status
-  for anything else. Nothing is dispatched: there is no workflow to start.
-- `packages/domain/src/api.ts` — `cancelled` joins the failure reasons as one that happened **after**
-  the money was reserved, so a replay of its key answers 200 and no screen says "Nothing was
-  reserved." about it.
-- `apps/ui/src/admin/TransfersScreen.tsx` — **Cancel** next to each payment waiting for its time,
-  with a confirmation that says where the money goes, and the story's **Released** line, which now
-  prints the cancel's sentence instead of a hash that does not exist.
-- `apps/ui/src/admin/PayablesScreen.tsx` — the one sentence a screen shows for `cancelled`.
-- `apps/ui/src/api/client.ts` — `cancelPayment(reference)`, next to `resumePayment`.
-- `tests/db/cancel.db.test.ts` — the three claims: cancelled before signing the money comes back and
-  the invoice reopens; cancelled after signing nothing at all is written; cancel and `sign` at the
-  same instant have exactly one winner, whichever it is.
-- `tests/db/release.db.test.ts` — the database's own refusal, posted straight through the ledger:
-  refused with a hash on the payment, allowed without one. `tests/db/README.md` indexes both.
-
-See it: on `/admin/pay-to-address` schedule 0.02 for ten minutes ahead, then press **Cancel** on
-`/admin/transfers`. Reserved goes back to Available at once, the invoice is OPEN on Invoices to pay and
-payable with a new key, and the payment's story ends with Failed and Released — no Signed line, no
-explorer link, no run in Temporal. Then try it on a payment that was signed:
-
-```
-curl -i -X POST localhost:3000/payments/PAY-XXXX/cancel   # 409 cannot_cancel_after_signing
-docker compose exec postgres psql -U payments -d payments \
-  -c "SELECT kind, reference, proof FROM ledger_transactions WHERE kind = 'cancel'"
-```
-
-## Reconciliation: your books against the chain (§10)
-
-Your ledger and the chain are written by different processes at different moments, so the only
-honest answer is to check. A separate process takes one snapshot of the database and one block of
-the chain, and writes down for every payment and every deposit whether the three versions agree:
-what was asked for, what was recorded, what happened. It reports and never repairs.
-
-- `migrations/0016_reconciliation.sql` — the two tables a run leaves behind: `reconciliation_runs`
-  (the block it pinned, the outcome, the counts, one line) and `reconciliation_items` (one row per
-  thing checked, with a signed `delta_minor` that means *books minus chain at that block*).
-- `apps/worker/src/reconcile.ts` — the whole run, top to bottom in the order it happens: one
-  `REPEATABLE READ` snapshot, the block **B = min(watcher cursor, final block)**, the chain reads
-  (never inside a transaction), one item per row, then one insert of the run with its items.
-- `apps/worker/src/reconcile-items.ts` — step 4 on its own: the rules that decide one payment's or
-  one deposit's item, and the sentences. This is where this demo's history stops being alerts.
-- `apps/worker/src/workflows.ts` — the third long-lived loop next to the watcher and the
-  dispatcher, and the two-line one-shot the api starts for "Run now". No Temporal Schedules.
-- `apps/api/src/reconciliation/reconciliation.controller.ts` — two GETs and a POST that starts the
-  one-shot and answers 202 without waiting; 503 when Temporal cannot be reached, because then
-  nothing was queued.
-- `apps/api/src/reconciliation/read-reconciliation.ts` — the two reads. The api computes no
-  reconciliation of its own; it prints what the worker wrote.
-- `packages/domain/src/temporal.ts` — how "Run now" is started: the workflow id is the second it
-  was asked for, so two presses in the same second are one run.
-- `tests/db/reconciliation.db.test.ts` — three claims against real Postgres with a stub chain: the
-  three versions agree; a settled payment the chain never carried; a release whose proof is not
-  true. A live system is always clean, so the mismatch is manufactured on the chain's side.
-  `tests/db/README.md` indexes the three, next to the invariant they finish proving.
-
-One thing the check deliberately does not look at: **gas is never posted to the books**, and the
-comparison is stablecoin-only, so a fee can never show up as a difference.
-
-See it:
-
-```
-curl -i -X POST localhost:3000/reconciliation/run          # 202 and a link to its run in Temporal
-curl -s localhost:3000/reconciliation/runs | jq '.runs[0]' # the block it pinned and how it came out
-curl -s localhost:3000/reconciliation/runs/<id> | jq -r '.items[] | "\(.subjectId) \(.outcome) \(.detail)"'
-```
-
-That last one is the point of the phase: one sentence per payment and per deposit, including the
-ones a naive check would call alerts. A reverted payout says the transaction its proof names really
-reverted in that block, a cancelled one says nothing was ever signed, a payment refused at the door
-says no money moved, and money nobody invoiced says so instead of being flagged.
-
-## Books against the chain at one block (§10)
-
-The second check, and the one finance cares about: everything the company holds, as one number on
-each side. Available plus Reserved plus what has arrived at the deposit addresses, against the
-stablecoin at the treasury and those same addresses at the block the run pinned. What was in flight
-at that block is subtracted rather than argued about, and what is left over must be zero.
-
-- `apps/worker/src/reconcile-items.ts` — `checkGlobal`: the identity itself, in four figures
-  (`books − chain at B − what the items explain = remainder`). It SUMS the deltas the per-payment
-  and per-deposit items already carry, so a difference can never be counted twice.
-- `apps/worker/src/reconcile.ts` — the balances at B, one per watched address, through
-  `ChainFacts.usdcBalanceAt`; the three book figures read inside the same snapshot as the rows; and
-  the retry that a load-balanced node makes necessary. A read that still fails leaves the item
-  `unchecked` and the run `incomplete` — never a mismatch, and never a second look at `latest`.
-- `packages/domain/src/api.ts` — `ReconciliationIdentity`: the four figures as decimal strings,
-  absent when a run has none to show.
-- `apps/api/src/reconciliation/read-reconciliation.ts` — where those figures come from: the global
-  item's own evidence, so the screen shows what that block was compared against and never a fresh
-  read of today's books next to an old block.
-- `apps/ui/src/admin/ReconciliationScreen.tsx`: the screen: three cards (Books, Chain, In flight),
-  the movements that need a look (all of them behind **Show all**), the runs before, and **Run now**.
-- `apps/ui/src/app/App.tsx` — the **Reconciliation** tab, after Transfers.
-- `apps/ui/src/api/client.ts` — `getReconciliationRuns`, `getReconciliationRun`,
-  `runReconciliation` (which answers 202: the screen's next poll is what shows the run).
-- `tests/db/reconciliation.db.test.ts` — the three claims that pin §10's fixed block: a payment in
-  flight explains the difference exactly and the run is still clean; a cent nothing explains is a
-  mismatch whose sentence carries all four numbers; and a receipt the chain would not answer for
-  leaves the whole identity `unchecked` rather than unexplained. `tests/db/README.md` indexes them.
-
-Two accounts still have no reader anywhere: `revenue:services` and `expense:services` are in the
-books and in psql, and nowhere else. They are accruals, so they are outside this identity by
-design — like `partner:receivable`, an invoice nobody has paid is not money on any chain.
-
-See it: open `/admin/reconciliation` and press **Run now**. The books and the chain agree, at the
-block the run pinned. Then pay a small invoice on `/admin/payables` and keep pressing Run now while
-it goes through. Around finality there are a few seconds where one side has moved and the other has
-not, and the run explains it instead of flagging it: `+0.02` while the books still hold money the
-chain has already moved, or `-0.02` while the books have settled and the block this run pinned is
-still before the transfer. Either way the run stays clean and the third line adds up. A few seconds,
-because here the watcher's cursor (which fixes the block) and the payment's own finality check both
-move off the same final block; with the article's daily rhythm the same difference is visible all
-day.
-
-```
-curl -s localhost:3000/reconciliation/runs/<id> | jq '.identity'
-```
+## Before the payment: the treasury gets its money
+
+Money on chain is not money in the books until something records it.
+
+- `apps/ui/src/admin/StartScreen.tsx`: the treasury address, the faucet links, and the chain next to the books.
+- `apps/api/src/treasury/treasury.controller.ts`: `GET /treasury`, the one read behind the Start screen.
+- `apps/worker/src/watcher.ts`: every ten seconds, reads final blocks and records each transfer to the treasury once.
+- `packages/chain/src/finality.ts`: what "final" means here (the chain's `safe` block).
+- `migrations/0004_watcher.sql`: which addresses to watch, and how far the watcher has read.
+- `apps/ui/src/partner/PartnerWalletCard.tsx`: the shared partner wallet and its **Fund partner wallet** button.
+- `apps/api/src/treasury/fund-partner-wallet.service.ts`: sends 2 USDC and 0.005 ETH to that wallet, recorded as `demo:partner-funding` because it is not a payment.
+
+See it: fund the treasury and watch the **Books** card catch up with the **Treasury** card; `docker compose logs -f worker` shows every tick.
+
+## 3. The whole system in one picture
+
+Seven services, one per box in the article's picture.
+
+- `docker-compose.yml`: the seven services, what waits on what, and why the signer publishes no port.
+- `apps/worker/src/workflows.ts`: every workflow: the payment's steps, and the watcher, dispatcher and reconciler loops.
+- `apps/worker/src/activities.ts`: the steps the worker can run, one file per step.
+- `apps/worker/src/index.ts`: starts the worker and the three loops, or attaches to them if they are running.
+- `packages/domain/src/temporal.ts`: what the api and the worker share about Temporal; a payment's workflow id is its reference.
+- `migrations/0003_audit_log.sql`: the audit log, which nobody can edit or delete.
+- `packages/ledger/src/audit.ts`: everything the audit log can say, in one place.
+- `apps/api/src/payments/read-payments.ts`: the payment reads, including its story from the audit log.
+- `apps/ui/src/admin/TransfersScreen.tsx`: every payment, and each payment's story step by step.
+
+See it: open `http://localhost:8080`: `watcher`, `dispatcher` and `reconciler` are always running, plus one `PaymentWorkflow` per payment.
+
+## 4. Follow a $1,000 payment to a partner
+
+One idempotency key, one payment: a retry or a double click gets the same payment back.
+
+- `apps/api/src/payables/payables.service.ts`: writes an invoice the company owes, with its debt, in one transaction.
+- `apps/api/src/payments/create-payment.ts`: the heart: record the intent, run the checks, reserve the money, then RESERVED or FAILED.
+- `migrations/0007_payments.sql`: the payments table; its unique index on the idempotency key is the whole mechanism.
+- `apps/api/src/payments/payments.controller.ts`: `POST /payments` and which outcome gets which status code.
+- `apps/api/src/payments/compliance.ts`: a mock, marked as one, where a real screening provider plugs in.
+- `apps/api/src/config.ts`: the limits a reader might change: invoice and payment amounts, the compliance denylist.
+- `migrations/0013_allowlist.sql`: the addresses the company may pay.
+- `apps/api/src/allowlist/allowlist.controller.ts`: read and add to the allowlist.
+- `apps/api/src/body.ts`: the checks on what a person typed: ids, amounts, addresses, times.
+- `apps/api/src/payments/dispatch.ts`: starts the payment's workflow, only after the database has committed.
+- `apps/worker/src/dispatcher.ts`: every ten seconds, starts any payment whose start failed or whose time has come.
+- `apps/ui/src/admin/PayablesScreen.tsx`: Pay and its dialog; the browser keeps one key per attempt.
+- `apps/ui/src/admin/PayToAddressScreen.tsx`: pay an address somebody typed; a refusal, **Add to allowlist**, **Pay again**.
+- `tests/db/payments.db.test.ts`: the same request twice writes nothing new; two parallel calls with one key make one payment.
+
+See it: on **Pay to an address**, paste the partner wallet's address from `/partner` and press **Create and pay**: refused (`destination_not_allowlisted`), then **Add to allowlist** and **Pay again**.
+
+## 5. Two ledger entries before the money moves
+
+Reserving moves money from Available to Reserved; the total does not change.
+
+- `migrations/0002_ledger.sql`: the whole rulebook: the accounts, and the guards the database enforces itself.
+- `packages/ledger/src/engine.ts`: writes one transaction: locks the accounts, checks it sums to zero, refuses a negative Available.
+- `packages/ledger/src/movements.ts`: every movement the article names, one function each (`reserve`, `settle`, `reversal`, `cancel` and the rest).
+- `packages/ledger/src/errors.ts`: the three answers the engine can refuse with.
+- `packages/ledger/src/money.ts`: turns a typed "0.50" into exact minor units, with no floating point.
+- `packages/ledger/src/seed.ts`: the article's figures (10,000, 1,000 and the race's 1,500) as real entries.
+- `migrations/0006_payables.sql`: the invoices the company owes; the debt is on the books from the moment one exists.
+- `migrations/0014_scheduled_payments.sql`: a payment can wait for its time, with its money already reserved.
+- `tests/db/guards.db.test.ts`: the database's guards, each broken on purpose.
+- `tests/db/race.db.test.ts`: two payments of 1,000 against 1,500: one reserved, one refused, Available ends at 500.
+- `tests/db/walkthrough.db.test.ts`: the article's figures, checked step by step.
+- `packages/domain/src/vocabulary.test.ts`: keeps the article's words true in the code: states, `PAY-` references, account names, figures.
+
+See it: on **Pay to an address**, pick **At a time** and press **Create and pay**: Reserved goes up at once, and nothing is signed until its time.
+
+## 6. When it fails, where is the money?
+
+Reserved money goes back only with proof that the transfer can no longer land.
+
+- `apps/worker/src/reverse.ts`: a transfer that reverted in a final block: FAILED, money back to Available, invoice open again.
+- `apps/api/src/payments/cancel-payment.ts`: cancel a payment nobody has signed; a payment with a hash is refused.
+- `migrations/0015_cancel_needs_no_hash.sql`: the same cancel rule, in the database.
+- `apps/worker/src/escalate.ts`: no proof either way: REVIEW, with the money still reserved.
+- `migrations/0010_payment_review.sql`: a payment in REVIEW remembers where it came from.
+- `apps/api/src/payments/resume-payment.ts`: an operator sends a payment back from REVIEW; the money stays reserved.
+- `packages/db/src/guarded-update.ts`: every state change is one `UPDATE … WHERE status = expected`, or a clear refusal.
+- `tests/db/release.db.test.ts`: the release rule tried from every side.
+- `tests/db/failure.db.test.ts`: the article's FAILED and REVIEW figures on a real payment row.
+- `tests/db/cancel.db.test.ts`: cancel before signing, after signing, and at the same instant as signing.
+- `tests/db/guarded-transition.db.test.ts`: a state change that matched no row is caught, not ignored.
+
+See it: on **Break it**, press **Run it** on **Revert a payment**, then open the payment's story on **Transfers**: Failed, then Released.
+
+## 7. Signed, sent, paid: three different moments
+
+The hash is stored before anything is sent, so a retry sends the same bytes and never pays twice.
+
+- `apps/worker/src/sign.ts`: reads the nonce and fees, asks the signer, stores the hash and the signed bytes.
+- `apps/worker/src/execute.ts`: asks the network for that hash, and sends the same bytes only if it does not know them.
+- `migrations/0008_payment_signing.sql`: the hash, the bytes and the nonce on the payment row, and the rules that guard them.
+- `packages/chain/src/send.ts`: send signed bytes and wait for the receipt, for every sender in the repo.
+- `apps/worker/src/watch.ts`: one check, no writes: not landed, not final, reverted, or paid.
+- `packages/chain/src/usdc.ts`: the article's rule: the event must come from the official contract, with the exact amount and destination.
+- `packages/chain/src/usdc.test.ts`: that rule checked against real receipts.
+- `apps/worker/src/settle.ts`: Reserved out, Partner debt cleared, payment SETTLED and invoice PAID, all or nothing.
+- `apps/worker/src/config.ts`: the gas headroom and fee cap a payout is signed with.
+- `tests/db/signing.db.test.ts`: a payment is signed once however many ask; two payments get two nonces.
+- `tests/db/settlement.db.test.ts`: the article's figures after settling, even when it runs twice.
+
+See it: pay a small invoice on **Invoices to pay** and run `docker compose logs -f worker`: sign, execute, a few `watch` checks, then settle.
+
+## 8. Now you are the one getting paid: whose money is this?
+
+Each partner pays at its own address, so the address says whose money it is.
+
+- `apps/api/src/partners/partners.service.ts`: creating a partner: its deposit address from the signer, its payout address, and the watcher told to watch.
+- `migrations/0005_partners.sql`: the partners and the two addresses each one has.
+- `apps/api/src/demo-scaffolding/partner-keys.service.ts`: the partner seed; the api holds it only because one machine plays both sides.
+- `migrations/0011_receivables.sql`: the invoices partners owe the company.
+- `apps/api/src/receivables/receivables.service.ts`: writes one, with what the partner owes on the books.
+- `apps/api/src/demo-scaffolding/partner-payments.service.ts`: the partner's side of a payment: sign, store the hash, send.
+- `apps/worker/src/watcher.ts`: also sees transfers to the deposit addresses, first as DETECTED.
+- `apps/worker/src/deposits.ts`: records a deposit, credits it once its block is final, and matches it to an invoice.
+- `migrations/0012_deposits.sql`: one row per arriving transfer, so the same money is never credited twice.
+- `apps/api/src/deposits/deposits.controller.ts`: `GET /deposits`, newest first.
+- `apps/ui/src/partner/PartnerHome.tsx`: what a partner sees: what it owes, where it pays, and Pay.
+- `apps/ui/src/admin/PartnersScreen.tsx`: each partner's two addresses, with balances.
+- `apps/ui/src/admin/ReceivablesScreen.tsx`: the invoices partners owe, with no Pay button (they pay from the other side).
+- `tests/db/deposits.db.test.ts`: credited only when final, the address decides whose money it is, and nothing posts twice.
+
+See it: pay an invoice on `/partner`, then watch **Money that arrived, newest first** on **Transfers**: DETECTED, then SETTLED.
+
+## 9. Four failures the payment has to survive
+
+Each failure is a card you can run, and a command that does the same from a terminal.
+
+- `apps/ui/src/admin/BreakItScreen.tsx`: the five cards and their **Run it**, in the article's order.
+- `packages/domain/src/experiments.ts`: every failure switch in one place.
+- `migrations/0009_settings.sql`: where the switches are stored; an absent row is off.
+- `apps/api/src/experiments/experiments.controller.ts`: reads and sets the switches; the api never acts on one.
+- `apps/worker/src/experiments.ts`: where the worker takes a switch, so exactly one payment breaks.
+- `apps/api/src/experiments/race.ts`: the race, run in a separate database with the article's figures.
+- `apps/ui/src/api/client.ts`: `doubleClick`, the one place the browser makes two calls at once.
+- `scripts/experiments/harness.ts`: what the four `pnpm experiment:*` commands share.
+- `scripts/experiments/double-click.ts`, `race.ts`, `crash.ts`, `stuck.ts`: one command per failure.
+- `tests/db/experiments.db.test.ts`: a switch breaks only the payment of its own invoice, so all cards can run at once.
+- `docs/dev/restart-survival.md`: stop the worker by hand while a payment waits, and watch it finish.
+
+See it: press **Run it** on **The race** (seconds, no money), or run `pnpm experiment:race`.
+
+## 10. Reconciliation: your books against the chain
+
+A separate process checks the books against the chain at one fixed block, and reports without fixing.
+
+- `migrations/0016_reconciliation.sql`: the runs, and one item per payment or deposit checked.
+- `apps/worker/src/reconcile.ts`: one run, top to bottom: one snapshot, one fixed block, the chain reads, the result.
+- `apps/worker/src/reconcile-items.ts`: the rules for each item, and the total check (books, chain, in flight).
+- `apps/api/src/reconciliation/reconciliation.controller.ts`: the runs, and **Run now**.
+- `apps/api/src/reconciliation/read-reconciliation.ts`: reads what the worker wrote; the api computes nothing.
+- `apps/ui/src/admin/ReconciliationScreen.tsx`: the Books, Chain and In flight cards, **Show all**, and the runs before.
+- `tests/db/reconciliation.db.test.ts`: a clean run, a payment the chain never carried, and a difference nothing explains.
+
+See it: press **Run now** on **Reconciliation**; the new run reads **Books and chain agree**, at the block it pinned.
+
+## 11. What you do not have to build
+
+Only the signer touches the key, so custody can change without rewriting the rest.
+
+- `apps/signer/src/keys/keys.service.ts`: creates the company seed on first start and derives every company address from it.
+- `packages/chain/src/derive.ts`: seed plus index gives an account (index 0 is the treasury).
+- `apps/signer/src/sign/sign.controller.ts`: signs a transfer and returns the bytes and the hash; it talks to no node.
+- `packages/chain/src/signer-client.ts`: how the api and the worker ask the signer, without ever seeing the seed.
+- `apps/api/src/payments/compliance.ts`: the mock where real screening plugs in.
+- `docs/integration-points.md`: where real auth, compliance, custody and bank money plug in.
+
+See it: `docker compose ps` shows no published port for the signer; only the other containers can reach it.
+
+## 12. Run a real payment on a testnet
+
+The README takes you from zero to a first payout; the tests guard the rules.
+
+- `README.md`: start, fund, first payout, first deposit.
+- `tests/db/README.md`: how the database tests run, and which test guards which rule.
+- `vitest.db.config.mts`: the database test setup, apart from the pure tests.
+
+See it: `pnpm test` (no Docker needed), then `pnpm test:db` (against the stack's Postgres, in its own database).
 
 ## The screens
 
-- `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
-  `/partner` is the partner's side.
-- `apps/ui/src/admin/StartScreen.tsx` — where the demo starts: the treasury address, the
-  faucet links, and what the chain holds next to what the books say.
-- `apps/ui/src/admin/PartnersScreen.tsx`: the partners, each with its two addresses and the
-  figures that go with them: they owe you, you owe them, and the USDC balance at each address.
-- `apps/ui/src/admin/PayablesScreen.tsx` — the invoices the company owes, the books they move,
-  and Pay, with each invoice's payment on its row.
-- `apps/ui/src/admin/PayToAddressScreen.tsx` — paying an address somebody typed: the invoice
-  first, the refusal when that address is not on the allowlist, the one click that fixes it, and
-  the payments made from this screen: waiting, in flight, done.
-- `apps/ui/src/admin/ReceivablesScreen.tsx` — the invoices partners owe, the two figures they
-  move, and no Pay button: these are paid from the other side.
-- `apps/ui/src/partner/PartnerHome.tsx` — the partner's side: what it owes, the address it pays
-  at, and the shared wallet it pays from, labelled demo only, with the button that funds it from
-  the treasury (`PartnerWalletCard.tsx`). The chosen partner lives in the address bar, so a
-  reload keeps it.
-- `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
-  Resume, the payments waiting for their time with Cancel next to each one, each payment's story
-  step by step, and below them the money that arrived.
-- `apps/ui/src/admin/ReconciliationScreen.tsx`: the books against the chain at one fixed block, in
-  three cards, then the payments and deposits that need a look, then the runs before this one.
-  **Run now** asks for another.
-- `apps/ui/src/admin/BreakItScreen.tsx` — the failures you can cause on purpose, five cards with
-  one Run it each, in the article's order: the double click, the race, the crash after signing and
-  the node that does not answer (§9's four), then the revert (§6). The three that inject a fault
-  also carry a switch, the long way, and a red banner shows on every admin screen while one is
-  armed. Only the race spends nothing: it runs in a sandbox database of its own.
-- `apps/ui/src/api/client.ts` — how the browser asks the api: one function per endpoint, plus
-  `doubleClick`, which calls one of them twice at once. The shapes of the answers are in
-  `packages/domain/src/api.ts`, which the api writes with and the browser reads.
-
-Open `http://localhost:5173/admin`.
+- `apps/ui/src/app/App.tsx`: the routes and the tabs: Start, Partners, Invoices to pay, Pay to an address, Invoices to collect, Transfers, Reconciliation, Break it.
+- `apps/ui/src/admin/`: one file per admin tab.
+- `apps/ui/src/partner/`: the partner's side, `/partner`.
+- `apps/ui/src/api/client.ts`: one function per api call.
+- `apps/ui/src/api/usePolling.ts`: every screen refreshes every five seconds, from here.
+- `apps/ui/src/app/usdc.ts`: how an amount is cut for the screen (cut, not rounded).
+- `apps/ui/src/config.ts`: how many decimals the screens show (4).
