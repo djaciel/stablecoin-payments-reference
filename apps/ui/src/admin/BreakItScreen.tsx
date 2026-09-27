@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { failedAfterReserving, type AuditStep, type BlackholeStep, type Experiments, type PaymentSummary, type PaymentView, type RaceResult } from '@payments/domain'
+import { failedAfterReserving, type AuditStep, type BlackholeStep, type Experiments, type PaymentSummary, type PaymentView, type RaceAttempt, type RaceResult } from '@payments/domain'
 import { createPayable, doubleClick, getPayables, getPayments, getPaymentTimeline, payPayable, resumePayment, runRace, setExperiments, type PaymentAnswer } from '../api/client'
 import { AddressLine } from '../app/AddressLine'
 import { formatUsdc } from '../app/usdc'
@@ -195,17 +195,31 @@ function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) 
 /**
  * §9's double click. Nothing is armed and nothing is broken: the failure is the reader's own
  * nervous second click, so the card has no badge and no switch, and its long way is the command.
+ * Its evidence is read, not announced: the invoice's payments and Available, around the two calls.
  */
 function DoubleClickCard(card: CardProps) {
-  // What the two calls answered, kept for the verdict: it has to say whether they name one payment.
-  const answers = useRef<readonly PaymentAnswer[]>([])
+  // What the run saw around the two calls, kept for the verdict that reads the payment's story.
+  const seen = useRef<DoubleClickEvidence>({ answers: [] })
   const run = useRun('double-click', card, {
     description: 'Double-click run',
     fire: async (payableId, key) => {
-      answers.current = await doubleClick(payableId, key)
-      return { reference: answers.current[0]?.payment.reference ?? '', stages: answers.current.map(answerStage) }
+      const before = (await getPayables()).ledger.available
+      const answers = await doubleClick(payableId, key)
+      seen.current = { answers }
+      const stages: ReactNode[] = answers.map((answer, index) => clickStage(answer, index + 1, answers))
+      try {
+        // Right after both answers: every payment this invoice has, and Available again.
+        const [payables, { payments }] = await Promise.all([getPayables(), getPayments()])
+        const paid = payments.filter((payment) => payment.payableId === payableId).length
+        seen.current = { answers, payments: paid }
+        stages.push(`Payments for this invoice: ${String(paid)}.`, availableStage(before, payables.ledger.available))
+      } catch (error: unknown) {
+        // The payment is made either way, so the run still follows it.
+        stages.push(`Could not read the payments and Available after the clicks: ${sentenceOf(error)}`)
+      }
+      return { reference: answers[0].payment.reference, stages }
     },
-    narrate: (steps) => doubleClickVerdict(steps, answers.current),
+    narrate: (steps) => doubleClickVerdict(steps, seen.current),
   })
 
   return (
@@ -215,7 +229,7 @@ function DoubleClickCard(card: CardProps) {
         <div>
           <Brief
             what="Pays the same invoice twice at the same instant, with the same key."
-            expect="One payment, one reference, the money leaves Available once."
+            expect="The second click gets the same payment back. Nothing is paid twice."
             cost="0.01 USDC · a few minutes"
           />
         </div>
@@ -234,7 +248,7 @@ function DoubleClickCard(card: CardProps) {
  * it shares the same latch: there is no invoice, no flag and no payment to follow.
  */
 function RaceCard({ running, setRunning }: CardProps) {
-  const [result, setResult] = useState<RaceResult | undefined>(undefined)
+  const [result, setResult] = useState<RaceRun | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const busy = running === 'race'
   const blocked = running !== undefined && !busy
@@ -243,7 +257,7 @@ function RaceCard({ running, setRunning }: CardProps) {
     setRunning('race')
     setResult(undefined)
     setFailure(undefined)
-    runRace()
+    race()
       .then(setResult, (refused: unknown) => {
         setFailure(sentenceOf(refused))
       })
@@ -258,9 +272,9 @@ function RaceCard({ running, setRunning }: CardProps) {
       <div className="card-columns">
         <div>
           <Brief
-            what="Two payments of 1,000 hit 1,500 available at the same instant."
-            expect="One reserved, one refused, Available never below zero."
-            cost="Free (sandbox database) · seconds"
+            what="In a copy of the books with 1,500 available, two payments of 1,000 arrive at the same instant."
+            expect="One is reserved, the other is refused for insufficient funds. Available never goes below zero."
+            cost="Free: a copy of the books, not yours · seconds"
           />
         </div>
         <div>
@@ -271,58 +285,73 @@ function RaceCard({ running, setRunning }: CardProps) {
             {blocked && <span className="card-note">The other run has to finish first.</span>}
           </p>
           {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
-          {result !== undefined && <RaceEvidence result={result} />}
+          {result !== undefined && <RaceEvidence run={result} />}
         </div>
       </div>
     </section>
   )
 }
 
-/** What the race left in the sandbox: the two answers as the api would have sent them, and the books. */
-function RaceEvidence({ result }: { readonly result: RaceResult }) {
+/** The race's answer, and the demo's own Available read before and after it: the proof it used a copy. */
+interface RaceRun {
+  readonly result: RaceResult
+  readonly yours: { readonly before: string; readonly after?: string }
+}
+
+async function race(): Promise<RaceRun> {
+  const before = (await getPayables()).ledger.available
+  const result = await runRace()
+  // The race is over either way; a failed read only leaves that one line out.
+  const after = await getPayables().then(
+    (payables) => payables.ledger.available,
+    () => undefined,
+  )
+  return { result, yours: { before, after } }
+}
+
+/** The two payments as the sandbox answered them, what that did to its Available, and your own books. */
+function RaceEvidence({ run: { result, yours } }: { readonly run: RaceRun }) {
+  const verdict = raceVerdict(result)
   return (
     <div className="result">
-      <p className="card-value">{raceVerdict(result)}</p>
       <ol className="steps">
         {result.attempts.map((attempt) => (
-          <li key={attempt.reference}>
-            <code>{attempt.code}</code> {attempt.reference} {attempt.status}{' '}
-            {attempt.reason !== undefined && <code>{attempt.reason}</code>} {formatUsdc(attempt.amount)}
-          </li>
+          <li key={attempt.reference}>{attemptLine(attempt)}</li>
         ))}
+        <li>
+          Available: {formatUsdc(result.availableBefore)} → {formatUsdc(result.availableAfter)}.
+          {!result.availableAfter.startsWith('-') && ' Never below zero.'}
+        </li>
+        {yours.after !== undefined && <li>{yoursLine(yours.before, yours.after, result.database)}</li>}
       </ol>
-      <dl className="figures">
-        <div className="figure">
-          <dt>Available before</dt>
-          <dd>{formatUsdc(result.availableBefore)}</dd>
-        </div>
-        <div className="figure">
-          <dt>Payments reserved</dt>
-          <dd>{result.reserves}</dd>
-        </div>
-        <div className="figure">
-          <dt>Available after</dt>
-          <dd>{formatUsdc(result.availableAfter)}</dd>
-        </div>
-        <div className="figure">
-          <dt>Reserved after</dt>
-          <dd>{formatUsdc(result.reservedAfter)}</dd>
-        </div>
-        <div className="figure">
-          <dt>Ran against</dt>
-          <dd>{result.database}</dd>
-        </div>
-      </dl>
+      {verdict !== undefined && <p className="card-value is-bad">{verdict}</p>}
     </div>
   )
+}
+
+/** One payment of the race, with the code the api would have answered it with. */
+function attemptLine({ reference, status, reason, amount, code }: RaceAttempt): string {
+  if (status === 'FAILED') {
+    const why = reason === undefined ? '' : `, ${reason.replaceAll('_', ' ')}`
+    return `${reference}: FAILED${why} (${String(code)}). ${failedAfterReserving(reason) ? 'The money went back.' : 'Nothing reserved.'}`
+  }
+  return `${reference}: ${status} ${formatUsdc(amount)} (${String(code)}).`
+}
+
+/** Your own Available, read around the race. The race wrote to a copy, so any change came from elsewhere. */
+function yoursLine(before: string, after: string, database: string): string {
+  return before === after
+    ? 'Your books did not move.'
+    : `Your Available went ${formatUsdc(before)} → ${formatUsdc(after)} while it ran. The race wrote to ${database}, so something else moved it.`
 }
 
 /**
  * The three things this card claims, checked rather than announced: one of the two reserved, the
  * other was refused for insufficient funds, and one reserve reached the books. A negative Available
- * is read off the string, because these figures carry thousands separators.
+ * is read off the string, because these figures carry thousands separators. The lines above show
+ * the evidence, so this only speaks when something did not hold.
  */
-function raceVerdict(result: RaceResult): string {
+function raceVerdict(result: RaceResult): string | undefined {
   const reserved = result.attempts.find((attempt) => attempt.status === 'RESERVED')
   const refused = result.attempts.find((attempt) => attempt.reason === 'insufficient_funds')
   const negative = result.availableAfter.startsWith('-')
@@ -332,43 +361,66 @@ function raceVerdict(result: RaceResult): string {
       `${count(result.reserves, 'reserve')} in the books, and Available at ${formatUsdc(result.availableAfter)}.`
     )
   }
-  return (
-    `${reserved.reference} reserved its ${formatUsdc(reserved.amount)} and ${refused.reference} was refused for insufficient ` +
-    `funds. Available went from ${formatUsdc(result.availableBefore)} to ${formatUsdc(result.availableAfter)}, and never below zero.`
-  )
+  return undefined
 }
 
-/** One answer, in the order the two requests came back, with the code that says what it did. */
-function answerStage({ code, payment }: PaymentAnswer): ReactNode {
-  const what = code === 201 ? 'recorded it' : code === 200 ? 'found it already written and answered with it' : 'refused it'
+/** What the double click saw: the two answers, and how many payments its invoice has right after. */
+interface DoubleClickEvidence {
+  readonly answers: readonly PaymentAnswer[]
+  /** Unknown when that read failed. */
+  readonly payments?: number
+}
+
+/** One click's answer, in the order the requests were made. The code says what the api did with it. */
+function clickStage({ code, payment }: PaymentAnswer, click: number, answers: readonly PaymentAnswer[]): ReactNode {
+  const reference = <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link>
+  const same = answers.every((answer) => answer.payment.reference === payment.reference) ? 'same ' : ''
+  const what =
+    code === 201 ? <>{reference} created</> : code === 200 ? <>{same}{reference} returned, nothing new created</> : <>{reference} refused</>
   return (
     <>
-      <code>{code}</code> <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link> {payment.status}: the api {what}.
+      Click {String(click)}: {what} ({String(code)}).
     </>
   )
 }
 
 /**
- * The three things this card claims, checked rather than announced: both answers name the same
- * payment, and that payment left ONE `created` row and ONE `reserved` row in its own story. If any
- * of them is not true, the line says what happened instead.
+ * Available before and after the clicks. "Once" is claimed only when it fell by exactly the run's
+ * amount: anything else running at the same time can move it too, and then the line just says so.
  */
-function doubleClickVerdict(steps: readonly AuditStep[], answers: readonly PaymentAnswer[]): string[] {
+function availableStage(before: string, after: string): string {
+  const moved = `Available: ${formatUsdc(before)} → ${formatUsdc(after)}`
+  return toMicro(before) - toMicro(after) === toMicro(RUN_AMOUNT)
+    ? `${moved} (down ${formatUsdc(RUN_AMOUNT)} once).`
+    : `${moved} (not a drop of exactly ${formatUsdc(RUN_AMOUNT)}, so something else may have moved it).`
+}
+
+/** An api amount (`"1,000.500000"`, maybe negative) in micro units, so no amount goes through a float. */
+function toMicro(amount: string): bigint {
+  const [whole = '0', fraction = ''] = amount.replace('-', '').replaceAll(',', '').split('.')
+  const micro = BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, '0').slice(0, 6))
+  return amount.startsWith('-') ? -micro : micro
+}
+
+/**
+ * What this card claims, checked rather than announced: both clicks got one payment back, the
+ * invoice has one payment, and that payment's story has ONE `created` row and ONE `reserved` row.
+ * The lines above already show the evidence, so this only speaks when something did not hold.
+ */
+function doubleClickVerdict(steps: readonly AuditStep[], { answers, payments }: DoubleClickEvidence): string[] {
   const rows = (event: string): number => steps.filter((step) => step.subjectType === 'payment' && step.event === event).length
   const created = rows('created')
   const reserved = rows('reserved')
   if (created === 0) {
     return []
   }
-  const references = new Set(answers.map((answer) => answer.payment.reference))
-  const oneReference = answers.length === 2 && references.size === 1
-  if (created === 1 && reserved === 1 && oneReference) {
-    return [`One payment, one reserve: both answers name ${[...references].join('')}, and ${formatUsdc(RUN_AMOUNT)} USDC left Available once.`]
-  }
-  return [
-    `Not what this card claims: the answers named ${oneReference ? 'one payment' : `${String(references.size)} payments`}, ` +
-      `with ${count(created, 'payment')} recorded and ${count(reserved, 'reserve')} in the books. Read the story on Transfers.`,
+  const references = new Set(answers.map((answer) => answer.payment.reference)).size
+  const broken = [
+    ...(answers.length === 2 && references === 1 ? [] : [`the clicks got ${count(references, 'payment')} back`]),
+    ...(payments === undefined || payments === 1 ? [] : [`the invoice has ${count(payments, 'payment')}`]),
+    ...(created === 1 && reserved === 1 ? [] : [`the story has ${count(created, 'payment')} recorded and ${count(reserved, 'reserve')}`]),
   ]
+  return broken.length === 0 ? [] : [`Not what this card claims: ${broken.join(', ')}. Read the story on Transfers.`]
 }
 
 function count(rows: number, thing: string): string {
