@@ -76,6 +76,8 @@ function LatestRun({ view, latestId, onLatest }: { readonly view?: Reconciliatio
             ? 'Press Run now, or wait: it runs every ten minutes.'
             : `${view.run.block === null ? 'No block' : `Block ${view.run.block}`} · ${RAN.format(new Date(view.run.startedAt))} · ${String(view.run.checked)} checks`}
         </p>
+        {/* The worker's RECONCILE_INTERVAL (apps/worker/src/workflows.ts); change both together. */}
+        {view !== undefined && <p className="card-note">Runs by itself every 10 minutes.</p>}
       </section>
       {view !== undefined && <Figures view={view} />}
     </>
