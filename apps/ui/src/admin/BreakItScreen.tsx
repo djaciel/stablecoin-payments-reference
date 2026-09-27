@@ -111,8 +111,7 @@ function RevertCard({ armed, ...card }: { readonly armed: boolean } & CardProps)
           />
         </div>
         <div>
-          <RunIt run={run} />
-          <Switch armed={armed} run={run} show={card.show} flag={{ revertNextPayment: !armed }} />
+          <RunIt run={run} extra={<Switch armed={armed} run={run} show={card.show} flag={{ revertNextPayment: !armed }} />} />
         </div>
       </div>
     </section>
@@ -157,8 +156,7 @@ function BlackholeCard({ blackhole, ...card }: { readonly blackhole: Experiments
           <p className="card-note">Before the broadcast, later payouts wait until you press Resume.</p>
         </div>
         <div>
-          <RunIt run={run} />
-          <Switch armed={blackhole.enabled} run={run} show={card.show} flag={{ blackholeRpc: { enabled: !blackhole.enabled, step } }} />
+          <RunIt run={run} extra={<Switch armed={blackhole.enabled} run={run} show={card.show} flag={{ blackholeRpc: { enabled: !blackhole.enabled, step } }} />} />
         </div>
       </div>
     </section>
@@ -184,8 +182,7 @@ function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) 
           />
         </div>
         <div>
-          <RunIt run={run} />
-          <Switch armed={armed} run={run} show={card.show} flag={{ crashAfterSigning: !armed }} />
+          <RunIt run={run} extra={<Switch armed={armed} run={run} show={card.show} flag={{ crashAfterSigning: !armed }} />} />
         </div>
       </div>
     </section>
@@ -284,8 +281,12 @@ function RaceCard({ running, setRunning }: CardProps) {
             </button>
             {blocked && <span className="card-note">The other run has to finish first.</span>}
           </p>
-          {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
-          {result !== undefined && <RaceEvidence run={result} />}
+          {(failure !== undefined || result !== undefined) && (
+            <div className="run-output">
+              {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
+              {result !== undefined && <RaceEvidence run={result} />}
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -450,7 +451,7 @@ function shortened(hash: string | undefined): string {
 }
 
 /** Run it, the stages the run has reached as it reaches them, and the evidence it ends with. */
-function RunIt({ run }: { readonly run: Run }) {
+function RunIt({ run, extra }: { readonly run: Run; readonly extra?: ReactNode }) {
   const { done, doing, failure, payment } = run.state
   // Once a run has started, the stages under the button say all this better than a hint could.
   const hint = run.blocked ? 'The other run has to finish first.' : done.length > 0 ? undefined : `It writes its own ${formatUsdc(RUN_AMOUNT)} USDC invoice and pays it.`
@@ -463,17 +464,22 @@ function RunIt({ run }: { readonly run: Run }) {
         </button>
         {hint !== undefined && <span className="card-note">{hint}</span>}
       </p>
+      {extra}
 
-      {(done.length > 0 || doing !== undefined) && (
-        <ol className="steps">
-          {done.map((line, index) => (
-            <li key={String(index)}>{line}</li>
-          ))}
-          {doing !== undefined && <li className="is-doing">{doing}…</li>}
-        </ol>
+      {(done.length > 0 || doing !== undefined || failure !== undefined) && (
+        <div className="run-output">
+          {(done.length > 0 || doing !== undefined) && (
+            <ol className="steps">
+              {done.map((line, index) => (
+                <li key={String(index)}>{line}</li>
+              ))}
+              {doing !== undefined && <li className="is-doing">{doing}…</li>}
+            </ol>
+          )}
+          {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
+          {payment !== undefined && <Evidence payment={payment} run={run} />}
+        </div>
       )}
-      {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
-      {payment !== undefined && <Evidence payment={payment} run={run} />}
     </>
   )
 }

@@ -651,3 +651,16 @@ a {
 .brief-label {
   color: var(--muted);
 }
+
+/* What a Break it run did, set apart from the buttons that start it. */
+.run-output {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.run-output > .result:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
