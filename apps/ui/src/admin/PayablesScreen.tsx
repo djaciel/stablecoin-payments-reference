@@ -174,7 +174,7 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
           {payment?.transaction !== undefined && (
             <>
               <p className="address-sub">Transaction hash</p>
-              <AddressLine address={payment.transaction.hash} explorerUrl={payment.transaction.explorerUrl} />
+              <AddressLine address={payment.transaction.hash} explorerUrl={payment.transaction.explorerUrl} short />
             </>
           )}
         </div>

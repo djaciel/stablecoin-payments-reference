@@ -277,6 +277,11 @@ a {
   font-size: 0.75rem;
 }
 
+/* A second label under an address starts a new pair, so it gets room above it. */
+.address-line + .address-sub {
+  margin-top: 1rem;
+}
+
 /* On an invoice card the destination starts its own block, after the state and the Pay button. */
 .card > .address-sub {
   margin-top: 0.9rem;
