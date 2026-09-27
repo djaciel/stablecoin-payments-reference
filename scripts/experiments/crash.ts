@@ -3,7 +3,7 @@ import type { AuditStep, Experiments, PaymentTimeline, PaymentView } from '@paym
 import { died, field, heading, post, put, refuseIfArmed, section, step, waitUntilResting, writeOwnInvoice } from './harness'
 
 /**
- * §9's crash, end to end: write a small invoice of this script's own, arm the flag for it, pay it,
+ * The crash, end to end: write a small invoice of this script's own, arm the flag for it, pay it,
  * and let the worker kill itself the moment the hash is stored. Nobody restarts anything; the
  * payment finishes with the bytes it had already signed.
  *

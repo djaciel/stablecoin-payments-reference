@@ -6,7 +6,7 @@ import { promotableDeposits, recordDetected, settleDeposit } from '../../apps/wo
 import { balanceOf, resetDatabase, seedPartner, seedReceivable, testPool, withClient } from './helpers/database'
 
 /**
- * Article section 8 against real Postgres: money coming in is credited only when the chain can no
+ * Deposits against real Postgres: money coming in is credited only when the chain can no
  * longer take it back, it belongs to whoever owns the address it arrived at, and scanning the same
  * block twice cannot pay an invoice twice.
  */

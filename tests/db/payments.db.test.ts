@@ -1,14 +1,14 @@
 import { inTransaction } from '@payments/db'
 import type { PaymentView } from '@payments/domain'
-import { seedArticle, withLedgerTransaction } from '@payments/ledger'
+import { seedExample, withLedgerTransaction } from '@payments/ledger'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { createPayment, type PaymentOutcome, type PaymentRequest } from '../../apps/api/src/payments/create-payment'
 import { barrier, resetDatabase, seedInvoices, testPool, withClient } from './helpers/database'
 
 /**
- * The article's idempotency key (§4) against real Postgres: one key is one payment, whatever the
+ * The idempotency key against real Postgres: one key is one payment, whatever the
  * client does with it. Retry it, reuse it for another request, or fire it twice at the same
- * instant (§9's double click).
+ * instant (the double click).
  */
 
 const KEY = 'abc-123'
@@ -22,7 +22,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await resetDatabase(pool)
-  await withLedgerTransaction(pool, (client) => seedArticle(client))
+  await withLedgerTransaction(pool, (client) => seedExample(client))
   invoices = await seedInvoices(pool)
 })
 

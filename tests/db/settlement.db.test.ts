@@ -1,12 +1,12 @@
 import { inTransaction } from '@payments/db'
-import { ACCOUNTS, seedArticle, toMinor, withLedgerTransaction } from '@payments/ledger'
+import { ACCOUNTS, seedExample, toMinor, withLedgerTransaction } from '@payments/ledger'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { createPayment } from '../../apps/api/src/payments/create-payment'
 import { settlePayment } from '../../apps/worker/src/settle'
 import { balanceOf, resetDatabase, seedInvoices, testPool, withClient } from './helpers/database'
 
 /**
- * §7's Paid moment on the books, against real Postgres: settling is one transaction that posts
+ * The Paid moment on the books, against real Postgres: settling is one transaction that posts
  * once, which is what makes a worker that runs it again after a crash harmless.
  */
 
@@ -27,13 +27,13 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await resetDatabase(pool)
-  await withLedgerTransaction(pool, (client) => seedArticle(client))
+  await withLedgerTransaction(pool, (client) => seedExample(client))
   const { first } = await seedInvoices(pool)
   reference = await reserveAndSend(first)
 })
 
 describe('settling a payment', () => {
-  it("posts once however often it runs: §7's 9,000 / 0 / 0, the payment SETTLED, the invoice PAID", async () => {
+  it('posts once however often it runs: 9,000 / 0 / 0, the payment SETTLED, the invoice PAID', async () => {
     const first = await withClient(pool, (client) => settlePayment(client, reference, EVIDENCE))
     const again = await withClient(pool, (client) => settlePayment(client, reference, EVIDENCE))
 

@@ -56,9 +56,7 @@ because a guarantee that only holds for well-behaved callers is not a guarantee.
 | 4 | Transitions are guarded and change exactly one row | `guarded-transition.db.test.ts` | `applyGuardedTransition` in `packages/db`: `UPDATE … WHERE status = $expected`, then `rowCount === 1` or `TransitionRejected` |
 | 5 | Reserved money is released only with proof the transfer can no longer land | `release.db.test.ts` (the ledger's two doors) and `cancel.db.test.ts` (the second door's conditions, and its race with `sign`) | `reversal` requires the proof argument; `CHECK (kind <> 'reversal' OR proof IS NOT NULL)`; and the deferred trigger `ledger_entries_release_is_allowed`, which refuses that movement of money under any kind but `reversal` and `cancel`, and refuses a `cancel` whose payment carries a hash (`0015`) |
 
-And the article's idempotency key (§4, §9's double click), one test per claim, all in
-`payments.db.test.ts`, calling `createPayment` from `apps/api/src/payments/create-payment.ts`
-directly:
+And the idempotency key (the double click), one test per claim, all in `payments.db.test.ts`, calling `createPayment` from `apps/api/src/payments/create-payment.ts` directly:
 
 | Claim | Test | Enforced at |
 |---|---|---|
@@ -66,16 +64,13 @@ directly:
 | The same key with a different body is refused, and nothing is written | "refuses the same key with a different body…" | the request fingerprint stored next to the key |
 | Two calls with one key in parallel make one payment and one `reserve` | "makes one payment out of two parallel calls…" | the same index: the loser waits on it until the winner commits. A SELECT before the INSERT fails this test |
 
-And §9's race at the payment door, in `race.db.test.ts` next to the same race at the ledger engine,
-calling the same `createPayment`:
+And the race at the payment door, in `race.db.test.ts` next to the same race at the ledger engine, calling the same `createPayment`:
 
 | Claim | Test | Enforced at |
 |---|---|---|
 | 1,500 and two payments of 1,000 with different keys: one is RESERVED and the other is recorded FAILED `insufficient_funds`, with one `reserve` in the books, Available 500 and Reserved 1,000 | "reserves one and records the other as FAILED insufficient_funds…" | the engine's check under `SELECT … FOR UPDATE` on `treasury:available`, and step 5 of `create-payment.ts`, which turns `InsufficientFunds` into a recorded refusal instead of a rollback. This is what `POST /experiments/race` runs |
 
-And §7's Signed moment, in `signing.db.test.ts`, calling `signPayment` from
-`apps/worker/src/sign.ts` with a signer that really signs (the published test mnemonic; real
-bytes, no network):
+And the Signed moment, in `signing.db.test.ts`, calling `signPayment` from `apps/worker/src/sign.ts` with a signer that really signs (the published test mnemonic; real bytes, no network):
 
 | Claim | Test | Enforced at |
 |---|---|---|
@@ -91,24 +86,20 @@ And the Break it flags, in `experiments.db.test.ts`, calling `signPayment` and
 | The same flag with no invoice: exactly one of the two takes it | "breaks exactly one of two payments…" | the same statement: the second UPDATE waits for the first to commit, then finds it off |
 | A blackhole that names invoice A fails A's step and lets B's ask the node | "makes the node silent for the payment of the invoice it names…" | `failIfNodeBlackholed`'s one SELECT, joined to the payment's `payable_id` |
 
-And §7's Paid moment, in `settlement.db.test.ts`, calling `settlePayment` from
-`apps/worker/src/settle.ts` on a payment the api reserved and the row then marked SENT:
+And the Paid moment, in `settlement.db.test.ts`, calling `settlePayment` from `apps/worker/src/settle.ts` on a payment the api reserved and the row then marked SENT:
 
 | Claim | Test | Enforced at |
 |---|---|---|
 | Settling is one transaction that posts once: run twice, it leaves Available 9,000, Reserved 0, Partner debt 0, the payment SETTLED, the invoice PAID, one `settle` and one `settled` audit row | "posts once however often it runs…" | the invoice lock, then the status read under it (SETTLED → nothing to do); the `(kind, reference)` unique index and the guarded SENT → SETTLED behind it |
 
-And §6's two outcomes after the reserve, FAILED and REVIEW, side by side in `failure.db.test.ts`,
-on a payment the api reserved and the row then marked SENT:
+And the two failure outcomes after the reserve, FAILED and REVIEW, side by side in `failure.db.test.ts`, on a payment the api reserved and the row then marked SENT:
 
 | Claim | Test | Enforced at |
 |---|---|---|
 | A final revert releases the money only with proof, reopens the invoice and posts once: run twice, it leaves Available 10,000, Reserved 0, Partner debt 1,000 (the invoice is still owed), the payment FAILED `reverted`, the invoice OPEN with no payment on it, one `reversal` whose proof names the hash and the block, one `failed` and one `released` row; a new key then reserves the same invoice again | "releases the money only with proof…" (`reversePayment`, from `apps/worker/src/reverse.ts`) | the invoice lock, then the status read under it (FAILED → nothing to do); the guarded SENT → FAILED and PAYING → OPEN; `reversal`'s required proof and `ledger_reversal_needs_proof` |
 | No proof either way leaves the money where it is, there and back: escalated twice, it moves the payment SENT → REVIEW with `review_from_status` SENT and leaves Available 9,000, Reserved 1,000, Partner debt 1,000, the invoice PAYING, no ledger transaction but the seed's and the `reserve`, and one `escalated` row carrying the step, the attempts, the last error, the hash and the nonce; resumed twice, it is SENT again with `review_from_status` cleared, the same three figures and postings, and one `resumed` row | "goes to REVIEW and back on resume…" (`escalatePayment`, from `apps/worker/src/escalate.ts`; `resumePayment`, from `apps/api/src/payments/resume-payment.ts`) | the payment row lock, then the status read under it (REVIEW → nothing to escalate; not REVIEW → nothing to resume); the guarded SENT → REVIEW → SENT; no ledger call in `escalate` or `resumePayment` at all; `0010`'s CHECK that a REVIEW, and only a REVIEW, knows where it came from |
 
-And §6's second release door, the one with no chain proof, in `cancel.db.test.ts`, calling
-`cancelPayment` from `apps/api/src/payments/cancel-payment.ts` on a payment the api reserved and
-nobody signed:
+And the second release door, the one with no chain proof, in `cancel.db.test.ts`, calling `cancelPayment` from `apps/api/src/payments/cancel-payment.ts` on a payment the api reserved and nobody signed:
 
 | Claim | Test | Enforced at |
 |---|---|---|
@@ -117,8 +108,7 @@ nobody signed:
 | Once a payment is cancelled there is nothing left to sign: `signPayment` answers `not-reserved` FAILED, never asks the signer, and leaves `tx_hash`, `signed_tx` and `nonce` null | "leaves nothing to sign once it has been cancelled…" | the same row lock, then `nothingToSign`'s status check under it. Without it a signature after the release would burn a treasury nonce on a FAILED payment, and every payout signed after it would wait behind that nonce |
 | Cancel and `sign` at the same instant have exactly one winner: either a stored hash or a `cancel` transaction, never both and never neither, with Reserved at 1,000 when sign won and 0 when cancel won, and no deadlock in five runs | "lets sign or cancel win when they run at the same instant…" | the payment row lock both of them take — `signPayment` holds it across the signer call — so the loser reads the winner's row and returns without writing |
 
-And §8's money coming in, in `deposits.db.test.ts`, calling `recordDetected`,
-`promotableDeposits` and `settleDeposit` from `apps/worker/src/deposits.ts`:
+And money coming in, in `deposits.db.test.ts`, calling `recordDetected`, `promotableDeposits` and `settleDeposit` from `apps/worker/src/deposits.ts`:
 
 | Claim | Test | Enforced at |
 |---|---|---|
@@ -126,20 +116,17 @@ And §8's money coming in, in `deposits.db.test.ts`, calling `recordDetected`,
 | The address decides whose money it is: two partners owing the same amount, and the deposit settles the invoice of the partner whose address it arrived at; a deposit nobody invoiced is credited anyway, flagged `unmatched`, and takes `partner:receivable` negative | "belongs to whoever owns the address it arrived at…" | `partner_id` written at detection from `watched_addresses`; the two matching statements in `settleDeposit`; `allows_negative` on `partner:receivable` |
 | A second pass posts nothing twice: `recordDetected` twice leaves one row, `settleDeposit` twice answers `already-settled`, with one `deposit` transaction, one `paid` audit row and the invoice PAID | "cannot be recorded or credited twice…" | `UNIQUE (tx_hash, log_index)` with `ON CONFLICT DO NOTHING`; the deposit row lock and the status read under it; the `(kind, reference)` unique index |
 
-And §10's two checks, in `reconciliation.db.test.ts`, calling `reconcile` from
-`apps/worker/src/reconcile.ts` with a **stub chain port**: a live system can only ever be clean, so
-the disagreement is manufactured on the chain's side. The ledger's side cannot be corrupted at all
-(it is append-only by trigger), and the demo's own books are never touched:
+And the two reconciliation checks, in `reconciliation.db.test.ts`, calling `reconcile` from `apps/worker/src/reconcile.ts` with a **stub chain port**: a live system can only ever be clean, so the disagreement is manufactured on the chain's side. The ledger's side cannot be corrupted at all (it is append-only by trigger), and the demo's own books are never touched:
 
 | Claim | Test | Enforced at |
 |---|---|---|
 | The three versions agree: a settled payment and a credited deposit, checked against receipts that carry the right Transfers, give one `ok` item each, no delta, and one run row written once with both its items | "finds the three versions agree…" | `reconcile`'s five steps: one `REPEATABLE READ` snapshot, the block `B = min(watcher cursor, final block)`, the chain reads outside any transaction, one item per row, then one INSERT of the run and its items together |
-| §10's "a settled payment with no event": the receipt succeeded and carries a Transfer for another amount, so that item is a `mismatch` naming both numbers, the run is a `mismatch`, and the deposit's item is still `ok` | "flags a settled payment the chain never carried…" | `findSettlementLog` in `packages/chain/src/usdc.ts`, over the receipt for the hash stored on the payment. A status check alone passes this |
+| A settled payment with no event: the receipt succeeded and carries a Transfer for another amount, so that item is a `mismatch` naming both numbers, the run is a `mismatch`, and the deposit's item is still `ok` | "flags a settled payment the chain never carried…" | `findSettlementLog` in `packages/chain/src/usdc.ts`, over the receipt for the hash stored on the payment. A status check alone passes this |
 | A release whose proof is not true: the `reversal` names a transaction the chain says succeeded, so it is a `mismatch` | "flags a release whose proof names a transaction that did not revert…" | `checkPayment`'s reversal rule: the receipt must be `reverted`, in the exact block the proof names, with no Transfer of that amount in its logs. The proof is read, never trusted |
 | A refusal is not taken at its word: a payment the door refused whose row somehow carries a hash and a nonce is a `mismatch`, because "nothing was signed" is a claim about bytes and a treasury nonce | "will not say nothing was signed about a refused payment whose row carries a hash…" | `checkPayment`'s `signedAnyway`, read from the payment row. `payments_signed_together` (0008) means such a row can only exist whole, not that it cannot exist |
-| §10's fixed block, and the reason for it: a payment in flight whose transfer landed at a block at or below B explains the difference exactly, so the run is still `clean`, its item carries `+amount`, and the identity's remainder is 0 | "is still clean when a payment in flight explains the whole difference…" | `checkGlobal` in `apps/worker/src/reconcile-items.ts`: it SUMS the items' deltas and never recomputes them, so an explained difference cannot be counted twice |
+| The fixed block, and the reason for it: a payment in flight whose transfer landed at a block at or below B explains the difference exactly, so the run is still `clean`, its item carries `+amount`, and the identity's remainder is 0 | "is still clean when a payment in flight explains the whole difference…" | `checkGlobal` in `apps/worker/src/reconcile-items.ts`: it SUMS the items' deltas and never recomputes them, so an explained difference cannot be counted twice |
 | A chain that did not answer is never a mismatch: an in-flight payment whose receipt cannot be read leaves that item `unchecked`, the identity `unchecked` naming it, and the run `incomplete` | "says the chain did not answer instead of flagging a mismatch…" | `checkGlobal`'s second guard: an `unchecked` item carries no delta, so computing a remainder without it would blame the books for the node's silence |
-| A cent nothing explains is a `mismatch`: one identity sentence carrying the books, the chain at B, what was in flight and what is left over | "flags what nothing explains, with all four numbers in the sentence…" | the same `checkGlobal`: `books − chain at B − Σ deltas`, against balances read at B and nowhere else. §10's "an event with no ledger entries", seen from the identity |
+| A cent nothing explains is a `mismatch`: one identity sentence carrying the books, the chain at B, what was in flight and what is left over | "flags what nothing explains, with all four numbers in the sentence…" | the same `checkGlobal`: `books − chain at B − Σ deltas`, against balances read at B and nowhere else. It is the event with no ledger entries, seen from the identity |
 
 Whether the transfer is final and carries the official Transfer event, or reverted in a final
 block, is decided before this, by `paidVerdict` in `packages/chain/src/usdc.ts`, whose three
@@ -158,22 +145,25 @@ Three notes on what a green suite does NOT say:
   mid-transaction balance; "Available never goes negative" is carried by the final figure plus
   the `CHECK` that `guards.db.test.ts` violates on purpose.
 
-## The article's numbers
+## The example figures
 
-`walkthrough.db.test.ts` asserts the figures the article prints, step by step: Available
-10,000 and Partner debt 1,000 to start (§5, §7), 9,000 / 1,000 after the reserve (§5), then
-Reserved 0 and Partner debt 0 after settling (§7). `release.db.test.ts` continues into §6:
-Available back at 10,000 after either release door.
+`walkthrough.db.test.ts` asserts the example figures step by step:
+
+- Available 10,000 and Partner debt 1,000 to start.
+- 9,000 / 1,000 after the reserve.
+- Reserved 0 and Partner debt 0 after settling.
+
+`release.db.test.ts` continues into a failure: Available back at 10,000 after either release door.
 
 The same walk by hand, printed rather than asserted:
 
 ```
 pnpm ledger:seed --walkthrough       # opening, after reserving, after settling
-pnpm ledger:seed --release=reversal  # ... and the transfer reverted onchain (§6)
+pnpm ledger:seed --release=reversal  # ... and the transfer reverted onchain
 pnpm ledger:seed --release=cancel    # ... and nothing was ever signed
 ```
 
-If one of those figures ever has to change here, the article changed first.
+The seed, `vocabulary.test.ts` and these tests quote the same figures, so one of them cannot change alone.
 
 ## The canary
 

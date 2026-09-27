@@ -2,14 +2,14 @@ import type { RaceAttempt, RaceResult } from '@payments/domain'
 import { died, field, heading, post, section } from './harness'
 
 /**
- * §9's race: Available 1,500 and two payments of 1,000 arriving at the same instant, with
+ * The race: Available 1,500 and two payments of 1,000 arriving at the same instant, with
  * different keys. One is reserved, the other is refused for insufficient funds, and Available
  * never crosses into negative.
  *
  *   pnpm experiment:race
  *
  * It presses the same door the Break it card presses, and it is the one command here that spends
- * nothing and takes seconds: the article's figures need more money than the demo's treasury holds,
+ * nothing and takes seconds: the example figures need more money than the demo's treasury holds,
  * so the api runs the race against a sandbox database of its own. The name of that database is
  * printed below, and the demo's books do not move.
  */

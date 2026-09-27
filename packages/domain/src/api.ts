@@ -10,7 +10,7 @@ export interface Health {
   readonly database: string
 }
 
-/** What the books say, in the article's three published account names. */
+/** What the books say, in the three account names the screens show. */
 export interface LedgerFigures {
   readonly available: string
   readonly reserved: string
@@ -281,7 +281,7 @@ export interface PartnerView {
   readonly chainError?: string
 }
 
-/** Why a payment failed: short codes a screen turns into a sentence and the article can quote. */
+/** Why a payment failed: short codes a screen turns into a sentence. */
 export type PaymentFailureReason =
   | 'payable_not_open'
   | 'partner_inactive'
@@ -317,7 +317,7 @@ export function failedAfterReserving(reason: PaymentFailureReason | undefined): 
  * the payment as it is now.
  */
 export interface PaymentView {
-  /** `PAY-XXXX`, the article's format. */
+  /** `PAY-XXXX`. */
   readonly reference: string
   readonly status: 'CREATED' | 'RESERVED' | 'SENT' | 'SETTLED' | 'FAILED' | 'REVIEW'
   readonly amount: string
@@ -336,7 +336,7 @@ export interface PaymentView {
 }
 
 /**
- * One of the two payments in §9's race, as the api would have answered it: the body it would have
+ * One of the two payments in the race, as the api would have answered it: the body it would have
  * sent, and the code the payment door's own rule gives that outcome (201 recorded, 422 refused).
  */
 export interface RaceAttempt {
@@ -348,14 +348,14 @@ export interface RaceAttempt {
 }
 
 /**
- * What `POST /experiments/race` answers: §9's race with the article's own figures, run against a
+ * What `POST /experiments/race` answers: the race with the example figures, run against a
  * sandbox database, which is why `database` is part of the evidence.
  */
 export interface RaceResult {
   readonly database: string
   readonly availableBefore: string
   readonly attempts: readonly RaceAttempt[]
-  /** `reserve` ledger transactions the two attempts left behind. The article's answer is one. */
+  /** `reserve` ledger transactions the two attempts left behind. The right answer is one. */
   readonly reserves: number
   readonly availableAfter: string
   readonly reservedAfter: string
@@ -417,7 +417,7 @@ export interface PaymentTimeline {
 }
 
 /**
- * One reconciliation run as the list shows it (§10): the block it pinned the chain side to, how it
+ * One reconciliation run as the list shows it: the block it pinned the chain side to, how it
  * came out, and the line a human reads. `block` is null for a database whose watcher has never
  * scanned: there is no block at which the books and the chain can be compared.
  */

@@ -9,7 +9,7 @@ import { formatUsdc } from '../app/usdc'
 /** What an invoice or a payment with no partner reads, wherever one shows: it is a destination, not a gap. */
 export const TO_AN_ADDRESS = 'Pay to an address'
 
-/** Why a payment failed, in the article's words. The api's code shows next to it on the payment's story. */
+/** Why a payment failed, in plain words. The api's code shows next to it on the payment's story. */
 export const REASONS: Record<PaymentFailureReason, string> = {
   insufficient_funds: 'Available was less than this amount.',
   payable_not_open: 'The invoice was already being paid.',
@@ -113,7 +113,7 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
   const [asking, setAsking] = useState(false)
   const [paying, setPaying] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
-  // The attempt's idempotency key (§4): made on the first Pay and sent again on every Pay until
+  // The attempt's idempotency key: made on the first Pay and sent again on every Pay until
   // the api answers, which is why a retry after a lost answer is the same payment, never a second
   // one. Any answer ends the attempt: an invoice that reopens after a revert must be paid with a new
   // key, because the old one would only replay the payment that reverted.

@@ -36,7 +36,7 @@ export function PayToAddressScreen() {
   const [payment, setPayment] = useState<PaymentView | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
-  // The attempt's idempotency key (§4): kept while a call is in flight, so a retry after a lost
+  // The attempt's idempotency key: kept while a call is in flight, so a retry after a lost
   // answer is the same payment. Dropped on any answer, because an invoice refused at the door is
   // paid again with a NEW key; the old one would only replay the refusal.
   const attemptKey = useRef<string | undefined>(undefined)

@@ -93,7 +93,7 @@ export interface PaymentAnswer {
 }
 
 /**
- * §9's double click: the same invoice paid twice at the same instant, with ONE key. The two
+ * The double click: the same invoice paid twice at the same instant, with ONE key. The two
  * requests are in flight before either answers (nothing is awaited between them), which is the
  * only thing that makes this a double click and not two payments in a row. Both answers come
  * back with their status code, because the codes are the evidence: one recorded the payment
@@ -160,7 +160,7 @@ export function fundPartnerWallet(): Promise<PartnerWalletFunding> {
 }
 
 /**
- * §9's race, in one call: the api seeds a sandbox database with the article's 1,500 and races two
+ * The race, in one call: the api seeds a sandbox database with 1,500 and races two
  * payments of 1,000 through the same payment door. The two calls are made there and not here
  * because two requests from a browser cannot be made to arrive at the same instant.
  */

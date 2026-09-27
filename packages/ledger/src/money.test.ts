@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { toMinorFromDecimal } from './money'
 
-// Where the article's money enters the system: an amount a person typed into a form.
+// Where the money enters the system: an amount a person typed into a form.
 describe('toMinorFromDecimal', () => {
   it('reads a typed amount into exact minor units', () => {
     expect(toMinorFromDecimal('0.50')).toBe(500_000n)

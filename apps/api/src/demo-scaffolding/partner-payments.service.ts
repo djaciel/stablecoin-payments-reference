@@ -272,7 +272,7 @@ export class PartnerPaymentsService {
     }
   }
 
-  /** The article's rule (§7), on the payer's side: without the event, nothing was paid. */
+  /** The paid rule, on the payer's side: without the event, nothing was paid. */
   private async verifyTransfer(client: PoolClient, invoice: Receivable, receipt: Receipt, from: Address): Promise<void> {
     const problem = transferProblem(receipt, { from, to: invoice.depositAddress, amount: invoice.amountMinor })
     if (problem === undefined) {

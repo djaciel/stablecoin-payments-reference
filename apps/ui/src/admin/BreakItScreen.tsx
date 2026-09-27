@@ -15,7 +15,7 @@ export interface ExperimentsContext {
   readonly show: (experiments: Experiments) => void
 }
 
-/** Where "Node not responding" bites, in the article's words; the step's own name stays under it. */
+/** Where "Node not responding" bites, in plain words; the step's own name stays under it. */
 export const BLACKHOLE_WHERE: Record<BlackholeStep, string> = {
   execute: 'before the broadcast',
   watch: 'after the broadcast',
@@ -38,7 +38,7 @@ const RUN_LIMIT_MS = 600_000
 const RUN_READ_BLIPS = 2
 
 /**
- * The Break it cards (§9). Each one makes a real failure happen, on the real network: Run it does
+ * The Break it cards. Each one makes a real failure happen, on the real network: Run it does
  * the whole experiment and leaves the evidence on the card, and the switch under it is the long way.
  * The flags come from the shell's poll, so these cards and the banner never disagree.
  */
@@ -49,7 +49,7 @@ export function BreakItScreen() {
     return <p className="card-note">reading…</p>
   }
 
-  // §9's four failures in the order the article lists them, then §6's revert.
+  // The four failures a payment has to survive, then the revert.
   const card: CardProps = { show }
   return (
     <div className="cards">
@@ -180,7 +180,7 @@ function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) 
 }
 
 /**
- * §9's double click. Nothing is armed and nothing is broken: the failure is the reader's own
+ * The double click. Nothing is armed and nothing is broken: the failure is the reader's own
  * nervous second click, so the card has no badge and no switch, and its long way is the command.
  * Its evidence is read, not announced: the invoice's payments and Available, around the two calls.
  */
@@ -229,7 +229,7 @@ function DoubleClickCard(card: CardProps) {
 }
 
 /**
- * §9's race. The only card that spends nothing, and the only one that does not run on the demo's
+ * The race. The only card that spends nothing, and the only one that does not run on the demo's
  * own books: the two payments together have to be more than Available, and Available here is a few
  * dollars of real testnet money. Its runner is its own, next to `useRun` rather than inside it:
  * there is no invoice, no flag and no payment to follow.
@@ -417,7 +417,7 @@ function count(rows: number, thing: string): string {
 }
 
 /**
- * The two moments of §9's crash that a status cannot show, read from the story the run already
+ * The two moments of the crash that a status cannot show, read from the story the run already
  * asks for: the `signed` row that took the flag, and the `sent` row that found the network had
  * never heard of the hash.
  */
@@ -612,7 +612,7 @@ interface Run {
   readonly resume: (reference: string) => void
 }
 
-/** Where the payment is while the run follows it, in the article's words (§7). */
+/** Where the payment is while the run follows it, in plain words. */
 const FOLLOWING: Partial<Record<PaymentView['status'], string>> = {
   CREATED: 'Recorded, reserving its money',
   RESERVED: 'Reserved, waiting to be signed and sent',
@@ -628,7 +628,7 @@ const FOLLOWING: Partial<Record<PaymentView['status'], string>> = {
 function useRun({ show }: CardProps, plan: RunPlan): Run {
   const [state, setState] = useState<RunState>({ done: [] })
   const [busy, setBusy] = useState(false)
-  // The attempt's idempotency key (§4), made once per run: a second POST could only replay this payment.
+  // The attempt's idempotency key, made once per run: a second POST could only replay this payment.
   const key = useRef<string | undefined>(undefined)
 
   const doing = (stage: string): void => {

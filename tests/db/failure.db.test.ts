@@ -1,5 +1,5 @@
 import { inTransaction } from '@payments/db'
-import { ACCOUNTS, seedArticle, toMinor, withLedgerTransaction } from '@payments/ledger'
+import { ACCOUNTS, seedExample, toMinor, withLedgerTransaction } from '@payments/ledger'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { createPayment } from '../../apps/api/src/payments/create-payment'
 import { resumePayment } from '../../apps/api/src/payments/resume-payment'
@@ -8,7 +8,7 @@ import { reversePayment } from '../../apps/worker/src/reverse'
 import { balanceOf, resetDatabase, seedInvoices, testPool, withClient } from './helpers/database'
 
 /**
- * §6 on the books, against real Postgres: what happens to the money when a payment fails after it
+ * Failures on the books, against real Postgres: what happens to the money when a payment fails after it
  * was reserved. A final revert is proof it did not land, so the money comes back and the invoice
  * reopens. Without proof either way the payment goes to REVIEW, and nothing moves, there or back.
  */
@@ -30,7 +30,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await resetDatabase(pool)
-  await withLedgerTransaction(pool, (client) => seedArticle(client))
+  await withLedgerTransaction(pool, (client) => seedExample(client))
   invoiceId = (await seedInvoices(pool)).first
   reference = await reserveAndSend(invoiceId)
 })
@@ -42,7 +42,7 @@ describe('a payment that reverted onchain', () => {
 
     expect(first.kind).toBe('reversed')
     expect(again.kind).toBe('already-reversed')
-    // §6's 10,000 / 0. Partner debt does not move: the invoice is still owed.
+    // Back to 10,000 / 0. Partner debt does not move: the invoice is still owed.
     expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(toMinor(10_000))
     expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(0n)
     expect(await balanceOf(pool, ACCOUNTS.partnerPayable)).toBe(toMinor(1_000))
@@ -89,7 +89,7 @@ describe('a payment with no proof either way', () => {
 
     expect(first).toEqual({ kind: 'escalated', fromStatus: 'SENT' })
     expect(again).toEqual({ kind: 'nothing-to-escalate', status: 'REVIEW' })
-    // §6's REVIEW row: 9,000 / 1,000, as after the reserve. The invoice is still owed.
+    // The REVIEW row: 9,000 / 1,000, as after the reserve. The invoice is still owed.
     expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(toMinor(9_000))
     expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(toMinor(1_000))
     expect(await balanceOf(pool, ACCOUNTS.partnerPayable)).toBe(toMinor(1_000))
@@ -110,11 +110,11 @@ describe('a payment with no proof either way', () => {
       payment_reference: reference,
       postings: ['reserve'],
       escalated: '1',
-      // "Escalates to manual review with all the context" (§9).
+      // "Escalates to manual review with all the context".
       context: { fromStatus: 'SENT', step: 'watch', attempts: 5, lastError: escalation.lastError, txHash: EVIDENCE.txHash, nonce: 11 },
     })
 
-    // Resumed (§9): back to where it was, for its workflow to look for the proof again. Once only.
+    // Resumed: back to where it was, for its workflow to look for the proof again. Once only.
     const resumed = await withClient(pool, (client) => inTransaction(client, () => resumePayment(client, reference)))
     const resumedAgain = await withClient(pool, (client) => inTransaction(client, () => resumePayment(client, reference)))
 

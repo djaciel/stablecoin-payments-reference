@@ -33,13 +33,13 @@ export const EXPERIMENT_KEYS = {
   /**
    * One-shot: its invoice's payment, or the next one when no invoice is named, stores its hash, its
    * signed bytes and its nonce, commits, and then the worker kills its own process with nothing
-   * sent. It comes back and finishes the payment (§9).
+   * sent. It comes back and finishes the payment.
    */
   crashAfterSigning: 'experiment.crash_after_signing',
   /**
    * While enabled, that step of its invoice's payment, or of every payment in flight when no invoice
    * is named, fails like a node that does not answer, so its attempts run out and the payment goes
-   * to REVIEW with its money still reserved (§9's stuck one).
+   * to REVIEW with its money still reserved (the stuck one).
    */
   blackholeRpc: 'experiment.blackhole_rpc',
 } as const satisfies Record<keyof Experiments, string>

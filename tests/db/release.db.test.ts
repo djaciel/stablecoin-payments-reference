@@ -1,12 +1,12 @@
 import {
   ACCOUNTS,
-  ARTICLE_TREASURY,
+  EXAMPLE_TREASURY,
   LedgerRejected,
   cancel,
   writeTransaction,
   reserve,
   reversal,
-  seedArticle,
+  seedExample,
   settle,
   toMinor,
   withLedgerTransaction,
@@ -18,9 +18,9 @@ import { balanceOf, resetDatabase, testPool } from './helpers/database'
  * Invariant 5, the whole rule: reserved money goes back to available through exactly two doors,
  * and the database refuses every other way whatever it is labelled.
  *
- *   reversal — the broadcast transaction reverted onchain, and the proof says which one (§6).
- *   cancel   — nothing was ever signed, so no node can include anything. That absence IS the
- *              proof, and it is the one release the article allows without a chain proof.
+ *   reversal: the broadcast transaction reverted onchain, and the proof says which one.
+ *   cancel:   nothing was ever signed, so no node can include anything. That absence IS the
+ *             proof, and it is the one release allowed without a chain proof.
  *
  * This is the invariant that costs real money when it is wrong: releasing a hold on a transfer
  * that has not landed yet is how a system pays the same partner twice. The third test is the
@@ -38,11 +38,11 @@ afterAll(async () => {
   await pool.end()
 })
 
-// Every test starts where §5 leaves off: Available 9,000 with 1,000 held for PAY-4821.
+// Every test starts right after the reserve: Available 9,000 with 1,000 held for PAY-4821.
 beforeEach(async () => {
   await resetDatabase(pool)
   await withLedgerTransaction(pool, async (client) => {
-    await seedArticle(client)
+    await seedExample(client)
     await reserve(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC })
   })
 })
@@ -62,14 +62,14 @@ describe('releasing a hold', () => {
     expect(await auditRowsFor(REFERENCE)).toEqual([])
     expect(await countTransactions('reversal')).toBe(0)
 
-    // Then the same release, committed. §6's figures: the hold is gone and the money is
+    // Then the same release, committed. The failure figures: the hold is gone and the money is
     // spendable again.
     await withLedgerTransaction(pool, (client) =>
       reversal(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC, proof: PROOF }),
     )
 
     expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(0n)
-    expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(ARTICLE_TREASURY)
+    expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(EXAMPLE_TREASURY)
 
     // The proof is stored next to the entries it justifies, and once more in the audit log.
     expect(await proofOnTransaction('reversal')).toEqual(PROOF)
@@ -107,7 +107,7 @@ describe('releasing a hold', () => {
     expect(await auditRowsFor('PAY-0002')).toEqual([])
   })
 
-  it('is refused when the reversal entry pair is recorded as a settle, while the article settle passes', async () => {
+  it('is refused when the reversal entry pair is recorded as a settle, while a real settle passes', async () => {
     // The exact movement of a reversal, under a label the schema likes. The rule is about what
     // the money did, so the trigger refuses it at COMMIT and names what it was recorded as.
     const refusal = await withLedgerTransaction(pool, (client) =>
@@ -125,7 +125,7 @@ describe('releasing a hold', () => {
     expect((refusal as Error).message).toMatch(/releases a hold .* but is recorded as settle/)
     expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(PAYMENT)
 
-    // And the settle the article describes still posts: it consumes the hold to pay a debt and
+    // And a real settle still posts: it consumes the hold to pay a debt and
     // never touches available. That is a settlement, not a release.
     await withLedgerTransaction(pool, (client) =>
       settle(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC }),
@@ -143,7 +143,7 @@ describe('releasing a hold', () => {
 
     // The same place the reversal ends, reached without anything onchain to point at.
     expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(0n)
-    expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(ARTICLE_TREASURY)
+    expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(EXAMPLE_TREASURY)
     expect(await proofOnTransaction('cancel')).toBeNull()
 
     const audit = await auditRowsFor(REFERENCE)
@@ -168,14 +168,14 @@ describe('releasing a hold', () => {
     expect(await auditRowsFor(REFERENCE)).toEqual([])
 
     // The same movement once nothing is signed. The trigger refuses only what it can see: it
-    // never asks that a payment exist, or the article's own ledger fixture would break.
+    // never asks that a payment exist, or the example ledger fixture would break.
     await pool.query('UPDATE payments SET tx_hash = NULL, signed_tx = NULL, nonce = NULL WHERE reference = $1', [REFERENCE])
     await withLedgerTransaction(pool, (client) =>
       cancel(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC, reason: 'nothing was signed' }),
     )
 
     expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(0n)
-    expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(ARTICLE_TREASURY)
+    expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(EXAMPLE_TREASURY)
   })
 })
 

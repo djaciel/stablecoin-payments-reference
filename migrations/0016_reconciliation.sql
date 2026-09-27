@@ -1,4 +1,4 @@
--- Reconciliation runs: what the system found when it checked itself (article section 10).
+-- Reconciliation runs: what the system found when it checked itself.
 --
 -- These two tables are derived evidence, not the books, so they carry no append-only trigger and
 -- no guard: everything here can be recomputed by running the check again. Nothing in the system

@@ -1,6 +1,10 @@
 # Stablecoin Payments Reference
 
-The code that goes with the article. It follows one stablecoin payment from the click to balanced books: a double-entry ledger, clear payment states, a durable workflow, deposits matched to partners, a check of the books against the chain, and failures you can cause on purpose. It runs on a public testnet (Base Sepolia) with test USDC only. Never send real money to its addresses.
+A demo app that shows how a stablecoin payment orchestration system works:
+
+- It simulates two sides, a company and its partners. You play both: `/admin` is the company, `/partner` is a partner.
+- It runs on a public blockchain testnet (Base Sepolia) with test money only. Never send real money to its addresses.
+- You do not need a wallet: the app creates its own keys the first time it starts.
 
 ## What you need
 
@@ -29,9 +33,9 @@ If a port is already taken on your machine, copy `.env.example` to `.env` and ch
 - **Testnet USDC**, the money the demo moves: the [Circle faucet](https://faucet.circle.com). Pick Base Sepolia.
 - **Base Sepolia ETH**, which pays the gas: the [Coinbase Developer Platform faucet](https://portal.cdp.coinbase.com/products/faucet) (it asks you to sign in).
 
-You need both: with USDC and no ETH, nothing can be sent. More faucets, and what to do when one says no: [`docs/dev/faucets.md`](docs/dev/faucets.md).
+You need both: without ETH nothing can be sent.
 
-The Treasury card shows the new balance first. The **Books** card catches up a few minutes later, once the block is final and the watcher records it. That gap is the first lesson: money on chain is not money in the books until something records it.
+The **Treasury** card shows the money first; **Books** updates a few minutes later, once the block is final.
 
 ## Your first payout
 
@@ -40,15 +44,6 @@ The Treasury card shows the new balance first. The **Books** card catches up a f
 3. On the invoice's card, press **Pay**, then **Pay** again in the dialog. The card now shows a **Payment status** and a **Reference** (`PAY-` and four digits).
 4. Click the reference to open the payment's story: **Created**, **Reserved**, **Signed**, **Sent**, **Paid**, **Settled**. Paid waits a few minutes for the block to be final.
 5. On the story, **The transfer on Base Sepolia** opens the real transaction, and **Its runs in Temporal** opens the workflow (`http://localhost:8080`, which keeps finished runs for 30 days).
-
-What the **Books** show along the way, if the faucet gave you 20 USDC:
-
-| Moment | Available | Reserved | Partner debt |
-|---|---|---|---|
-| After Fund partner wallet | 18.0000 | 0.0000 | 0.0000 |
-| After Create | 18.0000 | 0.0000 | 0.1000 |
-| After Pay | 17.9000 | 0.1000 | 0.1000 |
-| After Settled | 17.9000 | 0.0000 | 0.0000 |
 
 ## Your first deposit
 
@@ -80,7 +75,7 @@ On **Reconciliation**, press **Run now**. The new run shows three cards:
 
 ## Where to look next
 
-- [`GUIDE.md`](GUIDE.md): the map. For each section of the article, the files to open and how to see them run.
+- [`GUIDE.md`](GUIDE.md): the map. For each topic, the files to open and how to see them run.
 - [`docs/schema.md`](docs/schema.md): the tables and accounts, and how to read the books with `psql`.
 - [`docs/states.md`](docs/states.md): the states of payments, deposits, invoices and reconciliation runs.
 - [`docs/api.md`](docs/api.md): every endpoint.

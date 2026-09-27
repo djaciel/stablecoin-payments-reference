@@ -7,7 +7,7 @@ import { formatUsdc } from '../app/usdc'
 import { MOMENT } from './TransfersScreen'
 
 /**
- * Article section 10 on one screen: the books against the stablecoin the company holds on chain
+ * Reconciliation on one screen: the books against the stablecoin the company holds on chain
  * at one fixed block, then every movement that explains the difference, then the runs before
  * this one. Everything here is what the run recorded when it ran, never a fresh read.
  */

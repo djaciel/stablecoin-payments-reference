@@ -59,7 +59,7 @@ export class PaymentsController {
   }
 
   /**
-   * Back from REVIEW to where it was, with its money untouched (§9), then dispatched exactly as Pay
+   * Back from REVIEW to where it was, with its money untouched, then dispatched exactly as Pay
    * does: committed first, so the run that looks for the proof again reads the resumed state.
    */
   @Post(':reference/resume')
@@ -77,7 +77,7 @@ export class PaymentsController {
   }
 
   /**
-   * The money back with no chain proof, because nothing was ever signed (§6). Nothing is
+   * The money back with no chain proof, because nothing was ever signed. Nothing is
    * dispatched: there is no workflow to start, and a run already going finds a FAILED payment
    * and stops by itself.
    */

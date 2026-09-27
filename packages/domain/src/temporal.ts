@@ -56,7 +56,7 @@ export function paymentWorkflowStart(reference: string, taskQueue: string) {
   }
 }
 
-/** The one-shot reconciliation run's type name, started by "Run now" (§10). */
+/** The one-shot reconciliation run's type name, started by "Run now". */
 export const RECONCILIATION_WORKFLOW = 'ReconciliationRun'
 
 /**

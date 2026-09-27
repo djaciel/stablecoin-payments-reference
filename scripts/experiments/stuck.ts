@@ -2,7 +2,7 @@ import type { AuditStep, BlackholeStep, Experiments, LedgerFigures, PaymentTimel
 import { books, died, field, heading, post, put, refuseIfArmed, section, step, waitUntilResting, writeOwnInvoice } from './harness'
 
 /**
- * §9's stuck one: the node stops answering after the broadcast, the step runs out of its attempts,
+ * The stuck one: the node stops answering after the broadcast, the step runs out of its attempts,
  * and the payment escalates to REVIEW with its money still reserved. Then it is resumed and finishes.
  *
  *   pnpm experiment:stuck
@@ -20,7 +20,7 @@ const NAME = 'experiment:stuck'
 const AMOUNT = '0.01'
 const DESCRIPTION = 'Stuck run (script)'
 
-/** After the broadcast: the transfer lands while the workflow cannot see it, which is §9's stuck one. */
+/** After the broadcast: the transfer lands while the workflow cannot see it, which is the stuck one. */
 const STEP: BlackholeStep = 'watch'
 
 async function main(): Promise<void> {

@@ -1,4 +1,4 @@
--- The allowlist: the addresses the company may send money to (article section 4).
+-- The allowlist: the addresses the company may send money to.
 --
 -- Until now this was a join on the partners table, which quietly said that the only address you
 -- may pay is a partner's. They are two different ideas, and this table separates them: a row here

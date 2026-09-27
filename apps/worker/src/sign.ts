@@ -87,7 +87,7 @@ export async function sign(reference: string): Promise<string> {
 }
 
 /**
- * §9's crash, at the one moment that matters: the payment has a hash and nobody has sent anything.
+ * The crash experiment, at the one moment that matters: the payment has a hash and nobody has sent anything.
  *
  * `process.exit(1)` is the only honest way to cause it. Docker does not apply its restart policy to
  * a container stopped from outside, and PID 1 ignores `kill -9` (`docs/dev/restart-survival.md`).
@@ -155,7 +155,7 @@ export async function signPayment(
       maxPriorityFeePerGas: input.maxPriorityFeePerGas,
     })
 
-    // 5. Stored, and still RESERVED: signing is not a status change in the article. The hash must
+    // 5. Stored, and still RESERVED: signing is not a status change. The hash must
     //    name these exact bytes, or every later lookup and retry would ask about the wrong ones.
     if (keccak256(signed.signedTransaction).toLowerCase() !== signed.hash.toLowerCase()) {
       throw ApplicationFailure.nonRetryable(`${input.reference}: the signer's hash does not name its bytes; nothing was stored`)

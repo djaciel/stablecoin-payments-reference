@@ -53,6 +53,6 @@ export {
   type AuditEventName,
   type AuditSubject,
 } from './audit'
-export { ARTICLE_PARTNER_DEBT, ARTICLE_TREASURY, RACE_TREASURY, seedArticle, seedRace } from './seed'
+export { EXAMPLE_PARTNER_DEBT, EXAMPLE_TREASURY, RACE_TREASURY, seedExample, seedRace } from './seed'
 export { getBalances } from './balances'
 export { USDC_DECIMALS, formatMinor, toMinor, toMinorFromDecimal } from './money'

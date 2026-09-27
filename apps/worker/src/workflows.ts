@@ -48,19 +48,19 @@ const MAX_FINALITY_CHECKS = 180
  * Everything awaited here is recorded in Temporal's history, so a worker that dies mid-run
  * replays from it: finished steps return their recorded result instead of running again.
  *
- * It ends one of three ways (§6): settled, reversed with proof, or escalated to REVIEW.
+ * It ends one of three ways: settled, reversed with proof, or escalated to REVIEW.
  */
 export async function PaymentWorkflow(reference: string): Promise<string[]> {
   const timeline: string[] = []
   let gaveUp: Escalation | undefined
 
   try {
-    // Signed (§7): the hash exists, and is stored on the row, before anything is sent.
+    // Signed: the hash exists, and is stored on the row, before anything is sent.
     timeline.push(await sign(reference))
-    // Sent (§7): a node has the stored bytes. `execute` is §3's "Execution" box.
+    // Sent: a node has the stored bytes. `execute` is the Execution step.
     timeline.push(await execute(reference))
 
-    // Paid (§7): finality AND the event. One short check, then a durable timer, until the chain gives
+    // Paid: finality AND the event. One short check, then a durable timer, until the chain gives
     // a final answer either way, or 30 minutes pass without one.
     let verdict = await watch(reference)
     let checks = 1
@@ -75,7 +75,7 @@ export async function PaymentWorkflow(reference: string): Promise<string[]> {
       // Only now do the books move: Reserved out, Partner debt cleared, the invoice PAID.
       timeline.push(await settle(reference, verdict.evidence))
     } else if (verdict.outcome === 'reverted') {
-      // §6, "reverted: proof it did not land, so it is reversed": Reserved back to Available, the invoice OPEN.
+      // Reverted: proof it did not land, so it is reversed: Reserved back to Available, the invoice OPEN.
       timeline.push(`reverted in block ${verdict.evidence.blockNumber} (final ${verdict.evidence.finalBlock})`)
       timeline.push(await reverse(reference, verdict.evidence))
     } else {
@@ -86,7 +86,7 @@ export async function PaymentWorkflow(reference: string): Promise<string[]> {
     gaveUp = stepThatGaveUp(failure)
   }
 
-  // §6, "silence: no proof, the money does not move": REVIEW, with the reason, and Reserved untouched.
+  // Silence: no proof, the money does not move: REVIEW, with the reason, and Reserved untouched.
   if (gaveUp !== undefined) {
     timeline.push(await escalate(reference, gaveUp))
   }
@@ -117,7 +117,7 @@ const TICKS_PER_RUN = 360
 /** How often the two loops that follow the chain tick. */
 const CHAIN_INTERVAL = '10 seconds'
 
-/** Section 10's rhythm is daily; ten minutes here, so a reader can watch a run appear by itself. */
+/** A real reconciliation rhythm is daily; ten minutes here, so a reader can watch a run appear by itself. */
 const RECONCILE_INTERVAL = '10 minutes'
 
 /**
@@ -137,7 +137,7 @@ export async function DispatcherWorkflow(): Promise<void> {
 }
 
 /**
- * The reconciler (§10): every ten minutes, one run that checks every payment and every deposit
+ * The reconciler: every ten minutes, one run that checks every payment and every deposit
  * against the chain at one block. It writes only its own two tables and repairs nothing.
  */
 export async function ReconcilerWorkflow(): Promise<void> {

@@ -7,7 +7,7 @@ import { screenPayment } from './compliance'
 import { PAYMENT_COLUMNS, toView, type PaymentRow } from './read-payments'
 
 /**
- * `POST /payments` (§4, §5): record the intent, validate it and set the money aside, in six steps
+ * `POST /payments`: record the intent, validate it and set the money aside, in six steps
  * and inside the CALLER's transaction, which this file never opens, commits or rolls back. A plain
  * function, not a Nest service, so `tests/db/payments.db.test.ts` can run it on two connections.
  */
@@ -83,7 +83,7 @@ export async function createPayment(client: PoolClient, request: PaymentRequest)
     return fail(client, intent, 'partner_inactive')
   }
   // The allowlist is its own table (`0013`), so this asks the one question it answers. Any admin
-  // may add a row through `POST /allowlist`; in a real system that is a reviewed control (§11).
+  // may add a row through `POST /allowlist`; in a real system that is a reviewed control.
   const allowed = await client.query('SELECT 1 FROM allowlist WHERE address = $1', [destination])
   if (allowed.rowCount === 0) {
     return fail(client, intent, 'destination_not_allowlisted')
@@ -197,7 +197,7 @@ function fingerprintOf(request: PaymentRequest): string {
   return createHash('sha256').update(JSON.stringify(body)).digest('hex')
 }
 
-/** The article's PAY-XXXX: four random digits. A real system uses a longer id; ten thousand runs out. */
+/** PAY-XXXX: four random digits. A real system uses a longer id; ten thousand runs out. */
 function newReference(): string {
   return `PAY-${String(randomInt(10_000)).padStart(4, '0')}`
 }

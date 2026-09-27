@@ -1,6 +1,6 @@
 /**
- * The vocabulary the schema and the engine share. These names are the article's names:
- * changing one here means changing what the published text claims.
+ * The vocabulary the schema and the engine share. These names are the ones the screens and docs
+ * use: changing one here means changing them too.
  */
 
 /** The chart of accounts, the same nine rows `migrations/0002_ledger.sql` inserts. */

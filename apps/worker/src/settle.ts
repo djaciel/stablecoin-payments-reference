@@ -56,7 +56,7 @@ export async function settlePayment(client: PoolClient, reference: string, evide
       return { kind: 'already-settled' }
     }
 
-    // 3. The books (§7): Dr Partner debt / Cr Reserved. Available does not move.
+    // 3. The books: Dr Partner debt / Cr Reserved. Available does not move.
     const amountMinor = BigInt(row.amount_minor)
     const ledgerTransactionId = await settleLedger(client, { reference, amount: amountMinor, currency: row.currency })
 

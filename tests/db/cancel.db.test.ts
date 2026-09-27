@@ -1,6 +1,6 @@
 import type { SignedTransaction, TransactionToSign } from '@payments/chain'
 import { inTransaction } from '@payments/db'
-import { ACCOUNTS, seedArticle, toMinor, withLedgerTransaction } from '@payments/ledger'
+import { ACCOUNTS, seedExample, toMinor, withLedgerTransaction } from '@payments/ledger'
 import { keccak256, type Hex } from 'viem'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { cancelPayment } from '../../apps/api/src/payments/cancel-payment'
@@ -10,8 +10,8 @@ import { balanceOf, barrier, resetDatabase, seedInvoices, testPool, withClient }
 
 /**
  * Invariant 5's second door, against real Postgres: reserved money goes back to available with no
- * chain proof ONLY while no signed bytes exist, because that absence is the proof — no node can
- * include what was never signed (section 6).
+ * chain proof ONLY while no signed bytes exist, because that absence is the proof: no node can
+ * include what was never signed.
  *
  * The condition is read under `SELECT … FROM payments WHERE reference = $1 FOR UPDATE`, the lock
  * `signPayment` holds across the signer call, so the two cannot interleave. The last two tests are
@@ -41,7 +41,7 @@ describe('cancelling a payment', () => {
 
     expect(cancelled.kind === 'cancelled' && cancelled.payment.status).toBe('FAILED')
     expect(cancelled.kind === 'cancelled' && cancelled.payment.reason).toBe('cancelled')
-    // Section 5's opening figures again, reached with nothing onchain to point at. Partner debt
+    // The opening figures again, reached with nothing onchain to point at. Partner debt
     // does not move: the invoice is still owed, and an invoice is not a payment.
     expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(toMinor(10_000))
     expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(0n)
@@ -165,7 +165,7 @@ describe('cancelling a payment', () => {
 /** A fresh ledger, one invoice and its payment RESERVED through the api's own door. */
 async function reserveAPayment(idempotencyKey: string): Promise<{ invoiceId: string; reference: string }> {
   await resetDatabase(pool)
-  await withLedgerTransaction(pool, (client) => seedArticle(client))
+  await withLedgerTransaction(pool, (client) => seedExample(client))
   const { first } = await seedInvoices(pool)
   const outcome = await withClient(pool, (client) =>
     inTransaction(client, () => createPayment(client, { idempotencyKey, payableId: first })),

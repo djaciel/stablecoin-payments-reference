@@ -20,7 +20,7 @@ export type EscalateOutcome =
   /** Already in REVIEW, or finished: nothing is written. */
   | { readonly kind: 'nothing-to-escalate'; readonly status: string }
 
-/** The `escalate` activity: no proof either way (§6), so REVIEW, with the reason written down. */
+/** The `escalate` activity: no proof either way, so REVIEW, with the reason written down. */
 export async function escalate(reference: string, escalation: Escalation): Promise<string> {
   const client = await workerPool().connect()
   try {

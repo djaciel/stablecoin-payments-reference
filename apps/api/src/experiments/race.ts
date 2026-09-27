@@ -1,26 +1,26 @@
 import { randomUUID } from 'node:crypto'
 import { createPool, inTransaction, migrate, readDatabaseUrl, type Pool, type PoolClient } from '@payments/db'
 import type { RaceAttempt, RaceResult } from '@payments/domain'
-import { ACCOUNTS, ARTICLE_PARTNER_DEBT, formatMinor, getBalances, seedRace } from '@payments/ledger'
+import { ACCOUNTS, EXAMPLE_PARTNER_DEBT, formatMinor, getBalances, seedRace } from '@payments/ledger'
 import { createPayment, type PaymentOutcome } from '../payments/create-payment'
 import { statusCodeOf } from '../payments/payments.controller'
 
 /**
- * §9's race, with the article's own figures: Available 1,500, two payments of 1,000 fired at the
+ * The race, with the example figures: Available 1,500, two payments of 1,000 fired at the
  * same instant with different keys. One is reserved, the other is refused for insufficient funds,
  * and Available never crosses into negative.
  *
  * It runs against a sandbox database of its own, because Available in the demo is real testnet
  * money and this race needs two payments whose sum exceeds it. The sandbox is
  * created and migrated on demand by the real runner over the real files, and emptied and reseeded
- * on every run, so the figures are the article's every time.
+ * on every run, so the figures are the same every time.
  */
 
 /** Where the race runs, and the only database this endpoint may empty. */
 const SANDBOX_DATABASE = 'payments_experiment'
 
-/** §9's two payments. Their sum, 2,000, is what 1,500 cannot cover. */
-const PAYMENT = ARTICLE_PARTNER_DEBT
+/** The race's two payments. Their sum, 2,000, is what 1,500 cannot cover. */
+const PAYMENT = EXAMPLE_PARTNER_DEBT
 
 /** The sandbox's one partner, invented here: no seed is derived and no address is ever paid. */
 const PARTNER = {
@@ -40,7 +40,7 @@ export async function runRace(demo: Pool): Promise<RaceResult> {
   // 4. Its own pool, and nothing else in the api ever gets one.
   const sandbox = createPool(sandboxUrl)
   try {
-    // 5. The article's opening position, and the two invoices the race is about.
+    // 5. The race's opening position, and the two invoices the race is about.
     const invoices = await resetAndSeed(sandbox)
     const before = await figures(sandbox)
 
@@ -103,8 +103,8 @@ async function createSandboxDatabase(demo: Pool): Promise<void> {
 }
 
 /**
- * Back to the article's opening position, in one transaction: the ledger, the payments and the
- * invoices emptied (`ledger:seed`'s reset, plus the partners this one writes), then §9's Available
+ * Back to the race's opening position, in one transaction: the ledger, the payments and the
+ * invoices emptied (`ledger:seed`'s reset, plus the partners this one writes), then the race's Available
  * 1,500 and two invoices of 1,000 to pay it with.
  *
  * TRUNCATE does not fire the append-only triggers, which is the only reason the ledger can be
@@ -192,7 +192,7 @@ function barrier(parties: number): () => Promise<void> {
   }
 }
 
-/** The two figures §9 quotes, as the api writes every amount: decimal strings in whole USDC. */
+/** The two figures the race checks, as the api writes every amount: decimal strings in whole USDC. */
 async function figures(sandbox: Pool): Promise<{ available: string; reserved: string }> {
   return withClient(sandbox, async (client) => {
     const balances = new Map((await getBalances(client)).map((balance) => [balance.code, balance.balanceMinor]))
@@ -203,7 +203,7 @@ async function figures(sandbox: Pool): Promise<{ available: string; reserved: st
   })
 }
 
-/** How many of the two payments set money aside. The article's answer is one. */
+/** How many of the two payments set money aside. The right answer is one. */
 async function countReserves(sandbox: Pool): Promise<number> {
   const result = await sandbox.query<{ count: string }>(
     `SELECT count(*) AS count FROM ledger_transactions WHERE kind = 'reserve'`,

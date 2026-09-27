@@ -9,7 +9,7 @@ export type ReverseOutcome =
   /** Reversed before: a worker that died after COMMIT and before Temporal recorded the result. */
   | { readonly kind: 'already-reversed' }
 
-/** The `reverse` activity: a final revert is the proof (§6), so the money comes back in one transaction. No chain reads. */
+/** The `reverse` activity: a final revert is the proof, so the money comes back in one transaction. No chain reads. */
 export async function reverse(reference: string, evidence: RevertEvidence): Promise<string> {
   const client = await workerPool().connect()
   try {
@@ -78,7 +78,7 @@ export async function reversePayment(client: PoolClient, reference: string, evid
       context: { reason: 'reverted', ...evidence },
     })
 
-    // 4. The money came back (§6): Dr Available / Cr Reserved, with the proof. `reversal` writes the
+    // 4. The money came back: Dr Available / Cr Reserved, with the proof. `reversal` writes the
     //    `released` row itself. Partner debt does not move: the invoice is still owed.
     const { txHash, blockNumber, finalBlock } = evidence
     const ledgerTransactionId = await reversal(client, {

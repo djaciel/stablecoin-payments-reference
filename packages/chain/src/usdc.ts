@@ -47,7 +47,7 @@ export interface TransferQuery {
  *
  * ONE `eth_getLogs` whatever the number of addresses: the `to` topic takes a list and the
  * node does the filtering, which is the difference between one request per tick and one per
- * partner. `address` pins the query to the official contract — the first of the article's
+ * partner. `address` pins the query to the official contract: the first of the
  * three settlement checks.
  *
  * The caller must bound the range: `https://sepolia.base.org` refuses more than 10,000 blocks
@@ -125,7 +125,7 @@ export type PaidVerdict =
 export type LandedTransaction = Pick<TransactionReceipt, 'status' | 'blockNumber' | 'logs'>
 
 /**
- * §7's "Paid", both conditions, in the article's order: wait for finality, then look in the logs.
+ * "Paid", both conditions, in order: wait for finality, then look in the logs.
  * `finalBlock` is `finalBlockNumber()`, never `latest`. A mismatch throws `findSettlementLog`'s
  * error: a final transaction without the expected event is not paid, and never will be.
  */

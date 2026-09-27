@@ -1,11 +1,11 @@
 import {
   ACCOUNTS,
-  ARTICLE_PARTNER_DEBT,
-  ARTICLE_TREASURY,
+  EXAMPLE_PARTNER_DEBT,
+  EXAMPLE_TREASURY,
   type MinorUnits,
   getBalances,
   reserve,
-  seedArticle,
+  seedExample,
   settle,
   toMinor,
   withLedgerTransaction,
@@ -14,9 +14,9 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { resetDatabase, testPool, withClient } from './helpers/database'
 
 /**
- * The article's numbers, asserted step by step — the same walk `pnpm ledger:seed --walkthrough`
- * prints, checked by a machine. Every figure below is quoted from the published text: if one of
- * them ever has to change here, the article changed first.
+ * The example figures, asserted step by step: the same walk `pnpm ledger:seed --walkthrough`
+ * prints, checked by a machine. The seed, `vocabulary.test.ts` and this file quote the same
+ * figures, so one of them cannot change alone.
  */
 
 const USDC = 'USDC'
@@ -31,15 +31,15 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await resetDatabase(pool)
-  await withLedgerTransaction(pool, (client) => seedArticle(client))
+  await withLedgerTransaction(pool, (client) => seedExample(client))
 })
 
-describe('the walkthrough the article follows', () => {
-  it('opens at §5 and §7: Available 10,000, Reserved 0, Partner debt 1,000, posted as two balanced seeds', async () => {
+describe('the example walkthrough', () => {
+  it('opens at Available 10,000, Reserved 0, Partner debt 1,000, posted as two balanced seeds', async () => {
     expect(await position()).toEqual({
-      available: ARTICLE_TREASURY,
+      available: EXAMPLE_TREASURY,
       reserved: 0n,
-      partnerDebt: ARTICLE_PARTNER_DEBT,
+      partnerDebt: EXAMPLE_PARTNER_DEBT,
     })
 
     // Not written as balances: two `seed` transactions of two entries each, through the same
@@ -53,19 +53,19 @@ describe('the walkthrough the article follows', () => {
       reserve(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC }),
     )
 
-    // §5: the money is no longer available before anything has been signed, and the total did
+    // Reserved: the money is no longer available before anything has been signed, and the total did
     // not move.
     expect(await position()).toEqual({
       available: toMinor(9_000),
       reserved: PAYMENT,
-      partnerDebt: ARTICLE_PARTNER_DEBT,
+      partnerDebt: EXAMPLE_PARTNER_DEBT,
     })
 
     await withLedgerTransaction(pool, (client) =>
       settle(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC }),
     )
 
-    // §7: the hold is gone and so is the debt. Available does not move — it was reduced at
+    // Settled: the hold is gone and so is the debt. Available does not move: it was reduced at
     // reserve time.
     expect(await position()).toEqual({
       available: toMinor(9_000),
@@ -73,8 +73,8 @@ describe('the walkthrough the article follows', () => {
       partnerDebt: 0n,
     })
 
-    // And the balances the CHECK constraint guards still say what the entries say — every
-    // account, not only the three the article prints.
+    // And the balances the CHECK constraint guards still say what the entries say: every
+    // account, not only the three the screens show.
     expect(await accountsThatDriftedFromTheirEntries()).toEqual([])
   })
 })

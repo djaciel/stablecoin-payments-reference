@@ -25,7 +25,7 @@ interface ReconciliationRunStarted {
 }
 
 /**
- * The reconciliation reads, and the button that asks for a run (§10). The api never computes a
+ * The reconciliation reads, and the button that asks for a run. The api never computes a
  * reconciliation: the worker does, in one activity, and this controller only starts it and prints
  * what it wrote.
  */

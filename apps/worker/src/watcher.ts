@@ -162,7 +162,7 @@ async function postTransfer(
   const destination = watched.get(getAddress(transfer.to))
 
   if (destination?.role === 'deposit' && destination.partnerId !== null) {
-    // The address IS the attribution (article section 8): whose money this is was decided when
+    // The address IS the attribution: whose money this is was decided when
     // the partner was created, not by what the amount happens to match.
     const outcome = await recordDetected(client, transfer, destination.partnerId, finalBlock)
     return { posted: false, detected: outcome.recorded, line: outcome.line }
@@ -196,7 +196,7 @@ async function postTransfer(
  * The promotion pass: for every DETECTED deposit whose block is final, ask the chain again.
  * The Transfer we saw in a log is not enough on its own — a block near the tip can be replaced —
  * so the receipt is re-read by hash and the event re-checked at the exact log index before a
- * single entry is written (article section 7's rule, applied to money coming in).
+ * single entry is written (the paid rule, applied to money coming in).
  */
 async function promote(client: PoolClient, finalBlock: bigint): Promise<{ settled: number; skipped: number; lines: string[] }> {
   const lines: string[] = []

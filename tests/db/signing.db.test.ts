@@ -1,6 +1,6 @@
 import { CHAIN, ERC20_ABI, USDC_ADDRESS, deriveAccount, type SignedTransaction, type TransactionToSign } from '@payments/chain'
 import { inTransaction } from '@payments/db'
-import { seedArticle, withLedgerTransaction } from '@payments/ledger'
+import { seedExample, withLedgerTransaction } from '@payments/ledger'
 import { encodeFunctionData, keccak256, type Hex } from 'viem'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { createPayment } from '../../apps/api/src/payments/create-payment'
@@ -8,7 +8,7 @@ import { signPayment, type SignOutcome, type SigningInput } from '../../apps/wor
 import { barrier, resetDatabase, seedInvoices, testPool, withClient } from './helpers/database'
 
 /**
- * §7's Signed moment against real Postgres, with a signer that really signs: the published test
+ * The Signed moment against real Postgres, with a signer that really signs: the published test
  * mnemonic that `derive.test.ts` pins, so the bytes are real and nothing reaches a network.
  */
 
@@ -27,7 +27,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await resetDatabase(pool)
-  await withLedgerTransaction(pool, (client) => seedArticle(client))
+  await withLedgerTransaction(pool, (client) => seedExample(client))
   const invoices = await seedInvoices(pool)
   payments = { first: await reserve(invoices.first, 'key-1'), second: await reserve(invoices.second, 'key-2') }
 })

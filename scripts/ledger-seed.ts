@@ -2,26 +2,26 @@ import { type Pool, createPool, readDatabaseUrl } from '@payments/db'
 import {
   ACCOUNTS,
   type AccountBalance,
-  ARTICLE_PARTNER_DEBT,
-  ARTICLE_TREASURY,
+  EXAMPLE_PARTNER_DEBT,
+  EXAMPLE_TREASURY,
   cancel,
   formatMinor,
   getBalances,
   reserve,
   reversal,
-  seedArticle,
+  seedExample,
   seedRace,
   settle,
   withLedgerTransaction,
 } from '@payments/ledger'
 
 /**
- * Puts the article's numbers into the books and prints them.
+ * Puts the example figures into the books and prints them.
  *
- *   pnpm ledger:seed                     Available 10,000 / Reserved 0 / Partner debt 1,000 (§5, §7)
- *   pnpm ledger:seed --walkthrough       that position, then after the reserve (§5), then after the settle (§7)
- *   pnpm ledger:seed --race              Available 1,500, the opening position of §9's race
- *   pnpm ledger:seed --release=reversal  reserve, then the transfer reverts onchain (§6): Available back to 10,000
+ *   pnpm ledger:seed                     Available 10,000 / Reserved 0 / Partner debt 1,000
+ *   pnpm ledger:seed --walkthrough       that position, then after the reserve, then after the settle
+ *   pnpm ledger:seed --race              Available 1,500, the opening position of the race
+ *   pnpm ledger:seed --release=reversal  reserve, then the transfer reverts onchain: Available back to 10,000
  *   pnpm ledger:seed --release=cancel    reserve, then cancel before signing: the same figures, no chain proof
  *
  * THIS COMMAND DESTROYS WHAT IS IN THE LEDGER: every run empties the ledger, the audit log, the
@@ -33,18 +33,18 @@ import {
 /** Databases this script is allowed to empty. Anything else is somebody's real data. */
 const DEMO_DATABASES = ['payments', 'payments_test']
 
-/** The article's display names, in the article's order. */
+/** The display names the screens use, in the order they show them. */
 const DISPLAYED = [
   [ACCOUNTS.treasuryAvailable, 'Available'],
   [ACCOUNTS.treasuryReserved, 'Reserved'],
   [ACCOUNTS.partnerPayable, 'Partner debt'],
 ] as const
 // `equity:opening` is absent on purpose: the internal counterpart that lets a seed balance,
-// and it appears nowhere in the published text.
+// and it appears on no screen.
 
-/** The payment the article follows, and the amount it follows it with. */
+/** The example payment, and its amount. */
 const REFERENCE = 'PAY-4821'
-const PAYMENT = ARTICLE_PARTNER_DEBT
+const PAYMENT = EXAMPLE_PARTNER_DEBT
 const USDC = 'USDC'
 
 /** Proof for the `--release=reversal` run. A FIXTURE: this hash exists in no block anywhere. */
@@ -76,14 +76,14 @@ async function main(): Promise<void> {
 
     if (mode === 'race') {
       await withLedgerTransaction(pool, (client) => seedRace(client))
-      header('race scenario (§9): 1,500 is enough for one payment of 1,000 and not for two')
+      header('race scenario: 1,500 is enough for one payment of 1,000 and not for two')
       snapshot(await position(pool))
       return
     }
 
-    await withLedgerTransaction(pool, (client) => seedArticle(client))
+    await withLedgerTransaction(pool, (client) => seedExample(client))
     if (mode === 'opening') {
-      header('canonical opening position (§5, §7)')
+      header('canonical opening position')
       snapshot(await position(pool))
       return
     }
@@ -93,18 +93,18 @@ async function main(): Promise<void> {
       return
     }
 
-    header(`the article's walkthrough: ${REFERENCE} for ${formatMinor(PAYMENT)} ${USDC}`)
-    snapshot(await position(pool), 'Opening position (§5, §7)')
+    header(`the example walkthrough: ${REFERENCE} for ${formatMinor(PAYMENT)} ${USDC}`)
+    snapshot(await position(pool), 'Opening position')
 
     await withLedgerTransaction(pool, (client) =>
       reserve(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC }),
     )
-    snapshot(await position(pool), 'After reserving (§5) — the money is set aside before anything is signed')
+    snapshot(await position(pool), 'After reserving: the money is set aside before anything is signed')
 
     await withLedgerTransaction(pool, (client) =>
       settle(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC }),
     )
-    snapshot(await position(pool), 'After settling (§7) — the transfer is confirmed, so the debt goes with it')
+    snapshot(await position(pool), 'After settling: the transfer is confirmed, so the debt goes with it')
   } finally {
     await pool.end()
   }
@@ -124,18 +124,18 @@ function readMode(args: readonly string[]): Mode {
 }
 
 /**
- * The two release doors, from the article's opening position. What the reader is meant to
+ * The two release doors, from the example's opening position. What the reader is meant to
  * notice is that the entries are identical: only the kind and the justification differ, and
  * the database refuses that same movement under any other kind.
  */
 async function release(pool: Pool, door: 'reversal' | 'cancel'): Promise<void> {
   header(`the ${door} door: ${REFERENCE} for ${formatMinor(PAYMENT)} ${USDC}`)
-  snapshot(await position(pool), 'Opening position (§5, §7)')
+  snapshot(await position(pool), 'Opening position')
 
   await withLedgerTransaction(pool, (client) =>
     reserve(client, { reference: REFERENCE, amount: PAYMENT, currency: USDC }),
   )
-  snapshot(await position(pool), 'After reserving (§5) — the money is set aside')
+  snapshot(await position(pool), 'After reserving: the money is set aside')
 
   await withLedgerTransaction(pool, (client) =>
     door === 'reversal'
@@ -145,12 +145,12 @@ async function release(pool: Pool, door: 'reversal' | 'cancel'): Promise<void> {
   snapshot(
     await position(pool),
     door === 'reversal'
-      ? 'After the reversal (§6) — the transaction reverted onchain, so the hold is released'
-      : 'After the cancel — nothing was ever signed, so the transfer can no longer land',
+      ? 'After the reversal: the transaction reverted onchain, so the hold is released'
+      : 'After the cancel: nothing was ever signed, so the transfer can no longer land',
   )
 
   await printReleaseReason(pool)
-  console.log(`  Available is back at ${formatMinor(ARTICLE_TREASURY)} and Reserved at 0.000000.\n`)
+  console.log(`  Available is back at ${formatMinor(EXAMPLE_TREASURY)} and Reserved at 0.000000.\n`)
 }
 
 /** The audit row the release wrote in the same database transaction as its entries. */

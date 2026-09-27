@@ -22,7 +22,7 @@ import { readReceipt } from './watch'
 import { SCAN_NAME } from './watcher'
 
 /**
- * Article section 10's first check: every payment and every deposit, three versions each, at one
+ * Reconciliation's first check: every payment and every deposit, three versions each, at one
  * block. What was asked for (the intent row), what was recorded (the ledger transactions with that
  * reference) and what happened (the receipt and the official contract's Transfer).
  *
@@ -256,7 +256,7 @@ async function pinBlock(cursor: bigint | undefined, chain: ChainFacts): Promise<
     return { number: cursor < final ? cursor : final, why: undefined }
   } catch (error) {
     // After viem's three attempts. Never a fallback to `latest`: a moving target is the thing
-    // section 10 warns about.
+    // reconciliation must avoid.
     return { number: undefined, why: `the chain could not be read: ${chainErrorMessage(error)}` }
   }
 }

@@ -138,7 +138,7 @@ export function checkPayment(
   return inFlight(payment, receipts, block, item)
 }
 
-/** The one the article's section 6 leaves behind: the proof is READ against the chain, not trusted. */
+/** The one a failed payment leaves behind: the proof is READ against the chain, not trusted. */
 function checkReversal(
   payment: PaymentFacts,
   ledger: readonly LedgerFacts[],
@@ -232,7 +232,7 @@ function checkSettled(
   return item('ok', `paid in block ${receipt.blockNumber.toString()}, with the official contract's Transfer of ${formatMinor(payment.amountMinor)} to ${payment.destination}`)
 }
 
-/** Signed and broadcast, not settled yet: the difference section 10 calls a payment in flight. */
+/** Signed and broadcast, not settled yet: the difference reconciliation calls a payment in flight. */
 function inFlight(
   payment: PaymentFacts,
   receipts: Receipts,
@@ -274,7 +274,7 @@ export function checkDeposit(money: DepositFacts, ledger: readonly LedgerFacts[]
     detail,
     evidence: { txHash: money.txHash, logIndex: money.logIndex, blockNumber: money.blockNumber.toString() },
   })
-  // The address is the attribution (article section 8), so money nobody invoiced is still money.
+  // The address is the attribution, so money nobody invoiced is still money.
   const attribution = money.matchedBy === 'unmatched' ? ', with no invoice to match: money that arrived before anybody invoiced it' : ''
   const seen = `seen at block ${money.blockNumber.toString()}`
 
@@ -352,7 +352,7 @@ export interface AddressBalance {
 export const WHOLE_TREASURY = 'treasury + deposit addresses'
 
 /**
- * Article section 10's second check, and the one the phase exists for: the money the books say
+ * Reconciliation's second check, and the one the phase exists for: the money the books say
  * the company has, against the stablecoin it holds on chain at one fixed block, with what was in
  * flight at that block subtracted rather than argued about.
  *

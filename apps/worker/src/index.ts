@@ -63,7 +63,7 @@ async function main(): Promise<void> {
  *
  * Draining CANCELS in-flight steps, and there is no `shutdownGraceTime` on purpose: every step
  * re-reads the row and skips what is done, so a cancelled step is simply attempt 2 on the next
- * worker. Letting the broadcast "finish first" would hide the very recovery the article describes.
+ * worker. Letting the broadcast "finish first" would hide the very recovery this demo exists to show.
  */
 function stopOnSignal(worker: Worker): void {
   let stopping = false

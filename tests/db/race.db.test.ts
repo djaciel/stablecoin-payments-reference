@@ -14,10 +14,10 @@ import { createPayment, type PaymentOutcome } from '../../apps/api/src/payments/
 import { balanceOf, barrier, resetDatabase, seedInvoices, testPool, withClient } from './helpers/database'
 
 /**
- * The article's §9 race, executable: the treasury holds 1,500, two payments of 1,000 arrive at
- * the same instant, one must be reserved and the other rejected — never both.
+ * The race, executable: the treasury holds 1,500, two payments of 1,000 arrive at
+ * the same instant, one must be reserved and the other rejected, never both.
  *
- * Twice, because §9's race has two audiences: at the ledger engine, where the lock is, and at the
+ * Twice, because the race has two audiences: at the ledger engine, where the lock is, and at the
  * payment door, which is what `POST /payments` and `POST /experiments/race` actually run.
  *
  * What is asserted is the outcome, not the instant in between: an outside observer cannot see a
@@ -60,20 +60,20 @@ describe('two payments racing for the same money', () => {
     expect(rejected).toBeGreaterThanOrEqual(0)
 
     // The engine rejected it under the lock, with the numbers. A rejection from the database
-    // CHECK instead would carry no amounts, and the API could not show the article's message.
+    // CHECK instead would carry no amounts, and the API could not show a clear message.
     const refusal: unknown = outcomes[rejected]?.status === 'rejected' ? outcomes[rejected].reason : undefined
     expect(refusal).toBeInstanceOf(InsufficientFunds)
     expect((refusal as InsufficientFunds).account).toBe(ACCOUNTS.treasuryAvailable)
     expect((refusal as InsufficientFunds).requested).toBe(PAYMENT)
     expect((refusal as InsufficientFunds).available).toBe(RACE_TREASURY - PAYMENT)
 
-    // §9's figures: 1,500 minus the one payment that fit.
+    // The race's figures: 1,500 minus the one payment that fit.
     expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(RACE_TREASURY - PAYMENT)
     expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(PAYMENT)
     expect(await countReserves()).toBe(1)
 
     // A rejection has to be complete: a half-written transaction would mean the books remember
-    // a payment the article says never happened.
+    // a payment that never happened.
     const loser = references[rejected] ?? ''
     expect(await countRowsFor(loser)).toEqual({ transactions: 0, entries: 0 })
   })
@@ -106,7 +106,7 @@ describe('two payments racing at the payment door', () => {
     expect(payments.map((payment) => payment.status).sort()).toEqual(['FAILED', 'RESERVED'])
     expect(payments.find((payment) => payment.status === 'FAILED')?.reason).toBe('insufficient_funds')
 
-    // §9's figures, from the door the demo really uses: 1,500 minus the one payment that fit.
+    // The race's figures, from the door the demo really uses: 1,500 minus the one payment that fit.
     expect(await countReserves()).toBe(1)
     expect(await balanceOf(pool, ACCOUNTS.treasuryAvailable)).toBe(RACE_TREASURY - PAYMENT)
     expect(await balanceOf(pool, ACCOUNTS.treasuryReserved)).toBe(PAYMENT)

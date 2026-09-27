@@ -10,11 +10,11 @@ const MAX_LABEL_LENGTH = 80
 const MALFORMED_ADDRESS = 'address must be an EVM address: 0x and 40 hexadecimal characters.'
 
 /**
- * The addresses the company may send money to (§4), read and added. A controller and nothing else:
+ * The addresses the company may send money to, read and added. A controller and nothing else:
  * the list is one table with no rules of its own, and the payment door reads it directly.
  *
  * Add-only, and open to any admin, because this demo has no auth. In a real system this is where a
- * four-eyes rule lives, next to compliance and custody (§11).
+ * four-eyes rule lives, next to compliance and custody.
  */
 @Controller('allowlist')
 export class AllowlistController {

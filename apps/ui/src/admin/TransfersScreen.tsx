@@ -466,7 +466,7 @@ function Story({ timeline }: { readonly timeline: PaymentTimeline }) {
   )
 }
 
-/** One line of the story: the article's word for the step, and the audit rows that prove it. */
+/** One line of the story: the word for the step, and the audit rows that prove it. */
 interface Line {
   readonly name: string
   /** Empty while the step is waiting. */
@@ -474,10 +474,10 @@ interface Line {
   readonly text: ReactNode
 }
 
-/** The steps of a payment that goes well, in the article's words (§6, §7). */
+/** The steps of a payment that goes well, in plain words. */
 const STEPS = ['Created', 'Reserved', 'Signed', 'Sent', 'Paid', 'Settled'] as const
 
-/** What the first step not reached yet is waiting for. Between Sent and Paid: §6's SENT row. */
+/** What the first step not reached yet is waiting for. Between Sent and Paid: the SENT row. */
 const WAITING: Partial<Record<(typeof STEPS)[number], string>> = {
   Signed: 'Waiting to be signed.',
   Sent: 'Signed, not sent yet.',
@@ -492,8 +492,8 @@ const INVOICE_NOTES: Record<string, string | undefined> = {
 }
 
 /**
- * The log's rows turned into the article's steps, in the order they were written. `settled` is
- * two lines, Paid (the chain's evidence) and Settled (the books), because §7 tells them apart. An
+ * The log's rows turned into the story's steps, in the order they were written. `settled` is
+ * two lines, Paid (the chain's evidence) and Settled (the books), because they are different moments. An
  * event this screen has no words for still shows, under its own name. The names are the ones
  * `packages/ledger/src/audit.ts` writes; the browser cannot import that package (it needs Postgres).
  */
@@ -652,7 +652,7 @@ function escalatedText(context: AuditStep['context']): ReactNode {
   return <>{why} No proof either way, so the money stays reserved.</>
 }
 
-/** A revert names its block and says it is final: a revert that is not final proves nothing yet (§6). */
+/** A revert names its block and says it is final: a revert that is not final proves nothing yet. */
 function failedText(context: AuditStep['context'], wasReserved: boolean): ReactNode {
   if (context.reason === 'reverted') {
     return (

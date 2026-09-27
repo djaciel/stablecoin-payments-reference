@@ -266,7 +266,7 @@ export class FundPartnerWalletService {
     }
   }
 
-  /** Step 5's two checks, with the article's rule doing the second one. */
+  /** Step 5's two checks, with the paid rule doing the second one. */
   private verifyTransfer(receipt: Receipt, parties: { from: Address; to: Address }): void {
     if (receipt.status !== 'success') {
       throw new UnprocessableEntityException(

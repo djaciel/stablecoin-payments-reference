@@ -12,11 +12,11 @@ CREATE TABLE deposits (
   -- Position of the Transfer inside that transaction. With the hash it names one event for ever,
   -- which is what makes re-scanning a range free: the second INSERT simply conflicts.
   log_index       integer     NOT NULL,
-  -- Who sent it. Never used to attribute the money, only to show it: the article's rule is the
+  -- Who sent it. Never used to attribute the money, only to show it: the rule is the
   -- address it ARRIVED at, and an exchange or a custodian sends from an address nobody recognises.
   from_address    text        NOT NULL,
   deposit_address text        NOT NULL,
-  -- The attribution itself (article section 8), carried from the first moment: the address belongs to
+  -- The attribution itself, carried from the first moment: the address belongs to
   -- one partner, so the row knows whose money it is before anyone looks at amounts or invoices.
   partner_id      uuid        NOT NULL REFERENCES partners (id),
   amount_minor    bigint      NOT NULL CHECK (amount_minor > 0),

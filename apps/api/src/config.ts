@@ -8,7 +8,7 @@ export const MIN_INVOICE_USDC = '0.01'
 export const MAX_INVOICE_USDC = '1000'
 
 /**
- * The range one payment must fall in: §4's "the amount fits within the limits". Checked when the
+ * The range one payment must fall in: "the amount fits within the limits". Checked when the
  * payment is made, not when the invoice is written, so lowering it refuses with `amount_out_of_range`.
  */
 export const MIN_PAYMENT_USDC = '0.01'

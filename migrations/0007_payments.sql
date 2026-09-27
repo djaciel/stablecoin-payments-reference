@@ -1,4 +1,4 @@
--- Payments: the intent the article's §4 records before anything else happens, and the unique
+-- Payments: the intent recorded before anything else happens, and the unique
 -- index that gives its idempotency key a meaning. The columns the chain steps write (tx_hash,
 -- signed_tx, nonce, execute_at) arrive with the code that writes them.
 --
@@ -7,10 +7,10 @@
 
 CREATE TABLE payments (
   id                  uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  -- PAY-XXXX, the article's format: what the API answers with, and the ledger's reference.
+  -- PAY-XXXX: what the API answers with, and the ledger's reference.
   reference           text        NOT NULL UNIQUE,
-  -- The article's six public states, all of them from the start: the state catalog is the
-  -- article's, even while only CREATED, RESERVED and FAILED are reachable.
+  -- The six public states, all of them from the start: the state catalog is complete even
+  -- while only CREATED, RESERVED and FAILED are reachable.
   status              text        NOT NULL
                                   CHECK (status IN ('CREATED', 'RESERVED', 'SENT', 'SETTLED', 'FAILED', 'REVIEW')),
   -- The invoice this pays. Nullable for the ad-hoc payment to an address, which arrives with

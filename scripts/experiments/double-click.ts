@@ -2,7 +2,7 @@ import type { AuditStep, PaymentTimeline, PaymentView } from '@payments/domain'
 import { books, died, field, heading, nothingElseInFlight, postAnswering, section, waitUntilResting, writeOwnInvoice, type Answer } from './harness'
 
 /**
- * §9's double click: one invoice, two `POST /payments` fired at the same instant with the SAME
+ * The double click: one invoice, two `POST /payments` fired at the same instant with the SAME
  * idempotency key, and one payment out of them.
  *
  *   pnpm experiment:double-click

@@ -30,8 +30,8 @@ export interface Partner {
 }
 
 /**
- * The two partners the demo starts with. Plausible names on purpose: they end up in the
- * article's screenshots.
+ * The two partners the demo starts with. Plausible names on purpose: they show on every
+ * screen.
  */
 const BOOTSTRAP_PARTNER_NAMES = ['Northwind Logistics', 'Bluefin Studio']
 

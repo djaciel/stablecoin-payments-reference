@@ -71,7 +71,7 @@ export class TreasuryService implements OnApplicationBootstrap {
     return this.partnerKeys.partnerWallet().address
   }
 
-  /** The three figures the article prints. */
+  /** The three figures the Books card shows. */
   async ledgerFigures(): Promise<LedgerFigures> {
     const balances = await this.readBalances()
     const of = (code: AccountCode): string => formatMinor(balanceOf(balances, code))

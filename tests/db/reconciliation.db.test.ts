@@ -1,6 +1,6 @@
 import { ERC20_ABI, USDC_ADDRESS, type LandedTransaction } from '@payments/chain'
 import { inTransaction } from '@payments/db'
-import { formatMinor, seedArticle, toMinor, withLedgerTransaction, type MinorUnits } from '@payments/ledger'
+import { formatMinor, seedExample, toMinor, withLedgerTransaction, type MinorUnits } from '@payments/ledger'
 import { encodeEventTopics, getAddress, pad, toHex, type Address, type Hex, type TransactionReceipt } from 'viem'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { createPayment } from '../../apps/api/src/payments/create-payment'
@@ -12,9 +12,9 @@ import { settlePayment } from '../../apps/worker/src/settle'
 import { resetDatabase, seedInvoices, seedPartner, seedWatchedAddress, testPool, withClient } from './helpers/database'
 
 /**
- * Article section 10 against real Postgres: every payment and every deposit, three versions each,
- * at one block. What was asked for, what was recorded, what happened — and the two disagreements
- * the section names, "a settled payment with no event" and a release whose proof is not true.
+ * Reconciliation against real Postgres: every payment and every deposit, three versions each,
+ * at one block. What was asked for, what was recorded, what happened, and the two disagreements
+ * it looks for, "a settled payment with no event" and a release whose proof is not true.
  *
  * The chain side is a stub, so the mismatch is manufactured where a real one would come from. The
  * ledger's side cannot be corrupted at all: it is append-only by trigger.
@@ -52,7 +52,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await resetDatabase(pool)
-  await withLedgerTransaction(pool, (client) => seedArticle(client))
+  await withLedgerTransaction(pool, (client) => seedExample(client))
   payableId = (await seedInvoices(pool)).first
   northwind = await seedPartner(pool, 'Northwind Logistics', 3, NORTHWIND_DEPOSIT)
   // What a running system would have written: the addresses it watches, and how far it has looked.
@@ -84,7 +84,7 @@ describe('a reconciliation run', () => {
     expect(stored).toEqual({ runs: 1, items: 4, outcome: 'clean', block: CURSOR.toString(), checked: 4, explained: 0, mismatched: 0 })
   })
 
-  /** §10's "compare them at a fixed block, so the payments in flight explain the difference". */
+  /** "Compare them at a fixed block, so the payments in flight explain the difference". */
   it('is still clean when a payment in flight explains the whole difference', async () => {
     const reference = await reserveAndSend()
 
@@ -174,7 +174,7 @@ describe('a reconciliation run', () => {
     const reference = await settledPayment()
     const depositId = await settledDeposit(toMinor(1))
 
-    // The receipt succeeded and carries a Transfer, for somebody else's amount: section 10's
+    // The receipt succeeded and carries a Transfer, for somebody else's amount:
     // "a settled payment with no event", which a status check alone would call fine.
     const wrongAmount = paidReceipt(toMinor(999))
     const receipts = { [PAYMENT_HASH]: wrongAmount, [DEPOSIT_HASH]: arrivedReceipt(toMinor(1)) }
@@ -219,7 +219,7 @@ async function settledPayment(): Promise<string> {
   return reference
 }
 
-/** The same payment, ended the other way: FAILED `reverted`, with its proof on the books (§6). */
+/** The same payment, ended the other way: FAILED `reverted`, with its proof on the books. */
 async function reversedPayment(): Promise<string> {
   const reference = await reserveAndSend()
   await withClient(pool, (client) =>

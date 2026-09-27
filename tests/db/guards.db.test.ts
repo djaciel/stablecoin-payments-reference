@@ -17,7 +17,7 @@ import { balanceOf, resetDatabase, testPool, withClient } from './helpers/databa
  */
 
 const USDC = 'USDC'
-/** A fixture amount in minor units (500 USDC). The article's own figures belong to the seed. */
+/** A fixture amount in minor units (500 USDC). The example figures belong to the seed. */
 const SEEDED = 500_000_000n
 
 const pool = testPool()

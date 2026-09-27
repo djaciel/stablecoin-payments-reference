@@ -147,7 +147,7 @@ export function scaffolding(client: PoolClient, input: ScaffoldingInput): Promis
 }
 
 /**
- * An invoice the company owes: Dr `expense:services` / Cr `partner:payable`, the article's
+ * An invoice the company owes: Dr `expense:services` / Cr `partner:payable`, the
  * Partner debt. No money moves yet. The `(kind, reference)` unique index is why one invoice
  * can put its debt on the books only once. The audit row is the caller's, like `scaffolding`.
  */

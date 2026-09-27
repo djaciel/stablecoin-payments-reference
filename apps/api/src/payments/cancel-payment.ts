@@ -16,8 +16,8 @@ export type CancelOutcome =
 const FROM_THE_QUEUE = 'cancelled from the scheduled queue'
 
 /**
- * `POST /payments/:reference/cancel` (section 6): the second release door, and the only one the
- * article allows without a chain proof — no signed bytes exist, so no node can ever include any,
+ * `POST /payments/:reference/cancel`: the second release door, and the only one allowed
+ * without a chain proof. No signed bytes exist, so no node can ever include any,
  * and that absence IS the proof. Inside the CALLER's transaction, like `createPayment`.
  */
 export async function cancelPayment(client: PoolClient, reference: string, reason?: string): Promise<CancelOutcome> {

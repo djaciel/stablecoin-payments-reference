@@ -1,4 +1,4 @@
--- The release rule's second half, in the database (invariant 5, article section 6).
+-- The release rule's second half, in the database (invariant 5).
 --
 -- `0002_ledger.sql` already refuses to move money out of treasury:reserved and back into
 -- treasury:available under any kind but `reversal` and `cancel`. This adds the condition that
@@ -7,7 +7,7 @@
 --
 -- It refuses a `cancel` when a payment with that reference EXISTS AND CARRIES A HASH. It cannot
 -- demand that a payment exist: `pnpm ledger:seed --release=cancel` and `tests/db/release.db.test.ts`
--- post the article's cancel for PAY-4821 with no row in `payments` at all, and those are
+-- post the example cancel for PAY-4821 with no row in `payments` at all, and those are
 -- ledger-level fixtures this rule has no business breaking.
 --
 -- Belt and braces: the primary guard is `cancelPayment` reading `tx_hash` under the payment's

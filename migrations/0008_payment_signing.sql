@@ -1,5 +1,5 @@
 -- What the `sign` step writes on a payment: the transaction's hash, its signed bytes and its
--- nonce. The guards below make the article's rule (§7) a property of the table, whoever writes.
+-- nonce. The guards below make the signing rule a property of the table, whoever writes.
 --
 -- Convention from 0001_init.sql: no BEGIN/COMMIT/ROLLBACK here.
 
@@ -14,7 +14,7 @@ ALTER TABLE payments
   ADD CONSTRAINT payments_signed_together
   CHECK ((tx_hash IS NULL) = (signed_tx IS NULL) AND (tx_hash IS NULL) = (nonce IS NULL));
 
--- §7's "store(hash) before broadcasting": a payment cannot be SENT, or SETTLED, without it.
+-- "store(hash) before broadcasting": a payment cannot be SENT, or SETTLED, without it.
 ALTER TABLE payments
   ADD CONSTRAINT payments_sent_has_hash
   CHECK (status NOT IN ('SENT', 'SETTLED') OR tx_hash IS NOT NULL);

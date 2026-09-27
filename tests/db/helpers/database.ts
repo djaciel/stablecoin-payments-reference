@@ -1,5 +1,5 @@
 import { type Pool, type PoolClient, createPool } from '@payments/db'
-import { ACCOUNTS, ARTICLE_PARTNER_DEBT, type AccountCode } from '@payments/ledger'
+import { ACCOUNTS, EXAMPLE_PARTNER_DEBT, type AccountCode } from '@payments/ledger'
 
 /**
  * A pool aimed at the test database. Built on `createPool()` rather than `new Pool()` so the
@@ -50,7 +50,7 @@ export async function resetDatabase(pool: Pool): Promise<void> {
 const PAYOUT_ADDRESS = '0x1111111111111111111111111111111111111111'
 
 /**
- * One partner and two invoices of §7's 1,000 each, the Partner debt `seedArticle` put on the books.
+ * One partner and two invoices of 1,000 each, the Partner debt `seedExample` put on the books.
  * Written straight to the tables: these tests are about payments, not about how invoices are made.
  *
  * The allowlist row goes in with the partner, the way `POST /partners` writes it: without it the
@@ -69,7 +69,7 @@ export async function seedInvoices(pool: Pool): Promise<{ first: string; second:
   const payables = await pool.query<{ id: string }>(
     `INSERT INTO payables (partner_id, destination, amount_minor, description)
      VALUES ($1, $2, $3, 'March logistics'), ($1, $2, $3, 'April logistics') RETURNING id`,
-    [partner.rows[0]?.id, PAYOUT_ADDRESS, ARTICLE_PARTNER_DEBT.toString()],
+    [partner.rows[0]?.id, PAYOUT_ADDRESS, EXAMPLE_PARTNER_DEBT.toString()],
   )
   const [first, second] = payables.rows
   if (first === undefined || second === undefined) {

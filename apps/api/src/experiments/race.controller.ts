@@ -5,7 +5,7 @@ import { DATABASE_POOL } from '../db/db.module'
 import { runRace } from './race'
 
 /**
- * §9's race, from one call and with no body: the two racing calls happen inside the api, on two
+ * The race, from one call and with no body: the two racing calls happen inside the api, on two
  * connections, because two requests from a browser could not be made to arrive at the same instant.
  */
 @Controller('experiments')

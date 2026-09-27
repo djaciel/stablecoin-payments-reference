@@ -546,7 +546,7 @@ a {
   color: var(--bad);
 }
 
-/* Section 10's heading row: the outcome on the left, its one action on the right. */
+/* Reconciliation's heading row: the outcome on the left, its one action on the right. */
 .panel-head {
   display: flex;
   align-items: center;
