@@ -64,6 +64,31 @@ export function BreakItScreen() {
   )
 }
 
+/** A card's title, with the article section it demonstrates as a small tag on the right. */
+function CardHead({ title, section, badge }: { readonly title: string; readonly section: string; readonly badge?: ReactNode }) {
+  return (
+    <h2 className="card-title card-head">
+      <span>
+        {title} {badge}
+      </span>
+      <span className="section-tag">{section}</span>
+    </h2>
+  )
+}
+
+/** Every card says the same three things, in the same order: what it does, what to expect, what it costs. */
+function Brief({ what, expect, cost }: { readonly what: string; readonly expect: string; readonly cost: string }) {
+  return (
+    <>
+      <p className="card-value">{what}</p>
+      <p className="card-value">
+        <span className="brief-label">Expect:</span> {expect}
+      </p>
+      <p className="card-note">{cost}</p>
+    </>
+  )
+}
+
 /** What the screen hands every card: the flags' writer and the latch that keeps runs one at a time. */
 interface CardProps {
   readonly show: ExperimentsContext['show']
@@ -79,15 +104,12 @@ function RevertCard({ armed, ...card }: { readonly armed: boolean } & CardProps)
 
   return (
     <section className="card">
-      <h2 className="card-title">
-        Revert the next payment · article §6 <Badge armed={armed} />
-      </h2>
-      <p className="card-value">The next payment reaches the chain and reverts: nothing moves, and it costs only gas.</p>
-      <p className="card-note">
-        It is signed with a gas limit too low for the transfer, so the network includes it and it runs out of gas. Its
-        money stays reserved until the revert is final; then it goes back to Available and the invoice can be paid
-        again. Waiting for that final block takes minutes.
-      </p>
+      <CardHead title="Revert the next payment" section="§6" badge={<Badge armed={armed} />} />
+      <Brief
+        what="The next payment runs out of gas on chain."
+        expect="FAILED with proof, and the money back in Available."
+        cost="Gas only · a few minutes"
+      />
       <RunIt run={run} />
       <Switch armed={armed} run={run} show={card.show} flag={{ revertNextPayment: !armed }} />
     </section>
@@ -105,13 +127,12 @@ function BlackholeCard({ blackhole, ...card }: { readonly blackhole: Experiments
 
   return (
     <section className="card">
-      <h2 className="card-title">
-        Node not responding · article §9 <Badge armed={blackhole.enabled} />
-      </h2>
-      <p className="card-value">
-        The node stops answering the payment's workflow: the step runs out of its attempts and the payment goes to REVIEW,
-        with its money still reserved.
-      </p>
+      <CardHead title="Node not responding" section="§9" badge={<Badge armed={blackhole.enabled} />} />
+      <Brief
+        what="The node stops answering while the payment runs."
+        expect="REVIEW with the money still reserved, until you press Resume."
+        cost="0.02 USDC · about 5 minutes"
+      />
       <p className="form-row">
         {(Object.keys(BLACKHOLE_WHERE) as BlackholeStep[]).map((option) => (
           <label key={option} className="field-unit">
@@ -128,12 +149,7 @@ function BlackholeCard({ blackhole, ...card }: { readonly blackhole: Experiments
           </label>
         ))}
       </p>
-      <p className="card-note">
-        Before the broadcast, the payment is signed and never sent, and it holds its nonce: every payout signed after it
-        waits until it is resumed, and Fund partner wallet is refused until then. After it, the transfer lands while the
-        workflow cannot see it, and Reserved still holds the money. While armed it affects every payment in flight, so a
-        run switches it off the moment its own payment is in REVIEW.
-      </p>
+      <p className="card-note">Before the broadcast, later payouts wait until you press Resume.</p>
       <RunIt run={run} />
       <Switch armed={blackhole.enabled} run={run} show={card.show} flag={{ blackholeRpc: { enabled: !blackhole.enabled, step } }} />
     </section>
@@ -149,21 +165,12 @@ function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) 
 
   return (
     <section className="card">
-      <h2 className="card-title">
-        Crash after signing · article §9 <Badge armed={armed} />
-      </h2>
-      <p className="card-value">
-        The worker dies between signing and broadcasting, and the payment finishes itself with the bytes it had
-        already signed.
-      </p>
-      <p className="card-note">
-        The signing step stores the hash, the signed bytes and the nonce, commits, and then kills its own process:
-        nothing was sent, and the payment cannot know whether the transfer went out. Nobody restarts it by hand.
-        Docker brings the worker back within seconds, and half a minute later that step runs again, on its second
-        attempt, and finds the hash already stored. The next step is the one that asks the network about it, does not
-        find it, and sends the same bytes. The process really dies, so it takes down every payment in flight with it:
-        each of their steps loses one of its attempts. Run this one on its own.
-      </p>
+      <CardHead title="Crash after signing" section="§9" badge={<Badge armed={armed} />} />
+      <Brief
+        what="The worker dies right after signing, before sending."
+        expect="It comes back and sends the same signed bytes: one transfer on chain."
+        cost="0.02 USDC · a few minutes · run it alone"
+      />
       <RunIt run={run} />
       <Switch armed={armed} run={run} show={card.show} flag={{ crashAfterSigning: !armed }} />
     </section>
@@ -188,16 +195,12 @@ function DoubleClickCard(card: CardProps) {
 
   return (
     <section className="card">
-      <h2 className="card-title">Double click · article §9</h2>
-      <p className="card-value">
-        The same invoice is paid twice at the same instant, with the same key, and one payment comes out of it.
-      </p>
-      <p className="card-note">
-        Both requests carry the key this run made once, and both leave before either one answers. One of them records
-        the payment and is told so; the other arrives a moment late, finds that payment already written and gets it
-        back. Two answers, one reference, one set of entries, and the money leaves Available once. The long way is the
-        command <code>pnpm experiment:double-click</code>.
-      </p>
+      <CardHead title="Double click" section="§9" />
+      <Brief
+        what="Pays the same invoice twice at the same instant, with the same key."
+        expect="One payment, one reference, the money leaves Available once."
+        cost="0.02 USDC · a few minutes"
+      />
       <RunIt run={run} />
     </section>
   )
@@ -230,17 +233,12 @@ function RaceCard({ running, setRunning }: CardProps) {
 
   return (
     <section className="card">
-      <h2 className="card-title">The race · article §9</h2>
-      <p className="card-value">
-        There is 1,500 available and two payments of 1,000 arrive at the same instant, with different keys: one is
-        reserved and the other is refused.
-      </p>
-      <p className="card-note">
-        This is the failure the demo's own money cannot show, because the two payments together have to be more than
-        Available and Available here is a few dollars of real testnet USDC. So this one runs the article's figures
-        against a sandbox database of its own, through the same payment door the Pay button presses: the demo's books
-        do not move, and nothing is signed or sent. The long way is the command <code>pnpm experiment:race</code>.
-      </p>
+      <CardHead title="The race" section="§9" />
+      <Brief
+        what="Two payments of 1,000 hit 1,500 available at the same instant."
+        expect="One reserved, one refused, Available never below zero."
+        cost="Free (sandbox database) · seconds"
+      />
       <p className="card-actions">
         <button type="button" className="button" disabled={busy || blocked} onClick={start}>
           {busy ? 'running…' : 'Run it'}
@@ -486,9 +484,7 @@ function Switch({
         <button type="button" className="link-button" disabled={busy || run.busy || run.blocked} onClick={change}>
           {armed ? 'Disarm' : 'Arm'}
         </button>
-        <span className="card-note">
-          The long way: this switch, then Pay on your own invoice in <Link to="/admin/payables">Payables</Link>.
-        </span>
+        <span className="card-note">Or arm it and press Pay on any invoice.</span>
       </p>
     </>
   )

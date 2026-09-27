@@ -647,3 +647,20 @@ a {
     transform: rotate(360deg);
   }
 }
+
+/* A Break it card's title, with the article section as a quiet tag on the right. */
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.section-tag {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.brief-label {
+  color: var(--muted);
+}
