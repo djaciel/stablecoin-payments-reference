@@ -76,14 +76,17 @@ body {
   gap: 1rem;
 }
 
-/* A few figures side by side, one small card each: one row of numbers, not a grid of items. */
+/* A few cards side by side in one row (the Books figures, Treasury next to Books): one row,
+   not a grid of items. On a narrow screen they stack. */
 .figure-cards {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 
 .figure-cards > .card {
   flex: 1 1 0;
+  min-width: 16rem;
 }
 
 .card {

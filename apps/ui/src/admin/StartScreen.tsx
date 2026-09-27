@@ -21,7 +21,7 @@ export function StartScreen() {
 
   return (
     <>
-      <div className="cards">
+      <div className="figure-cards">
         <TreasuryCard treasury={data} error={error} />
         <BooksCard treasury={data} error={error} />
       </div>
