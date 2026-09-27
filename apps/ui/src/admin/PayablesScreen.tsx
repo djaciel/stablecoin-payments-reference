@@ -130,49 +130,55 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
   return (
     <section className="card">
       <h2 className="card-title">{payTo(invoice)}</h2>
-      <p className="card-value">{invoice.description}</p>
-      <dl className="figures">
-        <Figure label="Amount">{formatUsdc(invoice.amount)} USDC</Figure>
-        <Figure label="Invoice status">{invoice.status}</Figure>
-        {payment !== null && (
-          <>
-            <Figure label="Payment status">{payment.status}</Figure>
-            <Figure label="Reference">
-              <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link> <CopyButton text={payment.reference} />
-            </Figure>
-          </>
-        )}
-      </dl>
+      <div className="card-columns">
+        <div>
+          <p className="card-value">{invoice.description}</p>
+          <dl className="figures">
+            <Figure label="Amount">{formatUsdc(invoice.amount)} USDC</Figure>
+            <Figure label="Invoice status">{invoice.status}</Figure>
+            {payment !== null && (
+              <>
+                <Figure label="Payment status">{payment.status}</Figure>
+                <Figure label="Reference">
+                  <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link> <CopyButton text={payment.reference} />
+                </Figure>
+              </>
+            )}
+          </dl>
 
-      {/* Why it failed is this payment's own fact, so it stays; what that means is on its story. */}
-      {payment?.reason !== undefined && <p className="card-value is-bad">{REASONS[payment.reason]}</p>}
+          {/* Why it failed is this payment's own fact, so it stays; what that means is on its story. */}
+          {payment?.reason !== undefined && <p className="card-value is-bad">{REASONS[payment.reason]}</p>}
 
-      {payment?.transaction !== undefined && (
-        <>
-          <p className="address-sub">Transaction hash</p>
-          <AddressLine address={payment.transaction.hash} explorerUrl={payment.transaction.explorerUrl} />
-        </>
-      )}
+          {invoice.status === 'OPEN' && (
+            <p className="card-actions">
+              <button
+                type="button"
+                className="button"
+                disabled={paying}
+                onClick={() => {
+                  setAsking(true)
+                }}
+              >
+                {paying ? 'paying…' : 'Pay'}
+              </button>
+            </p>
+          )}
+        </div>
 
-      {invoice.status === 'OPEN' && (
-        <p className="card-actions">
-          <button
-            type="button"
-            className="button"
-            disabled={paying}
-            onClick={() => {
-              setAsking(true)
-            }}
-          >
-            {paying ? 'paying…' : 'Pay'}
-          </button>
-        </p>
-      )}
+        <div>
+          <p className="address-sub">
+            {invoice.partnerName === null ? 'External address (You pay here)' : 'Partner external address (You pay them here)'}
+          </p>
+          <AddressLine address={invoice.destination.address} explorerUrl={invoice.destination.explorerUrl} />
 
-      <p className="address-sub">
-        {invoice.partnerName === null ? 'External address (You pay here)' : 'Partner external address (You pay them here)'}
-      </p>
-      <AddressLine address={invoice.destination.address} explorerUrl={invoice.destination.explorerUrl} />
+          {payment?.transaction !== undefined && (
+            <>
+              <p className="address-sub">Transaction hash</p>
+              <AddressLine address={payment.transaction.hash} explorerUrl={payment.transaction.explorerUrl} />
+            </>
+          )}
+        </div>
+      </div>
 
       {asking && (
         <PayDialog

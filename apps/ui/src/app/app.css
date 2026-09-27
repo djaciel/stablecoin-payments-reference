@@ -89,6 +89,21 @@ body {
   min-width: 16rem;
 }
 
+/* Inside a full-width card: what it is on the left, its addresses on the right. Stacks when
+   the screen is narrow. */
+.card-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 0.5rem 2.5rem;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .card-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .card {
   padding: 1rem 1.15rem;
   background: var(--panel);

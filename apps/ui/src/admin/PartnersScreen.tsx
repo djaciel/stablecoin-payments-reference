@@ -39,20 +39,25 @@ export function PartnersScreen() {
                   {partner.name} · index {partner.derivationIndex}
                 </h2>
 
-                <Figures partner={partner} />
+                <div className="card-columns">
+                  <div>
+                    <Figures partner={partner} />
+                  </div>
+                  <div>
+                    <AddressBlock
+                      heading="Internal partner address (They pay you here)"
+                      address={partner.deposit}
+                      emptyNote="Nothing paid in yet."
+                    />
 
-                <AddressBlock
-                  heading="Internal partner address (They pay you here)"
-                  address={partner.deposit}
-                  emptyNote="Nothing paid in yet."
-                />
-
-                <AddressBlock
-                  heading="Partner external address (You pay them here)"
-                  address={partner.payout}
-                  secondary
-                  showBalance={false}
-                />
+                    <AddressBlock
+                      heading="Partner external address (You pay them here)"
+                      address={partner.payout}
+                      secondary
+                      showBalance={false}
+                    />
+                  </div>
+                </div>
               </section>
             ))}
           </div>
