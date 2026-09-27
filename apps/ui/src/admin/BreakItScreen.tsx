@@ -64,14 +64,11 @@ export function BreakItScreen() {
   )
 }
 
-/** A card's title, with the article section it demonstrates as a small tag on the right. */
-function CardHead({ title, section, badge }: { readonly title: string; readonly section: string; readonly badge?: ReactNode }) {
+/** A card's title, with its armed/off badge when it has a flag. */
+function CardHead({ title, badge }: { readonly title: string; readonly badge?: ReactNode }) {
   return (
-    <h2 className="card-title card-head">
-      <span>
-        {title} {badge}
-      </span>
-      <span className="section-tag">{section}</span>
+    <h2 className="card-title">
+      {title} {badge}
     </h2>
   )
 }
@@ -104,7 +101,7 @@ function RevertCard({ armed, ...card }: { readonly armed: boolean } & CardProps)
 
   return (
     <section className="card">
-      <CardHead title="Revert the next payment" section="§6" badge={<Badge armed={armed} />} />
+      <CardHead title="Revert the next payment" badge={<Badge armed={armed} />} />
       <Brief
         what="The next payment runs out of gas on chain."
         expect="FAILED with proof, and the money back in Available."
@@ -127,7 +124,7 @@ function BlackholeCard({ blackhole, ...card }: { readonly blackhole: Experiments
 
   return (
     <section className="card">
-      <CardHead title="Node not responding" section="§9" badge={<Badge armed={blackhole.enabled} />} />
+      <CardHead title="Node not responding" badge={<Badge armed={blackhole.enabled} />} />
       <Brief
         what="The node stops answering while the payment runs."
         expect="REVIEW with the money still reserved, until you press Resume."
@@ -165,7 +162,7 @@ function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) 
 
   return (
     <section className="card">
-      <CardHead title="Crash after signing" section="§9" badge={<Badge armed={armed} />} />
+      <CardHead title="Crash after signing" badge={<Badge armed={armed} />} />
       <Brief
         what="The worker dies right after signing, before sending."
         expect="It comes back and sends the same signed bytes: one transfer on chain."
@@ -195,7 +192,7 @@ function DoubleClickCard(card: CardProps) {
 
   return (
     <section className="card">
-      <CardHead title="Double click" section="§9" />
+      <CardHead title="Double click" />
       <Brief
         what="Pays the same invoice twice at the same instant, with the same key."
         expect="One payment, one reference, the money leaves Available once."
@@ -233,7 +230,7 @@ function RaceCard({ running, setRunning }: CardProps) {
 
   return (
     <section className="card">
-      <CardHead title="The race" section="§9" />
+      <CardHead title="The race" />
       <Brief
         what="Two payments of 1,000 hit 1,500 available at the same instant."
         expect="One reserved, one refused, Available never below zero."
