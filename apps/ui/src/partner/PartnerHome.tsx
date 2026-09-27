@@ -4,15 +4,16 @@ import type { PartnerPaymentReceipt, PartnerView, ReceivableSummary } from '@pay
 import { getPartnerView, payReceivable } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine } from '../app/AddressLine'
+import { PartnerWalletCard } from './PartnerWalletCard'
 
 /** The selection lives in the address bar, so a reload (or a shared link) keeps the same partner. */
 const PARTNER_PARAM = 'partner'
 
 /** What paying does, in the order it happens. Shown before, not narrated during. */
 const PAYMENT_STEPS = [
-  'signed — the transfer is signed with the wallet below, and its hash goes on the invoice before anything is sent',
-  'sent — the raw bytes go to the chain under that same hash, and the invoice turns PAYING',
-  'paid — paid is the company’s to decide: it credits this when its own watcher sees the money and the event checks out',
+  'signed: the transfer is signed with the partner wallet, and its hash goes on the invoice before anything is sent',
+  'sent: the raw bytes go to the chain under that same hash, and the invoice turns PAYING',
+  'paid: that is the company’s call, and it credits this when its own watcher sees the money and the event checks out',
 ]
 
 /**
@@ -71,6 +72,10 @@ export function PartnerHome() {
         <p className="card-value is-bad">unavailable — {polled.error}. What follows is the api's last answer.</p>
       )}
 
+      <div className="cards">
+        <PartnerWalletCard wallet={view.partnerWallet} />
+      </div>
+
       <PartnerSelector view={view} onSelect={select} />
       {view.chainError !== undefined && <p className="card-value is-bad">{view.chainError}</p>}
 
@@ -84,27 +89,8 @@ export function PartnerHome() {
             <h2 className="card-title">Where you pay</h2>
             <AddressLine address={view.partner.deposit.address} explorerUrl={view.partner.deposit.explorerUrl} />
             <p className="card-note">
-              This address is yours alone. It is how the company knows the money is yours: it does not guess by the
-              amount or by who sent it, it knows by where it came in.
-            </p>
-          </section>
-
-          <section className="card">
-            <h2 className="card-title">Your wallet</h2>
-            <AddressLine address={view.partnerWallet.address} explorerUrl={view.partnerWallet.explorerUrl} />
-            <dl className="figures">
-              <div className="figure">
-                <dt>USDC</dt>
-                <dd>{view.partnerWallet.usdc ?? '—'}</dd>
-              </div>
-              <div className="figure">
-                <dt>ETH</dt>
-                <dd>{view.partnerWallet.eth ?? '—'}</dd>
-              </div>
-            </dl>
-            <p className="card-note">
-              Demo scaffolding: every partner shares this wallet, and its keys live in this demo. In a real system you
-              would sign with your own. The ETH is there to pay the fees, which are never paid in stablecoin.
+              The company gave you this address to pay it. Every partner has a different one, so the company knows
+              the payment came from you.
             </p>
           </section>
         </div>
@@ -143,6 +129,7 @@ function Owed({
   return (
     <section className="card">
       <h2 className="card-title">What you owe</h2>
+      <p className="card-note">Invoices the company issued to you on its Receivables screen (admin). Pay them here.</p>
       {view.receivables.length === 0 ? (
         <p className="card-note">Nothing invoiced to you yet.</p>
       ) : (

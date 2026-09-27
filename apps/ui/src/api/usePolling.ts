@@ -22,7 +22,7 @@ export interface Polled<T> {
  * background tab, a restored session): the repeat is what costs something, and a page
  * stuck on "checking…" until someone looks at it is a bug, not a saving.
  *
- * `read` must be a stable reference (a module-level function such as `getHealth`, or one
+ * `read` must be a stable reference (a module-level function such as `getTreasury`, or one
  * wrapped in `useCallback`): it is the effect's dependency, so a new function on every
  * render would restart the timer on every render. `isDone` too, when given: once an answer
  * satisfies it, that answer stays on screen and the repeats stop.

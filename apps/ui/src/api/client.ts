@@ -11,13 +11,9 @@
  * variable.
  */
 
-import type { Allowlist, Deposits, Experiments, Health, PartnerPaymentReceipt, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, RaceResult, Receivables, ReconciliationRunView, ReconciliationRuns, Treasury } from '@payments/domain'
+import type { Allowlist, Deposits, Experiments, PartnerPaymentReceipt, Partners, PartnerView, PartnerWalletFunding, Payables, PaymentTimeline, PaymentView, Payments, RaceResult, Receivables, ReconciliationRunView, ReconciliationRuns, Treasury } from '@payments/domain'
 
 const API_BASE_PATH = '/api'
-
-export function getHealth(): Promise<Health> {
-  return read<Health>('/health')
-}
 
 export function getTreasury(): Promise<Treasury> {
   return read<Treasury>('/treasury')

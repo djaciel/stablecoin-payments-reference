@@ -41,7 +41,7 @@ the order of 0.0000002 ETH, so a faucet's usual drop covers thousands of them.
 ## Funding the partner wallet from the treasury
 
 The demo has a second address that needs money: the **partner wallet**, the shared wallet every
-partner pays you from. It is on the Start screen with a **Fund partner wallet** button, and
+partner pays you from. It is on `/partner` with a **Fund partner wallet** button, and
 that button is the way to fund it: one click sends 2 USDC and 0.005 ETH from the treasury,
 signs both transactions in the signer, broadcasts them, waits for both receipts, and writes
 one entry in the books labelled `demo:partner-funding`.
@@ -73,7 +73,7 @@ are the official USDC contract above.
 
 ## Checking the balance by hand
 
-The Start screen reads both balances from the chain and prints the block it read them at.
+The Start screen reads both balances from the chain.
 To check it against something that is not this repo, open the treasury address on
 <https://sepolia.basescan.org>: the ETH balance is on the account page, the USDC balance
 under the token holdings.

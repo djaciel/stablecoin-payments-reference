@@ -320,7 +320,7 @@ that says what it is. Gas never reaches the books at all; it goes to the audit l
   `treasury:available`, named by the transaction hash so the same one cannot post twice.
 
 See it: `curl -s -X POST localhost:3000/treasury/fund-partner-wallet`, or the button on
-`/admin`. Then `SELECT kind, reference FROM ledger_transactions ORDER BY created_at DESC
+`/partner`. Then `SELECT kind, reference FROM ledger_transactions ORDER BY created_at DESC
 LIMIT 1` and the audit row next to it, which carries the gas the books refuse to hold. The
 watcher posts nothing for it: it looks for money arriving, and this is money leaving.
 
@@ -626,7 +626,7 @@ a new signature.
 See it (this sends real testnet USDC): on `/admin/break-it` pick "before the broadcast" on "Node not
 responding" and press **Run it**. About 15 s later the card ends in REVIEW with a Resume of its own,
 and the payment is in the REVIEW queue on `/admin/transfers`, "holds nonce N"; the explorer does not
-know its hash, and "Fund partner wallet" on Start is refused and names it. The run has already switched
+know its hash, and "Fund partner wallet" on `/partner` is refused and names it. The run has already switched
 the flag off, so press Resume: Sent carries the same hash as Signed, then Paid and Settled after finality.
 
 ```
@@ -874,7 +874,7 @@ invoice can be written to an address somebody typed: same invoice, same debt, sa
   invoices without going through the api: both add the allowlist row next to the partner, or every
   payment they set up would be refused.
 
-See it: open `/admin/pay-to-address`, paste the partner wallet's address from Start, 0.02 and a
+See it: open `/admin/pay-to-address`, paste the partner wallet's address from `/partner`, 0.02 and a
 note, and press **Create and pay**. The invoice is written (Partner debt goes up by the amount) and
 the payment is refused: `destination_not_allowlisted`, nothing reserved, and the invoice sits OPEN
 on Payables reading "Pay to an address". Add the address with a label and press **Pay again**: the
@@ -921,7 +921,7 @@ two different moments (§7) — here they are minutes apart, and both screens sh
 - `apps/ui/src/api/client.ts` — `payPayable` sends the time, and leaves the field out for a payment
   that runs now.
 
-See it: on `/admin/pay-to-address` paste the partner wallet's address from Start, 0.02, a note, pick
+See it: on `/admin/pay-to-address` paste the partner wallet's address from `/partner`, 0.02, a note, pick
 **At a time** and press **Create and pay**. The answer is RESERVED straight away: Start shows the
 amount under Reserved while the chain still shows the old balance, `/admin/transfers` lists it under
 **Waiting for their time** with the countdown, and the Temporal UI has no run for it at all. Within
@@ -1071,8 +1071,7 @@ curl -s localhost:3000/reconciliation/runs/<id> | jq '.identity'
 - `apps/ui/src/app/App.tsx` — the shell and the two routes: `/admin` is the company,
   `/partner` is the partner's side.
 - `apps/ui/src/admin/StartScreen.tsx` — where the demo starts: the treasury address, the
-  faucet links, what the chain holds next to what the books say, and the partner wallet with
-  the button that funds it.
+  faucet links, and what the chain holds next to what the books say.
 - `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses and the
   three figures that go with them: they owe you, you owe them, and what has arrived.
 - `apps/ui/src/admin/PayablesScreen.tsx` — the invoices the company owes, the books they move,
@@ -1083,8 +1082,9 @@ curl -s localhost:3000/reconciliation/runs/<id> | jq '.identity'
   first, the refusal when that address is not on the allowlist, the one click that fixes it, and
   the list of addresses the company may pay.
 - `apps/ui/src/partner/PartnerHome.tsx` — the partner's side: what it owes, the address it pays
-  at, and the shared wallet it pays from, labelled demo scaffolding. The chosen partner lives in
-  the address bar, so a reload keeps it.
+  at, and the shared wallet it pays from, labelled demo only, with the button that funds it from
+  the treasury (`PartnerWalletCard.tsx`). The chosen partner lives in the address bar, so a
+  reload keeps it.
 - `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
   Resume, the payments waiting for their time with Cancel next to each one, each payment's story
   step by step, and below them the money that arrived.

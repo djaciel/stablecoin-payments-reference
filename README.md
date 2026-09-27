@@ -55,9 +55,8 @@ curl -s http://localhost:3000/treasury
 
 ## Fund the treasury
 
-`/admin` opens on **Start**. It shows the **Treasury address**, what it holds **Onchain**, what
-the **Books** say (Available, Reserved, Partner debt), the **Partner wallet**, and a **Fund the
-treasury** panel. The panel stays until the treasury holds both USDC and ETH on chain.
+`/admin` opens on **Start**. It shows the **Treasury** (its address and its onchain balance), what
+the **Books** say (Available, Reserved, Partner debt), and a **Fund the treasury** panel. The panel stays until the treasury holds both USDC and ETH on chain.
 
 The treasury needs **both**, from two different faucets:
 
@@ -72,9 +71,9 @@ With USDC and no ETH, nothing can be sent. A payout costs well under 0.000001 ET
 on this repo's own test payouts), so one drop of ETH goes a long way. Other gas faucets, their
 limits, and what to do when one refuses you: [`docs/dev/faucets.md`](docs/dev/faucets.md).
 
-**What you should see.** Onchain shows the new balances on its next read. Books stay at zero for a
+**What you should see.** The treasury's onchain balance shows the new figures on its next read. Books stay at zero for a
 little longer: once the funding's block is final (that takes minutes on Base Sepolia), the
-watcher posts it within a tick or two, and Available shows the same USDC figure as Onchain. That
+watcher posts it within a tick or two, and Available shows the same USDC figure as the chain. That
 gap closing is the first thing the demo teaches: money on chain is not money in the books until
 something posts it. The gas never enters the books.
 
@@ -91,7 +90,7 @@ Until the money is in, three things do not work yet:
 The examples below assume the faucet gave the treasury 20 USDC. The figures are the ones the
 Books show, with six decimals.
 
-1. On **Start**, press **Fund partner wallet**, then **Send**. It sends 2 USDC and 0.005 ETH from
+1. On `/partner`, press **Fund partner wallet**, then **Send**. It sends 2 USDC and 0.005 ETH from
    the treasury to the wallet the partners pay you from, which your first deposit needs. It is not
    a payment, so the USDC leaves the books as `demo:partner-funding` and the gas is not posted.
 2. On **Payables**, under **New invoice**, pick Northwind Logistics, type `0.10` and a description,
