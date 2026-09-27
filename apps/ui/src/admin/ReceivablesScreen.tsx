@@ -1,8 +1,9 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import type { ReceivableFigures, Receivables } from '@payments/domain'
 import { createReceivable, getReceivables } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { formatUsdc } from '../app/usdc'
+import { BookCard } from './PayablesScreen'
 
 /**
  * The money partners owe the company. Writing one puts it on the books right away; nothing has
@@ -38,15 +39,13 @@ export function ReceivablesScreen() {
   )
 }
 
+/** The two figures this screen moves, one small card per figure, in one row. */
 function Books({ ledger }: { readonly ledger: ReceivableFigures }) {
   return (
-    <section className="panel">
-      <h2 className="card-title">Books</h2>
-      <dl className="figures">
-        <Figure label="Partner receivables">{formatUsdc(ledger.receivable)} USDC</Figure>
-        <Figure label="Deposits">{formatUsdc(ledger.deposits)} USDC</Figure>
-      </dl>
-    </section>
+    <div className="figure-cards">
+      <BookCard label="Partner receivables" amount={ledger.receivable} note="What partners owe you on unpaid invoices." />
+      <BookCard label="Deposits" amount={ledger.deposits} note="Partner money that arrived at their internal addresses." />
+    </div>
   )
 }
 
@@ -93,10 +92,7 @@ function ReceivableTable({ receivables }: { readonly receivables: Receivables['r
           </tbody>
         </table>
       </div>
-      <p className="card-note">
-        There is no Pay button here: the partner pays these from its own side, on /partner. A PAYING invoice already
-        carries the hash the partner recorded before broadcasting; it is credited when the watcher sees the money.
-      </p>
+      <p className="card-note">Partners pay these from /partner.</p>
     </section>
   )
 }
@@ -186,14 +182,4 @@ function CreateReceivable({
 /** Enough of a hash to recognise it next to the explorer, without eating the row. */
 function shortHash(hash: string): string {
   return `${hash.slice(0, 10)}…${hash.slice(-6)}`
-}
-
-/** One line of a figures list: the label a human reads, the value the api sent, unrounded. */
-function Figure({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-  return (
-    <div className="figure">
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
-  )
 }

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import type { Allowlist, PayableSummary, PaymentView } from '@payments/domain'
-import { addToAllowlist, createPayable, getAllowlist, payPayable } from '../api/client'
+import type { PayableSummary, PaymentSummary, PaymentView } from '@payments/domain'
+import { addToAllowlist, createPayable, getPayables, getPayments, payPayable } from '../api/client'
 import { usePolling } from '../api/usePolling'
+import { AddressLine, CopyButton } from '../app/AddressLine'
 import { formatUsdc } from '../app/usdc'
-import { REASONS, TO_AN_ADDRESS } from './PayablesScreen'
-import { MOMENT } from './TransfersScreen'
+import { Figure, inFlight, REASONS, TO_AN_ADDRESS } from './PayablesScreen'
+import { CancelDialog, fromNow, isWaitingForItsTime, MOMENT, type Scheduled } from './TransfersScreen'
 
 /** Far enough ahead to watch the money sit in Reserved, near enough to not have to come back. */
 const DEFAULT_MINUTES_AHEAD = 2
@@ -23,9 +24,9 @@ interface Typed {
  * on the allowlist is refused there, with nothing reserved and the invoice still open.
  */
 export function PayToAddressScreen() {
-  const polled = usePolling(getAllowlist)
-  // The poll and a new address both write here, so what they change shows at once.
-  const [allowlist, setAllowlist] = useState<Allowlist | undefined>(undefined)
+  const polled = usePolling(readSent)
+  // The poll and a new payment both write here, so a payment made here shows at once.
+  const [sent, setSent] = useState<readonly Sent[] | undefined>(undefined)
   const [destination, setDestination] = useState('')
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
@@ -42,9 +43,14 @@ export function PayToAddressScreen() {
 
   useEffect(() => {
     if (polled.data !== undefined) {
-      setAllowlist(polled.data)
+      setSent(polled.data)
     }
   }, [polled.data])
+
+  // A failed read is left for the poll to report.
+  const refresh = (): void => {
+    readSent().then(setSent, () => undefined)
+  }
 
   const pay = async (payableId: string): Promise<void> => {
     attemptKey.current ??= crypto.randomUUID()
@@ -71,6 +77,7 @@ export function PayToAddressScreen() {
       })
       .finally(() => {
         setBusy(false)
+        refresh()
       })
   }
 
@@ -126,8 +133,8 @@ export function PayToAddressScreen() {
             onChange={(event) => {
               setNote(event.target.value)
             }}
-            placeholder="What it is for"
-            aria-label="What it is for"
+            placeholder="Description"
+            aria-label="Description"
           />
           <label className="field-unit">
             <input
@@ -186,14 +193,13 @@ export function PayToAddressScreen() {
           invoice={invoice}
           payment={payment}
           busy={busy}
-          onAdded={setAllowlist}
           onPayAgain={() => {
             run(pay(invoice.id))
           }}
         />
       )}
 
-      <AllowlistPanel allowlist={allowlist} onUse={setDestination} />
+      <SentList sent={sent} refresh={refresh} />
     </>
   )
 }
@@ -203,13 +209,11 @@ function Attempt({
   invoice,
   payment,
   busy,
-  onAdded,
   onPayAgain,
 }: {
   readonly invoice: PayableSummary
   readonly payment: PaymentView | undefined
   readonly busy: boolean
-  readonly onAdded: (allowlist: Allowlist) => void
   readonly onPayAgain: () => void
 }) {
   return (
@@ -233,7 +237,7 @@ function Attempt({
             <code>{payment.reason}</code> · payment {payment.reference}
           </p>
           {payment.reason === 'destination_not_allowlisted' && (
-            <AddToAllowlist address={invoice.destination.address} onAdded={onAdded} />
+            <AddToAllowlist address={invoice.destination.address} />
           )}
           <p className="card-actions">
             <button type="button" className="button" disabled={busy} onClick={onPayAgain}>
@@ -258,7 +262,7 @@ function Attempt({
 }
 
 /** The one-click fix for the refusal above: the address the invoice already carries, plus a label. */
-function AddToAllowlist({ address, onAdded }: { readonly address: string; readonly onAdded: (allowlist: Allowlist) => void }) {
+function AddToAllowlist({ address }: { readonly address: string }) {
   const [label, setLabel] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
@@ -269,8 +273,7 @@ function AddToAllowlist({ address, onAdded }: { readonly address: string; readon
     setBusy(true)
     setError(undefined)
     addToAllowlist({ address, label })
-      .then((allowlist) => {
-        onAdded(allowlist)
+      .then(() => {
         setAdded(true)
       })
       .catch((failure: unknown) => {
@@ -306,57 +309,138 @@ function AddToAllowlist({ address, onAdded }: { readonly address: string; readon
   )
 }
 
-function AllowlistPanel({
-  allowlist,
-  onUse,
-}: {
-  readonly allowlist: Allowlist | undefined
-  readonly onUse: (address: string) => void
-}) {
-  if (allowlist === undefined) {
+/** A payment made from this screen: its invoice, and the payment's row where the list still has it. */
+interface Sent {
+  readonly invoice: PayableSummary & { readonly payment: NonNullable<PayableSummary['payment']> }
+  /** From `GET /payments`, for the time a scheduled payment runs. */
+  readonly summary: PaymentSummary | undefined
+}
+
+/** The invoices with no partner that were paid, newest first, each with its payment's row. */
+async function readSent(): Promise<readonly Sent[]> {
+  const [{ payables }, { payments }] = await Promise.all([getPayables(), getPayments()])
+  const byReference = new Map(payments.map((payment) => [payment.reference, payment]))
+  return payables.flatMap((invoice) => {
+    const { payment } = invoice
+    return invoice.partnerName === null && payment !== null
+      ? [{ invoice: { ...invoice, payment }, summary: byReference.get(payment.reference) }]
+      : []
+  })
+}
+
+function isDone({ invoice }: Sent): boolean {
+  return invoice.payment.status === 'SETTLED' || invoice.payment.status === 'FAILED'
+}
+
+function SentList({ sent, refresh }: { readonly sent: readonly Sent[] | undefined; readonly refresh: () => void }) {
+  if (sent === undefined) {
     return <p className="card-note">reading…</p>
   }
+  if (sent.length === 0) {
+    return <p className="card-note">No payments to an address yet.</p>
+  }
+
+  const waiting = sent.filter(({ summary }) => summary !== undefined && isWaitingForItsTime(summary))
+  const done = sent.filter(isDone)
+  const moving = sent.filter((one) => !waiting.includes(one) && !done.includes(one))
 
   return (
-    <section className="panel">
-      <h2 className="card-title">Addresses the company may pay</h2>
-      <div className="table-scroll">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Label</th>
-              <th>Partner</th>
-              <th>Address</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {allowlist.addresses.map((allowed) => (
-              <tr key={allowed.address}>
-                <td>{allowed.label}</td>
-                <td>{allowed.partnerName ?? 'typed in'}</td>
-                <td className="is-mono">{allowed.address}</td>
-                <td>
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => {
-                      onUse(allowed.address)
-                    }}
-                  >
-                    use it
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <>
+      <SentGroup title="Waiting for their time" sent={waiting} refresh={refresh} />
+      <SentGroup title="In flight" sent={moving} refresh={refresh} />
+      <SentGroup title="Done" sent={done} refresh={refresh} />
+    </>
+  )
+}
+
+function SentGroup({ title, sent, refresh }: { readonly title: string; readonly sent: readonly Sent[]; readonly refresh: () => void }) {
+  if (sent.length === 0) {
+    return null
+  }
+  return (
+    <>
+      <h2 className="card-title group-title">{title}</h2>
+      <div className="cards">
+        {sent.map((one) => (
+          <SentCard key={one.invoice.id} sent={one} refresh={refresh} />
+        ))}
       </div>
-      <p className="card-note">
-        A partner's payout address is registered here when the partner is created; anything else somebody added by
-        hand. In a real system this list is a reviewed control, with approval and someone answering for each row; this
-        demo has no auth, and where it plugs in is documented like compliance and custody.
-      </p>
+    </>
+  )
+}
+
+function SentCard({ sent, refresh }: { readonly sent: Sent; readonly refresh: () => void }) {
+  // Held from the click, so the dialog stays open if the payment's time passes under it.
+  const [asking, setAsking] = useState<Scheduled | undefined>(undefined)
+  const { invoice, summary } = sent
+  const { payment } = invoice
+  const scheduled: Scheduled | undefined = summary !== undefined && isWaitingForItsTime(summary) ? summary : undefined
+
+  return (
+    <section className="card">
+      <div className="card-columns">
+        <div>
+          <p className="card-value">{invoice.description}</p>
+          <dl className="figures">
+            <Figure label="Amount">{formatUsdc(invoice.amount)} USDC</Figure>
+            <Figure label="Status">{payment.status}</Figure>
+            <Figure label="Reference">
+              <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link> <CopyButton text={payment.reference} />
+            </Figure>
+            {summary?.executeAt !== undefined && (
+              <Figure label="Runs at">
+                {MOMENT.format(new Date(summary.executeAt))}
+                {scheduled !== undefined && ` (${fromNow(scheduled.executeAt)})`}
+              </Figure>
+            )}
+          </dl>
+
+          {inFlight(payment) !== undefined && scheduled === undefined && (
+            <p className="card-note is-busy">
+              <span className="spinner" aria-hidden="true" />
+              {inFlight(payment)}
+            </p>
+          )}
+
+          {payment.reason !== undefined && <p className="card-value is-bad">{REASONS[payment.reason]}</p>}
+
+          {scheduled !== undefined && (
+            <p className="card-actions">
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  setAsking(scheduled)
+                }}
+              >
+                Cancel
+              </button>
+            </p>
+          )}
+        </div>
+
+        <div>
+          <p className="address-sub">Pays to</p>
+          <AddressLine address={invoice.destination.address} explorerUrl={invoice.destination.explorerUrl} />
+
+          {payment.transaction !== undefined && (
+            <>
+              <p className="address-sub">Transaction hash</p>
+              <AddressLine address={payment.transaction.hash} explorerUrl={payment.transaction.explorerUrl} short />
+            </>
+          )}
+        </div>
+      </div>
+
+      {asking !== undefined && (
+        <CancelDialog
+          payment={asking}
+          onClose={() => {
+            setAsking(undefined)
+            refresh()
+          }}
+        />
+      )}
     </section>
   )
 }

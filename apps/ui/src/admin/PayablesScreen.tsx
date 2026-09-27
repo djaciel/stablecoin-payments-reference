@@ -79,7 +79,7 @@ function Books({ ledger }: { readonly ledger: LedgerFigures }) {
   )
 }
 
-function BookCard({ label, amount, note }: { readonly label: string; readonly amount: string; readonly note: string }) {
+export function BookCard({ label, amount, note }: { readonly label: string; readonly amount: string; readonly note: string }) {
   return (
     <section className="card">
       <h2 className="card-title">{label}</h2>
@@ -90,7 +90,7 @@ function BookCard({ label, amount, note }: { readonly label: string; readonly am
 }
 
 /** What a payment in flight is doing right now, for the spinner on its card. */
-function inFlight(payment: PayableSummary['payment']): string | undefined {
+export function inFlight(payment: PayableSummary['payment']): string | undefined {
   if (payment === null) {
     return undefined
   }
@@ -340,7 +340,7 @@ function CreatePayable({
 }
 
 /** One line of a figures list: the label a human reads, the value the api sent, unrounded. */
-function Figure({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+export function Figure({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="figure">
       <dt>{label}</dt>

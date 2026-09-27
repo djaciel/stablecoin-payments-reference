@@ -209,10 +209,10 @@ function ResumeButton({ reference }: { readonly reference: string }) {
   )
 }
 
-type Scheduled = PaymentSummary & { readonly executeAt: string }
+export type Scheduled = PaymentSummary & { readonly executeAt: string }
 
 /** Promised for later: RESERVED, with a time still ahead. At its time the dispatcher takes it. */
-function isWaitingForItsTime(payment: PaymentSummary): payment is Scheduled {
+export function isWaitingForItsTime(payment: PaymentSummary): payment is Scheduled {
   return payment.status === 'RESERVED' && payment.executeAt !== undefined && new Date(payment.executeAt) > new Date()
 }
 
@@ -293,7 +293,7 @@ function WaitingForTheirTime({ payments }: { readonly payments: readonly Schedul
  * this is the other side of that button. `POST /payments/:reference/cancel`; a payment signed a
  * moment ago answers 409 and its sentence shows here. The next poll drops the row.
  */
-function CancelDialog({ payment, onClose }: { readonly payment: Scheduled; readonly onClose: () => void }) {
+export function CancelDialog({ payment, onClose }: { readonly payment: Scheduled; readonly onClose: () => void }) {
   const [cancelling, setCancelling] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
@@ -332,7 +332,7 @@ function CancelDialog({ payment, onClose }: { readonly payment: Scheduled; reado
 }
 
 /** "in 2 minutes" next to the exact time: the exact one is the promise, this one is the wait. */
-function fromNow(at: string): string {
+export function fromNow(at: string): string {
   const seconds = Math.round((new Date(at).getTime() - Date.now()) / 1000)
   return Math.abs(seconds) < 60 ? COUNTDOWN.format(seconds, 'second') : COUNTDOWN.format(Math.round(seconds / 60), 'minute')
 }

@@ -868,8 +868,8 @@ invoice can be written to an address somebody typed: same invoice, same debt, sa
 - `apps/api/src/partners/partners.service.ts` — creating a partner registers its payout address on
   the allowlist, which is what the migration backfilled for the two partners that already existed.
 - `apps/ui/src/admin/PayToAddressScreen.tsx` — the new tab: the form, the refusal in the api's own
-  words, **Add to allowlist** and then **Pay again** with a new key, and the addresses the company
-  may pay, with the one line about what this list is in a real system.
+  words, **Add to allowlist** and then **Pay again** with a new key, and the payments made from
+  this screen: waiting for their time (with Cancel), in flight, and done.
 - `apps/api/src/experiments/race.ts` and `tests/db/helpers/database.ts` — the two seeds that write
   invoices without going through the api: both add the allowlist row next to the partner, or every
   payment they set up would be refused.
@@ -1076,11 +1076,11 @@ curl -s localhost:3000/reconciliation/runs/<id> | jq '.identity'
   figures that go with them: they owe you, you owe them, and the USDC balance at each address.
 - `apps/ui/src/admin/PayablesScreen.tsx` — the invoices the company owes, the books they move,
   and Pay, with each invoice's payment on its row.
-- `apps/ui/src/admin/ReceivablesScreen.tsx` — the invoices partners owe, the two figures they
-  move, and no Pay button: these are paid from the other side.
 - `apps/ui/src/admin/PayToAddressScreen.tsx` — paying an address somebody typed: the invoice
   first, the refusal when that address is not on the allowlist, the one click that fixes it, and
-  the list of addresses the company may pay.
+  the payments made from this screen: waiting, in flight, done.
+- `apps/ui/src/admin/ReceivablesScreen.tsx` — the invoices partners owe, the two figures they
+  move, and no Pay button: these are paid from the other side.
 - `apps/ui/src/partner/PartnerHome.tsx` — the partner's side: what it owes, the address it pays
   at, and the shared wallet it pays from, labelled demo only, with the button that funds it from
   the treasury (`PartnerWalletCard.tsx`). The chosen partner lives in the address bar, so a

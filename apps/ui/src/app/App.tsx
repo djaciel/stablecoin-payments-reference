@@ -43,8 +43,8 @@ export function App() {
             <Route index element={<StartScreen />} />
             <Route path="partners" element={<PartnersScreen />} />
             <Route path="payables" element={<PayablesScreen />} />
-            <Route path="receivables" element={<ReceivablesScreen />} />
             <Route path="pay-to-address" element={<PayToAddressScreen />} />
+            <Route path="receivables" element={<ReceivablesScreen />} />
             <Route path="transfers" element={<TransfersScreen />} />
             {/* A payment's story has its own address, so an invoice row can link straight to it. */}
             <Route path="transfers/:reference" element={<TransfersScreen />} />
@@ -96,11 +96,11 @@ function AdminScreens() {
         <NavLink to="/admin/payables" className={navClass}>
           Invoices to pay
         </NavLink>
-        <NavLink to="/admin/receivables" className={navClass}>
-          Invoices to collect
-        </NavLink>
         <NavLink to="/admin/pay-to-address" className={navClass}>
           Pay to an address
+        </NavLink>
+        <NavLink to="/admin/receivables" className={navClass}>
+          Invoices to collect
         </NavLink>
         <NavLink to="/admin/transfers" className={navClass}>
           Transfers

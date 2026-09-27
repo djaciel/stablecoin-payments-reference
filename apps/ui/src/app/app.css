@@ -177,6 +177,11 @@ body {
   margin-top: 1rem;
 }
 
+/* A heading over a group of full-width cards, such as the payments made to an address. */
+.group-title {
+  margin-top: 1.5rem;
+}
+
 a {
   color: var(--accent);
 }
