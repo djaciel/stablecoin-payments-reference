@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import type { AddressBalance, PartnerSummary, Partners } from '@payments/domain'
+import type { AddressBalance, Partners } from '@payments/domain'
 import { createPartner, getPartners } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine } from '../app/AddressLine'
@@ -39,24 +39,30 @@ export function PartnersScreen() {
                   {partner.name} · index {partner.derivationIndex}
                 </h2>
 
-                <div className="card-columns">
-                  <div>
-                    <Figures partner={partner} />
-                  </div>
-                  <div>
-                    <AddressBlock
-                      heading="Internal partner address (They pay you here)"
-                      address={partner.deposit}
-                      emptyNote="Nothing paid in yet."
-                    />
+                <div className="card-columns is-even">
+                  <dl className="figures">
+                    <div className="figure">
+                      <dt>They owe you</dt>
+                      <dd>{formatUsdc(partner.owes)} USDC</dd>
+                    </div>
+                  </dl>
+                  <dl className="figures">
+                    <div className="figure">
+                      <dt>You owe them</dt>
+                      <dd>{formatUsdc(partner.owed)} USDC</dd>
+                    </div>
+                  </dl>
 
-                    <AddressBlock
-                      heading="Partner external address (You pay them here)"
-                      address={partner.payout}
-                      secondary
-                      showBalance={false}
-                    />
-                  </div>
+                  <AddressBlock
+                    heading="Internal partner address (They pay you here)"
+                    address={partner.deposit}
+                    emptyNote="Nothing paid in yet."
+                  />
+                  <AddressBlock
+                    heading="Partner external address (You pay them here)"
+                    address={partner.payout}
+                    showBalance={false}
+                  />
                 </div>
               </section>
             ))}
@@ -73,37 +79,15 @@ export function PartnersScreen() {
   )
 }
 
-/**
- * The two figures that make this screen the per-partner view of the books. They come from the
- * invoice tables, not from an account per partner: the ledger keeps one total each (Partner debt,
- * Partner receivables) and these are that total cut by partner.
- */
-function Figures({ partner }: { readonly partner: PartnerSummary }) {
-  return (
-    <dl className="figures">
-      <div className="figure">
-        <dt>They owe you</dt>
-        <dd>{formatUsdc(partner.owes)} USDC</dd>
-      </div>
-      <div className="figure">
-        <dt>You owe them</dt>
-        <dd>{formatUsdc(partner.owed)} USDC</dd>
-      </div>
-    </dl>
-  )
-}
-
 interface AddressBlockProps {
   readonly heading: string
   readonly address: AddressBalance
-  /** The payout address: still shown, but it is not the one this screen is teaching. */
-  readonly secondary?: boolean
   readonly emptyNote?: string
   /** The partner's own wallet is its business, not the company's: no balance for it. */
   readonly showBalance?: boolean
 }
 
-function AddressBlock({ heading, address, secondary = false, emptyNote, showBalance = true }: AddressBlockProps) {
+function AddressBlock({ heading, address, emptyNote, showBalance = true }: AddressBlockProps) {
   // Three states, not two: unknown is not zero. When the RPC is down the note has to say the
   // balance could not be read, or the screen quietly claims nobody has paid.
   const note = !showBalance
@@ -115,8 +99,8 @@ function AddressBlock({ heading, address, secondary = false, emptyNote, showBala
         : undefined
 
   return (
-    <div className={secondary ? 'address-block is-secondary' : 'address-block'}>
-      <h3 className="address-heading">{heading}</h3>
+    <div className="address-block">
+      <p className="address-sub">{heading}</p>
       <AddressLine address={address.address} explorerUrl={address.explorerUrl} />
       {showBalance && (
         <dl className="figures">

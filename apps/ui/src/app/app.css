@@ -98,8 +98,14 @@ body {
   align-items: start;
 }
 
+.card-columns.is-even {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  row-gap: 1rem;
+}
+
 @media (max-width: 760px) {
-  .card-columns {
+  .card-columns,
+  .card-columns.is-even {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -252,21 +258,21 @@ a {
 }
 
 /* One of the two addresses on a partner card. The rule separates them without a box. */
+.card-columns .address-block + .address-block {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .address-block + .address-block {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--line);
 }
 
-.address-heading {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
 /* A small label over an address, a hash or a balance. */
 .address-sub {
-  margin: 0.1rem 0 0.4rem;
+  margin: 0.1rem 0 0.6rem;
   color: var(--muted);
   font-size: 0.75rem;
 }
@@ -274,12 +280,6 @@ a {
 /* On an invoice card the destination starts its own block, after the state and the Pay button. */
 .card > .address-sub {
   margin-top: 0.9rem;
-}
-
-/* The payout address is the partner's own wallet: shown, but never the louder of the two. */
-.address-block.is-secondary .address-heading {
-  color: var(--muted);
-  font-size: 0.85rem;
 }
 
 .form-row {
