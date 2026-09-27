@@ -13,7 +13,8 @@ import { formatUsdc } from '../app/usdc'
  */
 
 const USDC_FAUCET_URL = 'https://faucet.circle.com'
-const GAS_FAUCET_URL = 'https://portal.cdp.coinbase.com/products/faucet'
+const GAS_FAUCET_URL = 'https://faucet.zalalena.com/base'
+const COINBASE_GAS_FAUCET_URL = 'https://www.coinbase.com/developer-platform/products/faucet'
 const FAUCET_DOC = 'docs/dev/faucets.md'
 
 export function StartScreen() {
@@ -62,9 +63,15 @@ function FaucetPanel() {
         </li>
         <li>
           <a href={GAS_FAUCET_URL} target="_blank" rel="noreferrer">
-            Coinbase Developer Platform faucet
+            ZalalenA faucet
           </a>
-          : Base Sepolia ETH for gas.
+          : Base Sepolia ETH for gas, no sign-in. One drop is enough for the whole demo.
+        </li>
+        <li>
+          <a href={COINBASE_GAS_FAUCET_URL} target="_blank" rel="noreferrer">
+            Coinbase faucet
+          </a>
+          : Base Sepolia ETH for gas, if the first one refuses you. It asks for a Coinbase sign-in.
         </li>
       </ul>
       <p className="card-note">
@@ -78,15 +85,19 @@ function FaucetPanel() {
 function FaucetNote() {
   return (
     <p className="card-note">
-      Need more test funds?{' '}
+      Need more test funds? USDC from the{' '}
       <a href={USDC_FAUCET_URL} target="_blank" rel="noreferrer">
         Circle faucet
-      </a>{' '}
-      (USDC) ·{' '}
+      </a>
+      , gas from the{' '}
       <a href={GAS_FAUCET_URL} target="_blank" rel="noreferrer">
-        CDP faucet
+        ZalalenA faucet
       </a>{' '}
-      (gas). More in <code>{FAUCET_DOC}</code>
+      or the{' '}
+      <a href={COINBASE_GAS_FAUCET_URL} target="_blank" rel="noreferrer">
+        Coinbase faucet
+      </a>
+      . More in <code>{FAUCET_DOC}</code>
     </p>
   )
 }

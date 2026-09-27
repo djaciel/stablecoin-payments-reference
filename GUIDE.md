@@ -40,7 +40,7 @@ Money on chain is not money in the books until something records it.
 - `packages/chain/src/finality.ts`: what "final" means here (the chain's `safe` block).
 - `migrations/0004_watcher.sql`: which addresses to watch, and how far the watcher has read.
 - `apps/ui/src/partner/PartnerWalletCard.tsx`: the shared partner wallet and its **Fund partner wallet** button.
-- `apps/api/src/treasury/fund-partner-wallet.service.ts`: sends 2 USDC and 0.005 ETH to that wallet, recorded as `demo:partner-funding` because it is not a payment.
+- `apps/api/src/treasury/fund-partner-wallet.service.ts`: sends 2 USDC and 0.0003 ETH to that wallet, recorded as `demo:partner-funding` because it is not a payment.
 
 See it: fund the treasury and watch the **Books** card catch up with the **Treasury** card; `docker compose logs -f worker` shows every tick.
 

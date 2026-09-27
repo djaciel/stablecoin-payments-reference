@@ -47,7 +47,7 @@ const CURRENCY = 'USDC'
  * decisions, and these two are small enough to repeat on a faucet-funded treasury.
  */
 const FUNDING_USDC = toMinor(2)
-const FUNDING_ETH = parseEther('0.005')
+const FUNDING_ETH = parseEther('0.0003')
 
 /** A plain ether transfer costs exactly this much gas. There is nothing to estimate. */
 const NATIVE_TRANSFER_GAS = 21_000n

@@ -31,7 +31,8 @@ If a port is already taken on your machine, copy `.env.example` to `.env` and ch
 `/admin` opens on **Start**. Copy the address on the **Treasury** card and fund it from two faucets:
 
 - **Testnet USDC**, the money the demo moves: the [Circle faucet](https://faucet.circle.com). Pick Base Sepolia.
-- **Base Sepolia ETH**, which pays the gas: the [Coinbase Developer Platform faucet](https://portal.cdp.coinbase.com/products/faucet) (it asks you to sign in).
+- **Base Sepolia ETH**, which pays the gas: the [ZalalenA faucet](https://faucet.zalalena.com/base), no sign-in. One drop of about 0.001 ETH is enough.
+- If it refuses you, the [Coinbase faucet](https://www.coinbase.com/developer-platform/products/faucet) also gives Base Sepolia ETH. It asks for a Coinbase sign-in.
 
 You need both: without ETH nothing can be sent.
 
@@ -39,7 +40,7 @@ The **Treasury** card shows the money first; **Books** updates a few minutes lat
 
 ## Your first payout
 
-1. On `/partner`, press **Fund partner wallet**, then **Send**. It moves 2 USDC and 0.005 ETH from the treasury to the wallet the partners pay from, which your first deposit needs. The button stays off until the treasury holds 2 USDC and 0.0051 ETH.
+1. On `/partner`, press **Fund partner wallet**, then **Send**. It moves 2 USDC and 0.0003 ETH from the treasury to the wallet the partners pay from, which your first deposit needs. The button stays off until the treasury holds 2 USDC and 0.0004 ETH.
 2. On **Invoices to pay**, under **New invoice**, pick Northwind Logistics, type `0.10` and a description, and press **Create**.
 3. On the invoice's card, press **Pay**, then **Pay** again in the dialog. The card now shows a **Payment status** and a **Reference** (`PAY-` and four digits).
 4. Click the reference to open the payment's story: **Created**, **Reserved**, **Signed**, **Sent**, **Paid**, **Settled**. Paid waits a few minutes for the block to be final.

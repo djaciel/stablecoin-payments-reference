@@ -17,9 +17,10 @@ The treasury address is on the admin Start screen (<http://localhost:5173/admin>
 
 If one refuses you, try the next:
 
-- Coinbase Developer Platform: <https://portal.cdp.coinbase.com/products/faucet> (sign-in required)
-- Alchemy: <https://www.alchemy.com/faucets/base-sepolia>
+- ZalalenA: <https://faucet.zalalena.com/base>, no sign-in, about 0.001 ETH per drop. That is enough for everything in the demo.
+- Coinbase: <https://www.coinbase.com/developer-platform/products/faucet>, needs a Coinbase sign-in.
 - Superchain: <https://console.optimism.io/faucet>
+- QuickNode and Alchemy ask for an ETH balance on mainnet.
 
 One drop is plenty: a USDC transfer costs about 0.0000002 ETH.
 
@@ -27,8 +28,8 @@ One drop is plenty: a USDC transfer costs about 0.0000002 ETH.
 
 The partner wallet (the wallet partners pay you from) is funded with **Fund partner wallet** on `/partner`.
 
-- It sends 2 USDC and 0.005 ETH from the treasury, waits for both receipts, and posts one `demo:partner-funding` entry.
-- The treasury needs at least 2 USDC (on chain and in the books) and 0.0051 ETH (the extra runs the two transactions).
+- It sends 2 USDC and 0.0003 ETH from the treasury, waits for both receipts, and posts one `demo:partner-funding` entry.
+- The treasury needs at least 2 USDC (on chain and in the books) and 0.0004 ETH (the extra runs the two transactions). The partner wallet then pays hundreds of invoices on that gas.
 - `GET /treasury` shows these under `partnerWallet.funding.requires`. Below them the button is off and the api answers 422 with how much is missing.
 
 ## Faucet rules drift
