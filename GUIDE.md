@@ -834,7 +834,8 @@ artefacts — and none of them ever prints an RPC URL or a key.
 - `scripts/experiments/stuck.ts` — `pnpm experiment:stuck`: REVIEW with the money held, then
   Resume.
 
-See it: run them one at a time, with nothing else in flight (each one checks). Three of them send
+See it: the three flag cards run one at a time, with nothing else in flight (each one checks);
+Double click and the race run alongside anything. Three of them send
 real testnet USDC, 0.01 each, and take four to five minutes; the race takes seconds.
 
 ```

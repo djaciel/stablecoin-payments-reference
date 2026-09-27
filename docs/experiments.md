@@ -40,9 +40,10 @@ is resumed.
 
 ## Rules that apply to every run
 
-- **One at a time.** The screen runs one card at a time. Every card but the race, and the three
-  commands that pay, first check `GET /payments` and refuse while any payment is CREATED, RESERVED
-  or SENT. REVIEW, SETTLED and FAILED do not block.
+- **One at a time, for the cards that arm a flag.** Crash, Node not responding and Revert run one at
+  a time and first check `GET /payments`: they refuse while any payment is CREATED, RESERVED or
+  SENT (REVIEW, SETTLED and FAILED do not block). Double click and the race break nothing, so the
+  screen runs them alongside anything. The three commands that pay still check first.
 - **A flag catches whatever moves next.** A card arms its flag last, right before its own payment,
   and disarms it when the payment ends, in a `finally`. The crash and stuck commands do the same.
   While any flag is armed, a red banner shows on every admin screen.

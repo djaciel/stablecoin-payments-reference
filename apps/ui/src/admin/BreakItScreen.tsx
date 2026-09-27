@@ -44,7 +44,8 @@ const RUN_READ_BLIPS = 2
  */
 export function BreakItScreen() {
   const { experiments, show } = useOutletContext<ExperimentsContext>()
-  // One run at a time: "Node not responding" is global, so a second run would be caught by the first's flag.
+  // The three cards that arm a flag run one at a time: their flags are global, so a second run would
+  // be caught by the first's. The double click and the race break nothing and run alongside anything.
   const [running, setRunning] = useState<string | undefined>(undefined)
 
   if (experiments === undefined) {
@@ -56,7 +57,7 @@ export function BreakItScreen() {
   return (
     <div className="cards">
       <DoubleClickCard {...card} />
-      <RaceCard {...card} />
+      <RaceCard />
       <CrashCard armed={experiments.crashAfterSigning} {...card} />
       <BlackholeCard blackhole={experiments.blackholeRpc} {...card} />
       <RevertCard armed={experiments.revertNextPayment} {...card} />
@@ -86,7 +87,7 @@ function Brief({ what, expect, cost }: { readonly what: string; readonly expect:
   )
 }
 
-/** What the screen hands every card: the flags' writer and the latch that keeps runs one at a time. */
+/** What the screen hands every card: the flags' writer and the latch that keeps the flag cards one at a time. */
 interface CardProps {
   readonly show: ExperimentsContext['show']
   readonly running: string | undefined
@@ -199,6 +200,7 @@ function DoubleClickCard(card: CardProps) {
   const seen = useRef<DoubleClickEvidence>({ answers: [] })
   const run = useRun('double-click', card, {
     description: 'Double-click run',
+    alongside: true,
     fire: async (payableId, key) => {
       const before = (await getPayables()).ledger.available
       const answers = await doubleClick(payableId, key)
@@ -244,14 +246,14 @@ function DoubleClickCard(card: CardProps) {
  * dollars of real testnet money. Its runner is its own, next to `useRun` rather than inside it, but
  * it shares the same latch: there is no invoice, no flag and no payment to follow.
  */
-function RaceCard({ running, setRunning }: CardProps) {
+/** Runs alongside anything: it writes to a copy of the books, so it has no latch to share. */
+function RaceCard() {
   const [result, setResult] = useState<RaceRun | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
-  const busy = running === 'race'
-  const blocked = running !== undefined && !busy
+  const [busy, setBusy] = useState(false)
 
   const start = (): void => {
-    setRunning('race')
+    setBusy(true)
     setResult(undefined)
     setFailure(undefined)
     race()
@@ -259,7 +261,7 @@ function RaceCard({ running, setRunning }: CardProps) {
         setFailure(sentenceOf(refused))
       })
       .finally(() => {
-        setRunning(undefined)
+        setBusy(false)
       })
   }
 
@@ -276,10 +278,9 @@ function RaceCard({ running, setRunning }: CardProps) {
         </div>
         <div>
           <p className="card-actions">
-            <button type="button" className="button" disabled={busy || blocked} onClick={start}>
+            <button type="button" className="button" disabled={busy} onClick={start}>
               {busy ? 'running…' : 'Run it'}
             </button>
-            {blocked && <span className="card-note">The other run has to finish first.</span>}
           </p>
           {(failure !== undefined || result !== undefined) && (
             <div className="run-output">
@@ -588,6 +589,11 @@ interface RunPlan {
   }
   readonly description: string
   /**
+   * True for a card that breaks nothing for other payments (the double click): it runs alongside
+   * anything, so it skips the one-at-a-time latch and the "nothing else in flight" check.
+   */
+  readonly alongside?: boolean
+  /**
    * How this card turns its invoice into a payment. The default is the one `POST /payments` every
    * Pay button makes; the double click's makes two at once. It answers the reference the run then
    * follows, and the lines to show for what it did.
@@ -640,6 +646,15 @@ const FOLLOWING: Partial<Record<PaymentView['status'], string>> = {
  */
 function useRun(card: string, { show, running, setRunning }: CardProps, plan: RunPlan): Run {
   const [state, setState] = useState<RunState>({ done: [] })
+  // An alongside run keeps its own busy flag; the shared latch is for the cards that break things.
+  const [ownBusy, setOwnBusy] = useState(false)
+  const claim = (on: boolean): void => {
+    if (plan.alongside === true) {
+      setOwnBusy(on)
+    } else {
+      setRunning(on ? card : undefined)
+    }
+  }
   // The attempt's idempotency key (§4), made once per run: a second POST could only replay this payment.
   const key = useRef<string | undefined>(undefined)
 
@@ -691,10 +706,12 @@ function useRun(card: string, { show, running, setRunning }: CardProps, plan: Ru
   }
 
   const start = async (): Promise<void> => {
-    setRunning(card)
+    claim(true)
     setState({ done: [], doing: `Writing an invoice for ${formatUsdc(RUN_AMOUNT)} USDC` })
     try {
-      await nothingElseInFlight()
+      if (plan.alongside !== true) {
+        await nothingElseInFlight()
+      }
       const partner = (await getPayables()).partners[0]
       if (partner === undefined) {
         throw new Error('there is no active partner to invoice. Add one on Partners.')
@@ -731,12 +748,12 @@ function useRun(card: string, { show, running, setRunning }: CardProps, plan: Ru
           gaveUp(refused, 'The run could not switch this off, so press Disarm:')
         })
       }
-      setRunning(undefined)
+      claim(false)
     }
   }
 
   const resume = async (reference: string): Promise<void> => {
-    setRunning(card)
+    claim(true)
     // The evidence goes while the payment moves again; the run ends with what it found this time.
     setState((run) => ({ ...run, payment: undefined, doing: 'Resuming' }))
     try {
@@ -746,14 +763,14 @@ function useRun(card: string, { show, running, setRunning }: CardProps, plan: Ru
     } catch (error: unknown) {
       gaveUp(error, 'The resume stopped:')
     } finally {
-      setRunning(undefined)
+      claim(false)
     }
   }
 
   return {
     state,
-    busy: running === card,
-    blocked: running !== undefined && running !== card,
+    busy: plan.alongside === true ? ownBusy : running === card,
+    blocked: plan.alongside === true ? false : running !== undefined && running !== card,
     start: () => {
       void start()
     },
