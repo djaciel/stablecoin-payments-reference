@@ -221,9 +221,15 @@ a {
 
 .card-actions {
   display: flex;
+  align-items: center;
   gap: 1rem;
   margin: 0.5rem 0 0;
   font-size: 0.85rem;
+}
+
+/* A note beside a button sits on the button's line, not under a note's usual top margin. */
+.card-actions .card-note {
+  margin: 0;
 }
 
 /* The admin side's own tabs, under the app header: same links, quieter. */
