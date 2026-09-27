@@ -59,7 +59,7 @@ export async function watch(reference: string): Promise<WatchResult> {
     const hash = payment.tx_hash as Hex
 
     // 2. The receipt by the stored hash, the final block, and who must have sent it.
-    await failIfNodeBlackholed(client, 'watch')
+    await failIfNodeBlackholed(client, 'watch', reference)
     const receipt = await readReceipt(hash)
     const finalBlock = await finalBlockNumber(chain)
     const { address: treasury } = await signer.treasuryAddress()

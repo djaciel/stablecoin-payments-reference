@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { failedAfterReserving, type AuditStep, type BlackholeStep, type Experiments, type PaymentSummary, type PaymentView, type RaceAttempt, type RaceResult } from '@payments/domain'
-import { createPayable, doubleClick, getPayables, getPayments, getPaymentTimeline, payPayable, resumePayment, runRace, setExperiments, type PaymentAnswer } from '../api/client'
+import { createPayable, doubleClick, getExperiments, getPayables, getPayments, getPaymentTimeline, payPayable, resumePayment, runRace, setExperiments, type PaymentAnswer } from '../api/client'
 import { AddressLine } from '../app/AddressLine'
 import { formatUsdc } from '../app/usdc'
 import { REASONS } from './PayablesScreen'
@@ -30,7 +30,7 @@ const RUN_POLL_MS = 2000
 /**
  * How long a run follows its payment before it lets go. Waiting for a final block took about three
  * minutes in both live runs, so this leaves room; what it rules out is a payment that never reaches
- * an end (the worker down, a step still retrying) holding a global flag armed for good.
+ * an end (the worker down, a step still retrying) holding its flag armed for good.
  */
 const RUN_LIMIT_MS = 600_000
 
@@ -44,23 +44,20 @@ const RUN_READ_BLIPS = 2
  */
 export function BreakItScreen() {
   const { experiments, show } = useOutletContext<ExperimentsContext>()
-  // The three cards that arm a flag run one at a time: their flags are global, so a second run would
-  // be caught by the first's. The double click and the race break nothing and run alongside anything.
-  const [running, setRunning] = useState<string | undefined>(undefined)
 
   if (experiments === undefined) {
     return <p className="card-note">reading…</p>
   }
 
   // §9's four failures in the order the article lists them, then §6's revert.
-  const card: CardProps = { show, running, setRunning }
+  const card: CardProps = { show }
   return (
     <div className="cards">
       <DoubleClickCard {...card} />
       <RaceCard />
-      <CrashCard armed={experiments.crashAfterSigning} {...card} />
+      <CrashCard armed={experiments.crashAfterSigning.enabled} {...card} />
       <BlackholeCard blackhole={experiments.blackholeRpc} {...card} />
-      <RevertCard armed={experiments.revertNextPayment} {...card} />
+      <RevertCard armed={experiments.revertNextPayment.enabled} {...card} />
     </div>
   )
 }
@@ -87,32 +84,34 @@ function Brief({ what, expect, cost }: { readonly what: string; readonly expect:
   )
 }
 
-/** What the screen hands every card: the flags' writer and the latch that keeps the flag cards one at a time. */
+/** What the screen hands every card: the flags' writer. */
 interface CardProps {
   readonly show: ExperimentsContext['show']
-  readonly running: string | undefined
-  readonly setRunning: (card: string | undefined) => void
 }
 
 function RevertCard({ armed, ...card }: { readonly armed: boolean } & CardProps) {
-  const run = useRun('revert', card, {
-    arm: { flag: (on) => ({ revertNextPayment: on }), says: 'Armed: the next payment is signed with a gas limit too low to finish.' },
+  const run = useRun(card, {
+    arm: {
+      key: 'revertNextPayment',
+      flag: (enabled, payableId) => ({ revertNextPayment: { enabled, payableId } }),
+      says: 'Armed for this invoice: its payment is signed with a gas limit too low to finish.',
+    },
     description: 'Revert run',
   })
 
   return (
     <section className="card">
-      <CardHead title="Revert the next payment" badge={<Badge armed={armed} />} />
+      <CardHead title="Revert a payment" badge={<Badge armed={armed} />} />
       <div className="card-columns">
         <div>
           <Brief
-            what="The next payment runs out of gas on chain."
+            what="This run's payment runs out of gas on chain."
             expect="FAILED with proof, and the money back in Available."
             cost="Gas only · a few minutes"
           />
         </div>
         <div>
-          <RunIt run={run} extra={<Switch armed={armed} run={run} show={card.show} flag={{ revertNextPayment: !armed }} />} />
+          <RunIt run={run} extra={<Switch armed={armed} run={run} show={card.show} flag={{ revertNextPayment: { enabled: !armed } }} />} />
         </div>
       </div>
     </section>
@@ -120,11 +119,13 @@ function RevertCard({ armed, ...card }: { readonly armed: boolean } & CardProps)
 }
 
 function BlackholeCard({ blackhole, ...card }: { readonly blackhole: Experiments['blackholeRpc'] } & CardProps) {
-  // The step to arm, picked here; while armed, the stored one.
-  const [picked, setPicked] = useState<BlackholeStep>(blackhole.step)
-  const step = blackhole.enabled ? blackhole.step : picked
-  const run = useRun('blackhole', card, {
-    arm: { flag: (on) => ({ blackholeRpc: { enabled: on, step } }), says: `Armed: the node stops answering ${BLACKHOLE_WHERE[step]} (${step}).` },
+  // Always after the broadcast: a node silent before it would hold a nonce every later payout waits on.
+  const run = useRun(card, {
+    arm: {
+      key: 'blackholeRpc',
+      flag: (enabled, payableId) => ({ blackholeRpc: { enabled, step: 'watch', payableId } }),
+      says: 'Armed for this invoice: the node stops answering after the broadcast.',
+    },
     description: 'Stuck run',
   })
 
@@ -138,26 +139,9 @@ function BlackholeCard({ blackhole, ...card }: { readonly blackhole: Experiments
             expect="REVIEW with the money still reserved, until you press Resume."
             cost="0.01 USDC · about 5 minutes"
           />
-          <p className="form-row">
-            {(Object.keys(BLACKHOLE_WHERE) as BlackholeStep[]).map((option) => (
-              <label key={option} className="field-unit">
-                <input
-                  type="radio"
-                  name="blackhole-step"
-                  checked={step === option}
-                  disabled={blackhole.enabled || run.busy || run.blocked}
-                  onChange={() => {
-                    setPicked(option)
-                  }}
-                />
-                {BLACKHOLE_WHERE[option]} <code>{option}</code>
-              </label>
-            ))}
-          </p>
-          <p className="card-note">Before the broadcast, later payouts wait until you press Resume.</p>
         </div>
         <div>
-          <RunIt run={run} extra={<Switch armed={blackhole.enabled} run={run} show={card.show} flag={{ blackholeRpc: { enabled: !blackhole.enabled, step } }} />} />
+          <RunIt run={run} extra={<Switch armed={blackhole.enabled} run={run} show={card.show} flag={{ blackholeRpc: { enabled: !blackhole.enabled, step: 'watch' } }} />} />
         </div>
       </div>
     </section>
@@ -165,8 +149,12 @@ function BlackholeCard({ blackhole, ...card }: { readonly blackhole: Experiments
 }
 
 function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) {
-  const run = useRun('crash', card, {
-    arm: { flag: (on) => ({ crashAfterSigning: on }), says: 'Armed: the next payment kills the worker the moment its hash is stored.' },
+  const run = useRun(card, {
+    arm: {
+      key: 'crashAfterSigning',
+      flag: (enabled, payableId) => ({ crashAfterSigning: { enabled, payableId } }),
+      says: 'Armed for this invoice: its payment kills the worker the moment its hash is stored.',
+    },
     description: 'Crash run',
     narrate: crashStages,
   })
@@ -179,11 +167,12 @@ function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) 
           <Brief
             what="The worker dies right after signing, before sending."
             expect="It comes back and sends the same signed bytes: one transfer on chain."
-            cost="0.01 USDC · a few minutes · run it alone"
+            cost="0.01 USDC · a few minutes"
           />
+          <p className="card-note">This really stops the worker: other payments in flight lose one attempt and carry on.</p>
         </div>
         <div>
-          <RunIt run={run} extra={<Switch armed={armed} run={run} show={card.show} flag={{ crashAfterSigning: !armed }} />} />
+          <RunIt run={run} extra={<Switch armed={armed} run={run} show={card.show} flag={{ crashAfterSigning: { enabled: !armed } }} />} />
         </div>
       </div>
     </section>
@@ -198,9 +187,8 @@ function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) 
 function DoubleClickCard(card: CardProps) {
   // What the run saw around the two calls, kept for the verdict that reads the payment's story.
   const seen = useRef<DoubleClickEvidence>({ answers: [] })
-  const run = useRun('double-click', card, {
+  const run = useRun(card, {
     description: 'Double-click run',
-    alongside: true,
     fire: async (payableId, key) => {
       const before = (await getPayables()).ledger.available
       const answers = await doubleClick(payableId, key)
@@ -243,10 +231,9 @@ function DoubleClickCard(card: CardProps) {
 /**
  * §9's race. The only card that spends nothing, and the only one that does not run on the demo's
  * own books: the two payments together have to be more than Available, and Available here is a few
- * dollars of real testnet money. Its runner is its own, next to `useRun` rather than inside it, but
- * it shares the same latch: there is no invoice, no flag and no payment to follow.
+ * dollars of real testnet money. Its runner is its own, next to `useRun` rather than inside it:
+ * there is no invoice, no flag and no payment to follow.
  */
-/** Runs alongside anything: it writes to a copy of the books, so it has no latch to share. */
 function RaceCard() {
   const [result, setResult] = useState<RaceRun | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
@@ -455,12 +442,12 @@ function shortened(hash: string | undefined): string {
 function RunIt({ run, extra }: { readonly run: Run; readonly extra?: ReactNode }) {
   const { done, doing, failure, payment } = run.state
   // Once a run has started, the stages under the button say all this better than a hint could.
-  const hint = run.blocked ? 'The other run has to finish first.' : done.length > 0 ? undefined : `It writes its own ${formatUsdc(RUN_AMOUNT)} USDC invoice and pays it.`
+  const hint = done.length > 0 ? undefined : `It writes its own ${formatUsdc(RUN_AMOUNT)} USDC invoice and pays it.`
 
   return (
     <>
       <p className="card-actions">
-        <button type="button" className="button" disabled={run.busy || run.blocked} onClick={run.start}>
+        <button type="button" className="button" disabled={run.busy} onClick={run.start}>
           {run.busy ? 'running…' : 'Run it'}
         </button>
         {hint !== undefined && <span className="card-note">{hint}</span>}
@@ -520,7 +507,7 @@ function Evidence({ payment, run }: { readonly payment: PaymentSummary; readonly
           <button
             type="button"
             className="button"
-            disabled={run.busy || run.blocked}
+            disabled={run.busy}
             onClick={() => {
               run.resume(payment.reference)
             }}
@@ -567,7 +554,7 @@ function Switch({
     <>
       {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
       <p className="card-actions">
-        <button type="button" className="link-button" disabled={busy || run.busy || run.blocked} onClick={change}>
+        <button type="button" className="link-button" disabled={busy || run.busy} onClick={change}>
           {armed ? 'Disarm' : 'Arm'}
         </button>
         <span className="card-note">Or arm it and press Pay on any invoice.</span>
@@ -579,20 +566,16 @@ function Switch({
 /** What one card's Run it does: the invoice it writes, what it arms if it arms anything, and how it pays. */
 interface RunPlan {
   /**
-   * The flag this card arms for its own payment, and what to say once it is on. A card that breaks
+   * The flag this card arms for its own invoice, and what to say once it is on. A card that breaks
    * nothing (the double click: two calls a user makes, not a failure injected) leaves it out, and
    * then the run never touches the flags endpoint at all.
    */
   readonly arm?: {
-    readonly flag: (armed: boolean) => Partial<Experiments>
+    readonly key: keyof Experiments
+    readonly flag: (enabled: boolean, payableId?: string) => Partial<Experiments>
     readonly says: string
   }
   readonly description: string
-  /**
-   * True for a card that breaks nothing for other payments (the double click): it runs alongside
-   * anything, so it skips the one-at-a-time latch and the "nothing else in flight" check.
-   */
-  readonly alongside?: boolean
   /**
    * How this card turns its invoice into a payment. The default is the one `POST /payments` every
    * Pay button makes; the double click's makes two at once. It answers the reference the run then
@@ -625,7 +608,6 @@ interface RunState {
 interface Run {
   readonly state: RunState
   readonly busy: boolean
-  readonly blocked: boolean
   readonly start: () => void
   readonly resume: (reference: string) => void
 }
@@ -638,23 +620,14 @@ const FOLLOWING: Partial<Record<PaymentView['status'], string>> = {
 }
 
 /**
- * One click: write an invoice, arm this card's flag, pay it, follow the payment until nothing else
- * will happen on its own, and disarm again. The flag goes on last, right before the payment that is
- * meant to take it, so nothing else is exposed to it while the invoice is being written. The disarm
- * is in `finally`, and the following is bounded, because the node flag is global: a run that gives
- * up half way must never leave it catching everyone else's payments.
+ * One click: write an invoice, arm this card's flag for that invoice, pay it, follow the payment
+ * until nothing else will happen on its own, and disarm again. Every card runs alongside the others:
+ * the flag breaks only this invoice's payment. The disarm is in `finally` and the following is
+ * bounded, so a run that gives up half way never leaves its flag armed.
  */
-function useRun(card: string, { show, running, setRunning }: CardProps, plan: RunPlan): Run {
+function useRun({ show }: CardProps, plan: RunPlan): Run {
   const [state, setState] = useState<RunState>({ done: [] })
-  // An alongside run keeps its own busy flag; the shared latch is for the cards that break things.
-  const [ownBusy, setOwnBusy] = useState(false)
-  const claim = (on: boolean): void => {
-    if (plan.alongside === true) {
-      setOwnBusy(on)
-    } else {
-      setRunning(on ? card : undefined)
-    }
-  }
+  const [busy, setBusy] = useState(false)
   // The attempt's idempotency key (§4), made once per run: a second POST could only replay this payment.
   const key = useRef<string | undefined>(undefined)
 
@@ -706,11 +679,13 @@ function useRun(card: string, { show, running, setRunning }: CardProps, plan: Ru
   }
 
   const start = async (): Promise<void> => {
-    claim(true)
+    setBusy(true)
     setState({ done: [], doing: `Writing an invoice for ${formatUsdc(RUN_AMOUNT)} USDC` })
+    // Only a flag this run switched on is switched off again: someone's own arm is theirs to disarm.
+    let armedHere = false
     try {
-      if (plan.alongside !== true) {
-        await nothingElseInFlight()
+      if (plan.arm !== undefined && (await getExperiments())[plan.arm.key].enabled) {
+        throw new Error('its switch is already armed. Press Disarm first.')
       }
       const partner = (await getPayables()).partners[0]
       if (partner === undefined) {
@@ -725,7 +700,8 @@ function useRun(card: string, { show, running, setRunning }: CardProps, plan: Ru
 
       if (plan.arm !== undefined) {
         doing('Arming the switch')
-        show(await setExperiments(plan.arm.flag(true)))
+        armedHere = true
+        show(await setExperiments(plan.arm.flag(true, invoice.id)))
         did(plan.arm.says)
       }
 
@@ -741,19 +717,17 @@ function useRun(card: string, { show, running, setRunning }: CardProps, plan: Ru
       gaveUp(error, 'The run stopped:')
     } finally {
       key.current = undefined
-      // A card that armed nothing never sends a flag, not even to switch one off: this screen is
-      // the only thing that arms them, and a stray PUT could disarm a run somebody else started.
-      if (plan.arm !== undefined) {
+      if (plan.arm !== undefined && armedHere) {
         await setExperiments(plan.arm.flag(false)).then(show, (refused: unknown) => {
           gaveUp(refused, 'The run could not switch this off, so press Disarm:')
         })
       }
-      claim(false)
+      setBusy(false)
     }
   }
 
   const resume = async (reference: string): Promise<void> => {
-    claim(true)
+    setBusy(true)
     // The evidence goes while the payment moves again; the run ends with what it found this time.
     setState((run) => ({ ...run, payment: undefined, doing: 'Resuming' }))
     try {
@@ -763,14 +737,13 @@ function useRun(card: string, { show, running, setRunning }: CardProps, plan: Ru
     } catch (error: unknown) {
       gaveUp(error, 'The resume stopped:')
     } finally {
-      claim(false)
+      setBusy(false)
     }
   }
 
   return {
     state,
-    busy: plan.alongside === true ? ownBusy : running === card,
-    blocked: plan.alongside === true ? false : running !== undefined && running !== card,
+    busy,
     start: () => {
       void start()
     },
@@ -784,19 +757,6 @@ function useRun(card: string, { show, running, setRunning }: CardProps, plan: Ru
 async function payOnce(payableId: string, key: string): Promise<Fired> {
   const payment = await payPayable(payableId, key)
   return { reference: payment.reference, stages: [payStage(payment)] }
-}
-
-/**
- * A run wants the demo to itself. A card that breaks something breaks it for every payment in
- * flight (a killed step costs each of them one of its five attempts), and a card that breaks
- * nothing still needs its evidence to be about its own payment. So a run does not start while one
- * is moving. REVIEW and the ends are fine; nothing moves them on its own.
- */
-async function nothingElseInFlight(): Promise<void> {
-  const moving = (await getPayments()).payments.find((payment) => !isResting(payment.status))
-  if (moving !== undefined) {
-    throw new Error(`${moving.reference} is still ${moving.status}. A run wants the demo to itself, so it waits until nothing else is moving.`)
-  }
 }
 
 /** What the pay step did. The api answers a refusal at the door with the payment it recorded as

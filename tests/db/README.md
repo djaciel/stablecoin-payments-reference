@@ -82,6 +82,15 @@ bytes, no network):
 | A payment is signed once: two calls at the same instant and one after ask the signer once, the stored hash is the hash of the stored bytes, the payment stays RESERVED, one `signed` audit row | "signs a payment once…" | the payment row lock (`SELECT … FOR UPDATE`) and the re-check under it; `UNIQUE (tx_hash)` in `0008`. Without the lock this test fails |
 | Two payments signed at the same instant get two nonces, though the chain's pending count told both 7 | "gives two payments signed at the same instant two nonces…" | the treasury's nonce lock (`pg_advisory_xact_lock`) and `max(pending, highest stored + 1)`; `UNIQUE (nonce)` in `0008`. Without the lock this test fails |
 
+And the Break it flags, in `experiments.db.test.ts`, calling `signPayment` and
+`failIfNodeBlackholed` from `apps/worker/src` with flags written the way the api stores them:
+
+| Claim | Test | Enforced at |
+|---|---|---|
+| A revert flag that names invoice A: B signed first is signed normally and leaves the flag armed for A; A signed next takes it, and the flag ends off | "breaks only the payment of the invoice it names…" | `claimOneShot`'s one `UPDATE … RETURNING`, whose `WHERE` matches no invoice or this payment's |
+| The same flag with no invoice: exactly one of the two takes it | "breaks exactly one of two payments…" | the same statement: the second UPDATE waits for the first to commit, then finds it off |
+| A blackhole that names invoice A fails A's step and lets B's ask the node | "makes the node silent for the payment of the invoice it names…" | `failIfNodeBlackholed`'s one SELECT, joined to the payment's `payable_id` |
+
 And §7's Paid moment, in `settlement.db.test.ts`, calling `settlePayment` from
 `apps/worker/src/settle.ts` on a payment the api reserved and the row then marked SENT:
 

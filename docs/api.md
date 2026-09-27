@@ -97,7 +97,7 @@ Add-only: there is no route that removes an address.
 
 | Method | Path | Body | Answers | Codes |
 |---|---|---|---|---|
-| GET | `/settings/experiments` | | `Experiments`: `{ revertNextPayment, crashAfterSigning, blackholeRpc: { enabled, step } }` | 200 |
+| GET | `/settings/experiments` | | `Experiments`: `{ revertNextPayment: { enabled, payableId? }, crashAfterSigning: { enabled, payableId? }, blackholeRpc: { enabled, step, payableId? } }`; a `payableId` breaks only that invoice's payment | 200 |
 | PUT | `/settings/experiments` | any of those fields; only the ones sent change | `Experiments` | 200; 400 unknown or malformed field |
 | POST | `/experiments/race` | none | `RaceResult`, from the `payments_experiment` sandbox | 200; 500 the sandbox could not be used |
 

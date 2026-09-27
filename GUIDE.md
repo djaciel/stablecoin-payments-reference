@@ -493,7 +493,7 @@ that revert is final, the payment waits SENT with its money reserved.
 - `apps/ui/src/admin/TransfersScreen.tsx` — the Signed line says when the gas limit was set too low on
   purpose, with both numbers.
 
-See it (real testnet gas, no USDC moves): press **Run it** on "Revert the next payment" at
+See it (real testnet gas, no USDC moves): press **Run it** on "Revert a payment" at
 `/admin/break-it`. The card names each stage as it reaches it: the invoice, armed, "Paid as PAY-XXXX",
 then "Sent, waiting for the network". Minutes later, when the revert's block is final, it ends with the
 evidence: FAILED `reverted`, the transaction on the explorer (out of gas, no Transfer), and the money
@@ -572,7 +572,7 @@ money moves, because nothing proves the transfer can no longer land.
 - `apps/api/src/experiments/experiments.controller.ts` — `PUT /settings/experiments` now changes
   only the flags it is sent, so switching one never re-arms the other.
 - `apps/ui/src/admin/BreakItScreen.tsx` — the "Node not responding" card: where it bites, and a Run it
-  that switches the flag off again the moment its own payment is in REVIEW (it is global while armed).
+  that arms the flag for its own invoice and switches it off again once its payment is in REVIEW.
 - `apps/ui/src/api/client.ts` — `setExperiments` takes only the flags that change.
 - `apps/ui/src/app/App.tsx` — the banner names whichever flag is armed.
 - `packages/ledger/src/audit.ts` — the payment's new `escalated` event.
@@ -583,8 +583,8 @@ money moves, because nothing proves the transfer can no longer land.
 - `tests/db/failure.db.test.ts` — §6's REVIEW next to its FAILED: escalated twice, Available 9,000,
   Reserved 1,000, the invoice PAYING, nothing posted but the reserve. Indexed in `tests/db/README.md`.
 
-See it (this sends real testnet USDC): on `/admin/break-it` pick "after the broadcast" on "Node not
-responding" and press **Run it**. About 15 s after Sent the card ends with REVIEW, its money still in
+See it (this sends real testnet USDC): on `/admin/break-it` press **Run it** on "Node not
+responding" (it always arms `watch`, after the broadcast). About 15 s after Sent the card ends with REVIEW, its money still in
 Reserved; its story on Transfers has an Escalated line saying `watch` ran out of its 5 attempts. The
 explorer shows the transfer landed, while `curl localhost:3000/treasury` still has it in Reserved
 (onchain is below Available + Reserved).
@@ -617,19 +617,20 @@ a new signature.
 - `apps/ui/src/admin/TransfersScreen.tsx` — the REVIEW queue above the list, oldest first, with Resume;
   the story's Resume, its Resumed line, and a re-send's Sent line.
 - `apps/ui/src/api/client.ts` — `resumePayment` (a POST; a 409 shows its sentence).
-- `apps/ui/src/admin/BreakItScreen.tsx` — "Node not responding" before the broadcast says what a held
-  nonce holds up, and a run that ends in REVIEW gets its own Resume on the card.
+- `apps/ui/src/admin/BreakItScreen.tsx`: a run that ends in REVIEW gets its own Resume on the card.
 - `tests/db/failure.db.test.ts` — §6's REVIEW continues through resume: SENT again, `review_from_status`
   cleared, Reserved still 1,000, one `resumed` row; a second resume writes nothing. Indexed in
   `tests/db/README.md`.
 
-See it (this sends real testnet USDC): on `/admin/break-it` pick "before the broadcast" on "Node not
-responding" and press **Run it**. About 15 s later the card ends in REVIEW with a Resume of its own,
-and the payment is in the REVIEW queue on `/admin/transfers`, "holds nonce N"; the explorer does not
-know its hash, and "Fund partner wallet" on `/partner` is refused and names it. The run has already switched
-the flag off, so press Resume: Sent carries the same hash as Signed, then Paid and Settled after finality.
+See it (this sends real testnet USDC): the card only arms after the broadcast, so arm "before the
+broadcast" through the api (the first command below) and press **Pay** on an invoice. About 15 s later
+the payment is in the REVIEW queue on `/admin/transfers`, "holds nonce N"; the explorer does not know
+its hash, and "Fund partner wallet" on `/partner` is refused and names it. Disarm it (the second
+command), then press Resume: Sent carries the same hash as Signed, then Paid and Settled after finality.
 
 ```
+curl -s -X PUT localhost:3000/settings/experiments -H 'content-type: application/json' -d '{"blackholeRpc": {"enabled": true, "step": "execute"}}'
+curl -s -X PUT localhost:3000/settings/experiments -H 'content-type: application/json' -d '{"blackholeRpc": {"enabled": false, "step": "execute"}}'
 docker compose logs worker | grep -E 'sign:|execute:'   # already signed 0x… (nonce N), then sent 0x… (the same hash)
 curl -i -X POST localhost:3000/payments/<its reference>/resume   # once settled: 409, only a payment in REVIEW can be resumed
 ```
@@ -717,8 +718,8 @@ about the hash it stored, does not find it, and sends the same bytes: one transf
 - `docs/dev/restart-survival.md` — the drill (you stop the worker) next to the experiment (the
   worker stops itself), and why Docker's restart policy only covers the second.
 
-See it (real testnet USDC, about four minutes, and it kills whatever else is in flight — run it
-alone): press **Run it** on "Crash after signing" at `/admin/break-it`, or run the command. The
+See it (real testnet USDC, about four minutes; other payments in flight lose one attempt and carry
+on): press **Run it** on "Crash after signing" at `/admin/break-it`, or run the command. The
 card names the stages as it reaches them: the invoice, armed, "Paid as PAY-XXXX", "Signed 0x…,
 then the worker was killed with nothing sent", and half a minute later "The worker came back,
 asked the network about that hash, did not find it, and sent the same bytes", then SETTLED with
@@ -744,15 +745,14 @@ above, already pinned by `tests/db/payments.db.test.ts`.
   the evidence.
 - `apps/ui/src/admin/BreakItScreen.tsx` — the "Double click" card (no badge and no switch: it arms
   nothing) and the one new seam in the runner, `fire`, the step that turns the invoice into a
-  payment; every other card leaves it at its default of one call. The runner also refuses to start
-  while another payment is still moving, since these runs break things for real.
+  payment; every other card leaves it at its default of one call.
 - `scripts/experiments/double-click.ts` — `pnpm experiment:double-click`: the same two calls from a
   terminal, with the payment rows, the reserve entries and Available before and after.
 - `scripts/experiments/stuck.ts` — `pnpm experiment:stuck`: §9's stuck one over the flag from "No
   proof either way" above, armed, escalated to REVIEW with the money held, disarmed, resumed, settled.
 - `scripts/experiments/harness.ts` — what the two new commands needed: a POST that hands the status
   code back with the body, the books in one read, the invoice a run writes for itself, and the
-  check every command now starts with (`crash.ts` too): nothing else in flight.
+  check the double click starts with: nothing else in flight.
 
 See it (real testnet USDC, about four minutes): press **Run it** on "Double click" at
 `/admin/break-it`. The card shows the invoice, then both answers, `201 PAY-XXXX RESERVED` and
@@ -794,7 +794,7 @@ presses. The demo's books do not move, and nothing is signed or sent.
 - `apps/ui/src/api/client.ts` — `runRace`: one call and no body, the only endpoint the browser
   asks to do the concurrency for it.
 - `apps/ui/src/admin/BreakItScreen.tsx` — the "The race" card and its own small runner next to
-  `useRun`: no invoice, no flag and no payment to follow, but the same latch as the other cards.
+  `useRun`: no invoice, no flag and no payment to follow.
   The five cards are also reordered here into the article's order.
 - `tests/db/race.db.test.ts` — the same race twice: at the ledger engine, where the lock is, and
   at the payment door, which is what this endpoint runs. Both claims are in the index in
@@ -823,9 +823,9 @@ add one thing a browser cannot do: Docker's own count of how many times the work
 Each prints one screen — what it did, the figures before, the outcome, the figures after, and the
 artefacts — and none of them ever prints an RPC URL or a key.
 
-- `scripts/experiments/harness.ts` — what all four run on: the api client, the pre-flight that
-  refuses to start while another payment is moving, the invoice a run writes for itself, and the
-  one shape the evidence is printed in.
+- `scripts/experiments/harness.ts`, what all four run on. It holds the api client, the invoice a
+  run writes for itself, the pre-flights (the double click waits for nothing else moving, crash and
+  stuck refuse while their own flag is armed) and the one shape the evidence is printed in.
 - `scripts/experiments/double-click.ts` — `pnpm experiment:double-click`: two calls, one key, one
   payment.
 - `scripts/experiments/race.ts` — `pnpm experiment:race`: the only one that spends nothing.
@@ -834,8 +834,8 @@ artefacts — and none of them ever prints an RPC URL or a key.
 - `scripts/experiments/stuck.ts` — `pnpm experiment:stuck`: REVIEW with the money held, then
   Resume.
 
-See it: the three flag cards run one at a time, with nothing else in flight (each one checks);
-Double click and the race run alongside anything. Three of them send
+See it: all five cards run at once, since a card's flag breaks only its own invoice's payment.
+Three of the commands send
 real testnet USDC, 0.01 each, and take four to five minutes; the race takes seconds.
 
 ```

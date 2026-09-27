@@ -1,20 +1,17 @@
 import { execFileSync } from 'node:child_process'
 import type { AuditStep, Experiments, PaymentTimeline, PaymentView } from '@payments/domain'
-import { died, field, heading, nothingElseInFlight, post, put, section, step, waitUntilResting, writeOwnInvoice } from './harness'
+import { died, field, heading, post, put, refuseIfArmed, section, step, waitUntilResting, writeOwnInvoice } from './harness'
 
 /**
- * §9's crash, end to end: arm the flag, pay a small invoice of this script's own, and let the
- * worker kill itself the moment the hash is stored. Nobody restarts anything; the payment
- * finishes with the bytes it had already signed.
+ * §9's crash, end to end: write a small invoice of this script's own, arm the flag for it, pay it,
+ * and let the worker kill itself the moment the hash is stored. Nobody restarts anything; the
+ * payment finishes with the bytes it had already signed.
  *
  *   pnpm experiment:crash
  *
  * It presses the same api doors the Break it card presses, and adds the one thing a browser
  * cannot read: Docker's own count of how many times the worker has come back.
  * It sends real testnet USDC. About four minutes, most of it waiting for a final block.
- *
- * The process really dies, so it takes down every payment in flight with it: each of their steps
- * loses one of its five attempts. Run this on its own.
  */
 
 const NAME = 'experiment:crash'
@@ -28,23 +25,23 @@ const WORKER = 'stablecoin-payments-reference-worker-1'
 
 async function main(): Promise<void> {
   heading(NAME, 'the worker dies after signing, and the payment finishes itself')
-  await nothingElseInFlight()
+  await refuseIfArmed('crashAfterSigning')
 
   const before = workerLife()
   section('The worker before the run')
   printLife(before)
 
+  const payableId = await writeOwnInvoice(AMOUNT, DESCRIPTION)
   // Said before anything is armed, because after that it is too late to stop.
-  step('this kills the worker for real: every payment in flight loses one of its attempts too')
-  await put<Experiments>('/settings/experiments', { crashAfterSigning: true })
-  step('armed: the next payment kills the worker the moment its hash is stored')
+  step('this really stops the worker: other payments in flight lose one attempt and carry on')
+  await put<Experiments>('/settings/experiments', { crashAfterSigning: { enabled: true, payableId } })
+  step('armed for this invoice: its payment kills the worker the moment its hash is stored')
 
   let timeline: PaymentTimeline
   try {
-    const reference = await payOwnInvoice()
-    timeline = await waitUntilResting(reference)
+    timeline = await waitUntilResting(await pay(payableId))
   } finally {
-    await put<Experiments>('/settings/experiments', { crashAfterSigning: false })
+    await put<Experiments>('/settings/experiments', { crashAfterSigning: { enabled: false } })
     step('disarmed')
   }
 
@@ -55,9 +52,8 @@ async function main(): Promise<void> {
   evidence(timeline, before, after)
 }
 
-/** The door the Pay button presses: an invoice of this run's own, then one `POST /payments`. */
-async function payOwnInvoice(): Promise<string> {
-  const payableId = await writeOwnInvoice(AMOUNT, DESCRIPTION)
+/** The door the Pay button presses: one `POST /payments` with a key of its own. */
+async function pay(payableId: string): Promise<string> {
   const payment = await post<PaymentView>('/payments', { payableId }, { 'idempotency-key': crypto.randomUUID() })
   if (payment.status === 'FAILED') {
     throw new Error(`the payment was refused: ${payment.reason ?? 'no reason given'}`)

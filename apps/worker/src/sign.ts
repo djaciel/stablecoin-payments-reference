@@ -23,7 +23,7 @@ const signer = new SignerClient(readSignerUrl())
 /** The lock that stands for the treasury's nonce. Transaction-scoped: the COMMIT releases it. */
 const TREASURY_NONCE_LOCK = 'treasury-nonce'
 
-const COLUMNS = 'status, destination, amount_minor, tx_hash, nonce'
+const COLUMNS = 'status, payable_id, destination, amount_minor, tx_hash, nonce'
 
 /** What `signPayment` is told: the numbers the chain gave step 2. */
 export interface SigningInput {
@@ -135,10 +135,11 @@ export async function signPayment(
     const stored = await client.query<{ next: number | null }>('SELECT max(nonce) + 1 AS next FROM payments')
     const nonce = Math.max(input.pendingNonce, stored.rows[0]?.next ?? 0)
 
-    // Break it's two one-shot flags, claimed in this transaction: a rollback (the signer down)
-    // leaves them armed, and two payments signing together cannot both take the same one.
-    const gasTooLowOnPurpose = await claimRevertNextPayment(client)
-    const crashOnPurpose = await claimCrashAfterSigning(client)
+    // Break it's two one-shot flags, claimed in this transaction when they name this payment's
+    // invoice or none: a rollback (the signer down) leaves them armed, and two payments signing
+    // together cannot both take the same one.
+    const gasTooLowOnPurpose = await claimRevertNextPayment(client, locked.payable_id)
+    const crashOnPurpose = await claimCrashAfterSigning(client, locked.payable_id)
     const gas = gasTooLowOnPurpose ? REVERT_GAS_LIMIT : input.gas
 
     // 4. The signer, inside the transaction. Not the "no network inside a transaction" case: a
@@ -191,6 +192,8 @@ export async function signPayment(
 
 interface PaymentRow {
   readonly status: string
+  /** The invoice it pays; a Break it flag can name it. */
+  readonly payable_id: string | null
   readonly destination: string
   readonly amount_minor: string
   readonly tx_hash: string | null

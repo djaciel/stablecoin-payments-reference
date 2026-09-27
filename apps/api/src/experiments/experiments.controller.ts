@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Inject, Put } from '@nestjs/common'
 import type { Pool } from '@payments/db'
-import { BLACKHOLE_STEPS, EXPERIMENT_KEYS, type BlackholeStep, type Experiments } from '@payments/domain'
+import { BLACKHOLE_STEPS, EXPERIMENT_KEYS, type ArmedFlag, type BlackholeStep, type Experiments } from '@payments/domain'
 import { DATABASE_POOL } from '../db/db.module'
 
 /**
@@ -25,7 +25,7 @@ export class ExperimentsController {
     const changes = changesIn(body)
     if (changes === undefined) {
       throw new BadRequestException(
-        'Send revertNextPayment (true or false), crashAfterSigning (true or false), blackholeRpc ({ "enabled": true or false, "step": "execute" or "watch" }), any of them, and nothing else.',
+        'Send revertNextPayment and crashAfterSigning as { "enabled": true or false, "payableId": an invoice id or left out }, blackholeRpc as the same plus "step": "execute" or "watch", any of them, and nothing else.',
       )
     }
     if (changes.revertNextPayment !== undefined) {
@@ -50,10 +50,10 @@ function changesIn(body: unknown): Partial<Experiments> | undefined {
   if (Object.keys(unknownFields).length > 0) {
     return undefined
   }
-  if (revertNextPayment !== undefined && typeof revertNextPayment !== 'boolean') {
+  if (revertNextPayment !== undefined && !isFlag(revertNextPayment)) {
     return undefined
   }
-  if (crashAfterSigning !== undefined && typeof crashAfterSigning !== 'boolean') {
+  if (crashAfterSigning !== undefined && !isFlag(crashAfterSigning)) {
     return undefined
   }
   if (blackholeRpc !== undefined && !isBlackhole(blackholeRpc)) {
@@ -62,25 +62,40 @@ function changesIn(body: unknown): Partial<Experiments> | undefined {
   return { revertNextPayment, crashAfterSigning, blackholeRpc }
 }
 
+/** `{ enabled, payableId? }`: the invoice whose payment it breaks, or none for the next payment. */
+function isFlag(value: unknown): value is ArmedFlag {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const { enabled, payableId, ...unknownFields } = value as Record<string, unknown>
+  return typeof enabled === 'boolean' && (payableId === undefined || typeof payableId === 'string') && Object.keys(unknownFields).length === 0
+}
+
 function isBlackhole(value: unknown): value is Experiments['blackholeRpc'] {
   if (typeof value !== 'object' || value === null) {
     return false
   }
-  const { enabled, step, ...unknownFields } = value as Record<string, unknown>
-  return typeof enabled === 'boolean' && BLACKHOLE_STEPS.includes(step as BlackholeStep) && Object.keys(unknownFields).length === 0
+  const { step, ...flag } = value as Record<string, unknown>
+  return BLACKHOLE_STEPS.includes(step as BlackholeStep) && isFlag(flag)
 }
 
-/** An absent row is off; "Node not responding" defaults to after the broadcast. */
+/** An absent row, or a `true` stored before flags named an invoice, is off; "Node not responding" defaults to after the broadcast. */
 async function readExperiments(pool: Pool): Promise<Experiments> {
   const result = await pool.query<{ key: string; value: unknown }>('SELECT key, value FROM settings WHERE key = ANY($1)', [
     Object.values(EXPERIMENT_KEYS),
   ])
   const stored = new Map(result.rows.map((row) => [row.key, row.value]))
+  const blackhole = stored.get(EXPERIMENT_KEYS.blackholeRpc) as { step?: BlackholeStep } | undefined
   return {
-    revertNextPayment: stored.get(EXPERIMENT_KEYS.revertNextPayment) === true,
-    crashAfterSigning: stored.get(EXPERIMENT_KEYS.crashAfterSigning) === true,
-    blackholeRpc: (stored.get(EXPERIMENT_KEYS.blackholeRpc) as Experiments['blackholeRpc'] | undefined) ?? { enabled: false, step: 'watch' },
+    revertNextPayment: flagIn(stored.get(EXPERIMENT_KEYS.revertNextPayment)),
+    crashAfterSigning: flagIn(stored.get(EXPERIMENT_KEYS.crashAfterSigning)),
+    blackholeRpc: { ...flagIn(blackhole), step: blackhole?.step ?? 'watch' },
   }
+}
+
+function flagIn(value: unknown): ArmedFlag {
+  const { enabled, payableId } = (typeof value === 'object' && value !== null ? value : {}) as Partial<ArmedFlag>
+  return enabled === true ? { enabled, ...(payableId === undefined ? {} : { payableId }) } : { enabled: false }
 }
 
 async function writeFlag(pool: Pool, key: string, value: unknown): Promise<void> {

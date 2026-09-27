@@ -1,5 +1,5 @@
 import { rpcHost } from '@payments/chain'
-import type { LedgerFigures, Payables, PaymentSummary, PaymentTimeline, Payments } from '@payments/domain'
+import type { Experiments, LedgerFigures, Payables, PaymentSummary, PaymentTimeline, Payments } from '@payments/domain'
 
 /**
  * What every `pnpm experiment:*` command runs on: the api client it drives the demo with, and
@@ -93,15 +93,23 @@ export async function writeOwnInvoice(amount: string, description: string): Prom
 }
 
 /**
- * A run wants the demo to itself. A command that breaks something breaks it for every payment in
- * flight (a killed worker costs each of them one of its five attempts, an armed flag catches
- * whatever moves next), and one that breaks nothing still needs its evidence to be about its own
- * payment. So a run refuses to start while a payment is moving; REVIEW and the ends are resting.
+ * The double click's pre-flight: its evidence reads Available before and after, so another payment
+ * moving at the same time would blur it. REVIEW and the ends are resting.
  */
 export async function nothingElseInFlight(): Promise<void> {
   const moving = (await get<Payments>('/payments')).payments.find((payment) => !isResting(payment))
   if (moving !== undefined) {
     throw new Error(`${moving.reference} is still ${moving.status}: wait until nothing else is moving, then run this again`)
+  }
+}
+
+/**
+ * A command that arms a flag does not start while that flag is already armed: its disarm at the
+ * end would switch off an arm somebody else made.
+ */
+export async function refuseIfArmed(flag: keyof Experiments): Promise<void> {
+  if ((await get<Experiments>('/settings/experiments'))[flag].enabled) {
+    throw new Error(`${flag} is already armed: disarm it first, then run this again`)
   }
 }
 

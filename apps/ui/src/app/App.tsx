@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useMatch } from 'react-router-dom'
-import type { Experiments } from '@payments/domain'
+import type { ArmedFlag, Experiments } from '@payments/domain'
 import { BLACKHOLE_WHERE, BreakItScreen, type ExperimentsContext } from '../admin/BreakItScreen'
 import { PartnersScreen } from '../admin/PartnersScreen'
 import { PayablesScreen } from '../admin/PayablesScreen'
@@ -131,12 +131,18 @@ function AdminScreens() {
   )
 }
 
-/** What the banner says for each flag that is armed. */
+/** What the banner says for each flag that is armed: for one invoice, or for whatever pays next. */
 function armedFlags({ revertNextPayment, crashAfterSigning, blackholeRpc }: Experiments): string[] {
+  const whose = (flag: ArmedFlag): string => (flag.payableId === undefined ? 'the next payment' : 'the payment for one invoice')
   return [
-    ...(revertNextPayment ? ['the next payment will revert'] : []),
-    ...(crashAfterSigning ? ['the next payment kills the worker after signing'] : []),
-    ...(blackholeRpc.enabled ? [`the node does not answer ${BLACKHOLE_WHERE[blackholeRpc.step]} (${blackholeRpc.step}), for every payment in flight`] : []),
+    ...(revertNextPayment.enabled ? [`${whose(revertNextPayment)} will revert`] : []),
+    ...(crashAfterSigning.enabled ? [`${whose(crashAfterSigning)} kills the worker after signing`] : []),
+    ...(blackholeRpc.enabled
+      ? [
+          `the node does not answer ${BLACKHOLE_WHERE[blackholeRpc.step]} (${blackholeRpc.step}), ` +
+            (blackholeRpc.payableId === undefined ? 'for every payment in flight' : 'for one invoice'),
+        ]
+      : []),
   ]
 }
 

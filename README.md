@@ -152,7 +152,7 @@ in the Temporal UI (`http://localhost:8080`) three workflows keep running, `watc
 
 **Break it**, the last tab, has five cards. **Run it** on a card does the whole experiment and
 leaves the evidence on the card. Each one writes and pays its own 0.01 USDC invoice, except the
-race, and most of them take a few minutes because they wait for a final block. The three that arm a flag run one at a time; Double click and The race run alongside anything.
+race, and most of them take a few minutes because they wait for a final block. All five can run at once.
 
 - **Double click**: the same invoice is paid twice at the same instant, with the same key, and
   one payment comes out of it.
@@ -162,7 +162,7 @@ race, and most of them take a few minutes because they wait for a final block. T
   itself with the bytes it had already signed.
 - **Node not responding**: the node stops answering, and the payment goes to REVIEW with its
   money still reserved until you resume it.
-- **Revert the next payment**: the transfer reaches the chain and reverts. No stablecoin moves,
+- **Revert a payment**: the transfer reaches the chain and reverts. No stablecoin moves,
   the reserved money goes back to Available once the revert is final, and it costs only gas.
 
 Four of them also run from a terminal, through the same api (they need Node 22 and

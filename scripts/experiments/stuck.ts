@@ -1,5 +1,5 @@
 import type { AuditStep, BlackholeStep, Experiments, LedgerFigures, PaymentTimeline, PaymentView } from '@payments/domain'
-import { books, died, field, heading, nothingElseInFlight, post, put, section, step, waitUntilResting, writeOwnInvoice } from './harness'
+import { books, died, field, heading, post, put, refuseIfArmed, section, step, waitUntilResting, writeOwnInvoice } from './harness'
 
 /**
  * §9's stuck one: the node stops answering after the broadcast, the step runs out of its attempts,
@@ -10,8 +10,8 @@ import { books, died, field, heading, nothingElseInFlight, post, put, section, s
  * The transfer is really on the chain while the payment sits in REVIEW: the system has no proof it
  * can see, so it releases nothing. It sends real testnet USDC and takes about five minutes.
  *
- * The flag is global while it is armed, so this run is the only payment that should be moving; it
- * switches it off in a `finally`, whatever the payment does.
+ * The flag names this run's own invoice, so other payments keep moving; it is switched off in a
+ * `finally`, whatever the payment does.
  */
 
 const NAME = 'experiment:stuck'
@@ -25,20 +25,18 @@ const STEP: BlackholeStep = 'watch'
 
 async function main(): Promise<void> {
   heading(NAME, 'the node stops answering, and the money stays reserved')
-  await nothingElseInFlight()
+  await refuseIfArmed('blackholeRpc')
 
   const before = await books()
   field('available before', before.available)
   field('reserved before', before.reserved)
 
-  // Said before anything is armed: while this flag is on it catches every payment in flight.
-  step(`this makes the node stop answering ${STEP} for every payment, not just this one`)
-  await arm(true)
-  step(`armed: the node stops answering after the broadcast (${STEP})`)
+  const payableId = await writeOwnInvoice(AMOUNT, DESCRIPTION)
+  await arm(true, payableId)
+  step(`armed for this invoice: the node stops answering after the broadcast (${STEP})`)
 
   let review: PaymentTimeline
   try {
-    const payableId = await writeOwnInvoice(AMOUNT, DESCRIPTION)
     review = await waitUntilResting(await pay(payableId))
   } finally {
     await arm(false)
@@ -57,8 +55,8 @@ async function main(): Promise<void> {
   evidence(await waitUntilResting(review.payment.reference), await books())
 }
 
-function arm(enabled: boolean): Promise<Experiments> {
-  return put<Experiments>('/settings/experiments', { blackholeRpc: { enabled, step: STEP } })
+function arm(enabled: boolean, payableId?: string): Promise<Experiments> {
+  return put<Experiments>('/settings/experiments', { blackholeRpc: { enabled, step: STEP, payableId } })
 }
 
 /** The door the Pay button presses: one `POST /payments` with a key of its own. */

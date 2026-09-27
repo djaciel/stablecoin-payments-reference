@@ -25,7 +25,7 @@ export async function execute(reference: string): Promise<string> {
       throw ApplicationFailure.nonRetryable(`${reference}: execute before sign, no signed bytes are stored`)
     }
     const hash = payment.tx_hash as Hex
-    await failIfNodeBlackholed(client, 'execute')
+    await failIfNodeBlackholed(client, 'execute', reference)
 
     // 2. Ask first. Found means a previous attempt sent these bytes and died before it could
     //    record SENT: nothing is sent again. Only this answer sets `networkAlreadyKnew`.

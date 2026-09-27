@@ -45,7 +45,7 @@ export type {
 } from './api'
 export { failedAfterReserving } from './api'
 export { optionalEnv, readEnv, requireEnv } from './env'
-export { BLACKHOLE_STEPS, EXPERIMENT_KEYS, type BlackholeStep, type Experiments } from './experiments'
+export { BLACKHOLE_STEPS, EXPERIMENT_KEYS, type ArmedFlag, type BlackholeStep, type Experiments } from './experiments'
 export {
   PAYMENT_WORKFLOW,
   RECONCILIATION_WORKFLOW,
