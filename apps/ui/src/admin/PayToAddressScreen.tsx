@@ -186,78 +186,51 @@ export function PayToAddressScreen() {
           the time you pick.
         </p>
         {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
+        {invoice !== undefined && payment?.status === 'FAILED' && (
+          <Refusal
+            invoice={invoice}
+            payment={payment}
+            busy={busy}
+            onPayAgain={() => {
+              run(pay(invoice.id))
+            }}
+          />
+        )}
       </section>
-
-      {invoice !== undefined && (
-        <Attempt
-          invoice={invoice}
-          payment={payment}
-          busy={busy}
-          onPayAgain={() => {
-            run(pay(invoice.id))
-          }}
-        />
-      )}
 
       <SentList sent={sent} refresh={refresh} />
     </>
   )
 }
 
-/** The invoice and what the door answered: refused with nothing reserved, or the money set aside. */
-function Attempt({
+/**
+ * Only a refusal shows here: a payment that went through is already in the list below. The invoice
+ * stays open, so the fix (allowlist the address) and Pay again sit right under the form.
+ */
+function Refusal({
   invoice,
   payment,
   busy,
   onPayAgain,
 }: {
   readonly invoice: PayableSummary
-  readonly payment: PaymentView | undefined
+  readonly payment: PaymentView
   readonly busy: boolean
   readonly onPayAgain: () => void
 }) {
   return (
-    <section className="panel">
-      {/* Not "Pay to an address" again: the form above carries that title, and this panel is what
-          came back from it. */}
-      <h2 className="card-title">The invoice, and what the door said</h2>
-      {/* The invoice's own status is not repeated here: it is read once, when it is written, and
-          where it stands afterwards is what the payment below says. */}
-      <p className="card-value">
-        {formatUsdc(invoice.amount)} USDC for “{invoice.description}”
+    <>
+      {payment.reason !== undefined && (
+        <p className="card-value is-bad">{REASONS[payment.reason]} Nothing was reserved.</p>
+      )}
+      {payment.reason === 'destination_not_allowlisted' && <AddToAllowlist address={invoice.destination.address} />}
+      <p className="card-actions">
+        {/* A new attempt with a new key: the old one would only replay this refusal. */}
+        <button type="button" className="button" disabled={busy} onClick={onPayAgain}>
+          {busy ? 'paying…' : 'Pay again'}
+        </button>
       </p>
-      <p className="card-value is-address">{invoice.destination.address}</p>
-
-      {payment?.status === 'FAILED' && payment.reason !== undefined && (
-        <>
-          <p className="card-value is-bad">
-            {REASONS[payment.reason]} Nothing was reserved, and the invoice is still open.
-          </p>
-          <p className="card-note">
-            <code>{payment.reason}</code> · payment {payment.reference}
-          </p>
-          {payment.reason === 'destination_not_allowlisted' && (
-            <AddToAllowlist address={invoice.destination.address} />
-          )}
-          <p className="card-actions">
-            <button type="button" className="button" disabled={busy} onClick={onPayAgain}>
-              {busy ? 'paying…' : 'Pay again'}
-            </button>
-          </p>
-          <p className="card-note">Pay again is a new attempt with a new key: the old one would only replay this refusal.</p>
-        </>
-      )}
-
-      {payment !== undefined && payment.status !== 'FAILED' && (
-        <p className="card-value">
-          Payment <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link> is {payment.status}:{' '}
-          {formatUsdc(payment.amount)} USDC moved from Available to Reserved
-          {payment.executeAt === undefined
-            ? ', and only then is it signed and sent.'
-            : ` now, and it runs at ${MOMENT.format(new Date(payment.executeAt))}. Nothing is signed until then.`}
-        </p>
-      )}
-    </section>
+    </>
   )
 }
 
@@ -285,7 +258,7 @@ function AddToAllowlist({ address }: { readonly address: string }) {
   }
 
   if (added) {
-    return <p className="card-value">On the allowlist now. Pay again and the door will let it through.</p>
+    return <p className="card-value">On the allowlist now. Press Pay again.</p>
   }
 
   return (
