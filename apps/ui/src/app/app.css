@@ -171,8 +171,10 @@ a {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-/* In a full-width panel the figures keep a card's width, so each amount stays next to its label. */
-.panel .figures {
+/* Cards and panels are full width now, so the figures keep a narrow column and each amount
+   stays next to its label instead of drifting to the far edge. */
+.panel .figures,
+.card .figures {
   max-width: 24rem;
 }
 

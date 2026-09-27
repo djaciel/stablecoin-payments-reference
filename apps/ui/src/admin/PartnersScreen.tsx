@@ -51,8 +51,7 @@ export function PartnersScreen() {
                   heading="Partner external address (You pay them here)"
                   address={partner.payout}
                   secondary
-                  emptyNote="Nothing paid out yet."
-                  fundedNote="The partner's own money. It never appears on the company's books."
+                  showBalance={false}
                 />
               </section>
             ))}
@@ -61,9 +60,7 @@ export function PartnersScreen() {
           <p className="card-note">
             {partners.blockNumber === null
               ? 'Addresses from the database; balances unavailable.'
-              : `Balances read at block ${partners.blockNumber}.`}{' '}
-            Payout addresses come from the partner seed, which this demo holds only because one machine has to
-            play both sides.
+              : `Balances read at block ${partners.blockNumber}.`}
           </p>
         </>
       )}
@@ -96,26 +93,34 @@ interface AddressBlockProps {
   readonly address: AddressBalance
   /** The payout address: still shown, but it is not the one this screen is teaching. */
   readonly secondary?: boolean
-  readonly emptyNote: string
-  /** Said only once money is there; nothing when absent. */
-  readonly fundedNote?: string
+  readonly emptyNote?: string
+  /** The partner's own wallet is its business, not the company's: no balance for it. */
+  readonly showBalance?: boolean
 }
 
-function AddressBlock({ heading, address, secondary = false, emptyNote, fundedNote }: AddressBlockProps) {
+function AddressBlock({ heading, address, secondary = false, emptyNote, showBalance = true }: AddressBlockProps) {
   // Three states, not two: unknown is not zero. When the RPC is down the note has to say the
   // balance could not be read, or the screen quietly claims nobody has paid.
-  const note = address.usdc === null ? 'Balance unknown: the chain could not be read.' : Number(address.usdc) === 0 ? emptyNote : fundedNote
+  const note = !showBalance
+    ? undefined
+    : address.usdc === null
+      ? 'Balance unknown: the chain could not be read.'
+      : Number(address.usdc) === 0
+        ? emptyNote
+        : undefined
 
   return (
     <div className={secondary ? 'address-block is-secondary' : 'address-block'}>
       <h3 className="address-heading">{heading}</h3>
       <AddressLine address={address.address} explorerUrl={address.explorerUrl} />
-      <dl className="figures">
-        <div className="figure">
-          <dt>USDC balance</dt>
-          <dd>{address.usdc === null ? 'unknown' : formatUsdc(address.usdc)}</dd>
-        </div>
-      </dl>
+      {showBalance && (
+        <dl className="figures">
+          <div className="figure">
+            <dt>USDC balance</dt>
+            <dd>{address.usdc === null ? 'unknown' : formatUsdc(address.usdc)}</dd>
+          </div>
+        </dl>
+      )}
       {note !== undefined && <p className="card-note">{note}</p>}
     </div>
   )
