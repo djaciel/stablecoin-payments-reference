@@ -57,13 +57,13 @@ body {
   color: var(--accent);
 }
 
+/* The testnet notice sits at the foot of every page: said once, out of the way. */
 .app-banner {
   margin: 0;
-  padding: 0.5rem var(--page-gutter);
-  background: #2a2417;
-  border-bottom: 1px solid var(--line);
-  color: #e8cf8f;
-  font-size: 0.85rem;
+  padding: 1rem var(--page-gutter) 1.5rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 .app-main {

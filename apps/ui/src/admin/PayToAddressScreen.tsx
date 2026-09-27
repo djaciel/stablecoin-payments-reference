@@ -179,12 +179,7 @@ export function PayToAddressScreen() {
             {busy ? 'paying…' : 'Create and pay'}
           </button>
         </form>
-        <p className="card-note">
-          This writes the invoice first and then pays it: the demo has one path to a payment, so an amount typed here
-          becomes a debt on the books and goes through the same checks as an invoice to a partner. At a time, the checks
-          run and the money is set aside right now; only the transfer waits, and it leaves within about ten seconds of
-          the time you pick.
-        </p>
+        <p className="card-note">At a time: the money is reserved now and sent at that time.</p>
         {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
         {invoice !== undefined && payment?.status === 'FAILED' && (
           <Refusal

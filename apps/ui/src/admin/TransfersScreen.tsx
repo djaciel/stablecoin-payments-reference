@@ -49,10 +49,7 @@ function DepositTable({ deposits }: { readonly deposits: readonly DepositSummary
   return (
     <section className="panel">
       <h2 className="card-title">Money that arrived, newest first</h2>
-      <p className="panel-lead">
-        Each partner pays at an address of its own, so what says whose money this is, is where it came in. Nothing here
-        was typed by anyone: the watcher wrote every row from the chain.
-      </p>
+      <p className="panel-lead">Each partner pays to its own address, so the address tells you who paid.</p>
       {deposits.length === 0 ? (
         <p className="card-note">Nothing has arrived yet. Have a partner pay an invoice on the partner side.</p>
       ) : (
@@ -87,10 +84,6 @@ function DepositTable({ deposits }: { readonly deposits: readonly DepositSummary
           </table>
         </div>
       )}
-      <p className="card-note">
-        The money stays on the deposit addresses in this demo. Moving it into the treasury would be a transaction of its
-        own, and the address it leaves from needs a little of the network's own currency to pay for it.
-      </p>
     </section>
   )
 }

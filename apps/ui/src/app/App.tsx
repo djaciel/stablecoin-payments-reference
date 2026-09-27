@@ -35,8 +35,6 @@ export function App() {
         </nav>
       </header>
 
-      <p className="app-banner">Testnet demo. Keys are generated locally and hold test funds only.</p>
-
       <main className="app-main">
         <Routes>
           <Route path="/admin" element={<AdminScreens />}>
@@ -56,6 +54,8 @@ export function App() {
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
       </main>
+
+      <p className="app-banner">Testnet demo. Keys are generated locally and hold test funds only.</p>
     </div>
   )
 }
