@@ -75,20 +75,35 @@ export function PayablesScreen() {
 function Books({ ledger }: { readonly ledger: LedgerFigures }) {
   return (
     <div className="figure-cards">
-      <BookCard label="Available" amount={ledger.available} />
-      <BookCard label="Reserved" amount={ledger.reserved} />
-      <BookCard label="Partner debt" amount={ledger.partnerDebt} />
+      <BookCard label="Available" amount={ledger.available} note="Money you can spend now." />
+      <BookCard label="Reserved" amount={ledger.reserved} note="Set aside when you press Pay, until the payment settles." />
+      <BookCard label="Partner debt" amount={ledger.partnerDebt} note="What you owe partners on unpaid invoices." />
     </div>
   )
 }
 
-function BookCard({ label, amount }: { readonly label: string; readonly amount: string }) {
+function BookCard({ label, amount, note }: { readonly label: string; readonly amount: string; readonly note: string }) {
   return (
     <section className="card">
       <h2 className="card-title">{label}</h2>
       <p className="card-value">{formatUsdc(amount)} USDC</p>
+      <p className="card-note">{note}</p>
     </section>
   )
+}
+
+/** What a payment in flight is doing right now, for the spinner on its card. */
+function inFlight(payment: PayableSummary['payment']): string | undefined {
+  if (payment === null) {
+    return undefined
+  }
+  if (payment.status === 'SENT') {
+    return 'Sent, waiting for a final block…'
+  }
+  if (payment.status === 'RESERVED') {
+    return payment.transaction === undefined ? 'Reserved, waiting to be signed…' : 'Signed, sending…'
+  }
+  return undefined
 }
 
 /** Who the card pays: the partner, or for an invoice to a typed address, that address, shortened. */
@@ -145,6 +160,13 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
               </>
             )}
           </dl>
+
+          {inFlight(payment) !== undefined && (
+            <p className="card-note is-busy">
+              <span className="spinner" aria-hidden="true" />
+              {inFlight(payment)}
+            </p>
+          )}
 
           {/* Why it failed is this payment's own fact, so it stays; what that means is on its story. */}
           {payment?.reason !== undefined && <p className="card-value is-bad">{REASONS[payment.reason]}</p>}
@@ -214,14 +236,9 @@ function PayDialog({
       <section className="modal" role="dialog" aria-modal="true" aria-label="Pay invoice">
         <h2 className="card-title">Pay invoice</h2>
         <p className="panel-lead">
-          Paying reserves <strong>{formatUsdc(invoice.amount)} USDC</strong> now: the amount moves from Available to Reserved, so
-          no other payment can spend it. Then the payment's workflow has it signed and sends it, and this row follows
-          it until it is paid.
+          Pay <strong>{formatUsdc(invoice.amount)} USDC</strong> to {invoice.partnerName ?? 'this address'} for “{invoice.description}”.
+          The money is reserved now and sent right after.
         </p>
-        <p className="card-note">
-          To {invoice.partnerName ?? 'this address'}, for “{invoice.description}”:
-        </p>
-        <p className="card-value is-address">{invoice.destination.address}</p>
 
         {failure !== undefined && (
           <>

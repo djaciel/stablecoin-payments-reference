@@ -541,3 +541,25 @@ a {
 .is-identity dt {
   min-width: 15rem;
 }
+
+/* A payment still moving: a small spinner next to what it is doing right now. */
+.is-busy {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.spinner {
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
