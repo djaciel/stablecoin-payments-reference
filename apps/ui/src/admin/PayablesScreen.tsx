@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { failedAfterReserving, type LedgerFigures, type PayableSummary, type Payables, type PaymentFailureReason, type PaymentView } from '@payments/domain'
+import type { LedgerFigures, PayableSummary, Payables, PaymentFailureReason } from '@payments/domain'
 import { createPayable, getPayables, payPayable } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine, CopyButton } from '../app/AddressLine'
+import { formatUsdc } from '../app/usdc'
 
 /** Small on purpose: every invoice paid here spends real testnet USDC from the treasury. */
 const DEFAULT_AMOUNT = '0.50'
@@ -11,7 +12,7 @@ const DEFAULT_AMOUNT = '0.50'
 /** What an invoice or a payment with no partner reads, wherever one shows: it is a destination, not a gap. */
 export const TO_AN_ADDRESS = 'Pay to an address'
 
-/** Why a payment failed, in the article's words. The api's code stays on screen under it. */
+/** Why a payment failed, in the article's words. The api's code shows next to it on the payment's story. */
 export const REASONS: Record<PaymentFailureReason, string> = {
   insufficient_funds: 'Available was less than this amount.',
   payable_not_open: 'The invoice was already being paid.',
@@ -21,13 +22,6 @@ export const REASONS: Record<PaymentFailureReason, string> = {
   compliance_rejected: 'The compliance check refused the destination.',
   reverted: 'The transfer reached the chain and reverted.',
   cancelled: 'The payment was cancelled before anything was signed.',
-}
-
-/** Where a signed payment stands, in the article's words (§7). */
-const SIGNED_MOMENTS: Partial<Record<PaymentView['status'], string>> = {
-  RESERVED: 'Signed, not sent yet.',
-  SENT: 'Sent, waiting for the network.',
-  SETTLED: 'Paid: its block is final and its receipt carries the official Transfer event. Reserved and Partner debt went down.',
 }
 
 /**
@@ -77,21 +71,30 @@ export function PayablesScreen() {
   )
 }
 
+/** The books this screen moves, one small card per figure, in one row. */
 function Books({ ledger }: { readonly ledger: LedgerFigures }) {
   return (
-    <section className="panel">
-      <h2 className="card-title">Books</h2>
-      <dl className="figures">
-        <Figure label="Available">{ledger.available} USDC</Figure>
-        <Figure label="Reserved">{ledger.reserved} USDC</Figure>
-        <Figure label="Partner debt">{ledger.partnerDebt} USDC</Figure>
-      </dl>
-      <p className="card-note">
-        An invoice adds to Partner debt (Dr <code>expense:services</code> / Cr <code>partner:payable</code>). Paying
-        it moves its amount from Available to Reserved, before anything is signed.
-      </p>
+    <div className="figure-cards">
+      <BookCard label="Available" amount={ledger.available} />
+      <BookCard label="Reserved" amount={ledger.reserved} />
+      <BookCard label="Partner debt" amount={ledger.partnerDebt} />
+    </div>
+  )
+}
+
+function BookCard({ label, amount }: { readonly label: string; readonly amount: string }) {
+  return (
+    <section className="card">
+      <h2 className="card-title">{label}</h2>
+      <p className="card-value">{formatUsdc(amount)} USDC</p>
     </section>
   )
+}
+
+/** Who the card pays: the partner, or for an invoice to a typed address, that address, shortened. */
+function payTo(invoice: PayableSummary): string {
+  const { address } = invoice.destination
+  return `Pay to ${invoice.partnerName ?? `${address.slice(0, 8)}…${address.slice(-6)}`}`
 }
 
 function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; readonly refresh: () => Promise<void> }) {
@@ -126,14 +129,14 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
 
   return (
     <section className="card">
-      <h2 className="card-title">{invoice.partnerName ?? TO_AN_ADDRESS}</h2>
+      <h2 className="card-title">{payTo(invoice)}</h2>
       <p className="card-value">{invoice.description}</p>
       <dl className="figures">
-        <Figure label="Amount">{invoice.amount} USDC</Figure>
-        <Figure label="Invoice">{invoice.status}</Figure>
+        <Figure label="Amount">{formatUsdc(invoice.amount)} USDC</Figure>
+        <Figure label="Invoice status">{invoice.status}</Figure>
         {payment !== null && (
           <>
-            <Figure label="Payment">{payment.status}</Figure>
+            <Figure label="Payment status">{payment.status}</Figure>
             <Figure label="Reference">
               <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link> <CopyButton text={payment.reference} />
             </Figure>
@@ -141,25 +144,12 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
         )}
       </dl>
 
-      {payment?.reason !== undefined && (
-        <>
-          <p className="card-value is-bad">
-            {REASONS[payment.reason]}{' '}
-            {failedAfterReserving(payment.reason) ? 'Nothing moved onchain, and the money is back in Available.' : 'Nothing was reserved.'}
-          </p>
-          <p className="card-note">
-            <code>{payment.reason}</code>
-          </p>
-        </>
-      )}
-
-      {/* Signed or not: a REVIEW before the broadcast may have no hash yet, and still holds the money. */}
-      {payment?.status === 'REVIEW' && <p className="card-value">In REVIEW: no proof either way, so the money stays reserved.</p>}
+      {/* Why it failed is this payment's own fact, so it stays; what that means is on its story. */}
+      {payment?.reason !== undefined && <p className="card-value is-bad">{REASONS[payment.reason]}</p>}
 
       {payment?.transaction !== undefined && (
         <>
-          {SIGNED_MOMENTS[payment.status] !== undefined && <p className="card-value">{SIGNED_MOMENTS[payment.status]}</p>}
-          <p className="address-sub">The transaction (its hash is stored before anything is sent)</p>
+          <p className="address-sub">Transaction hash</p>
           <AddressLine address={payment.transaction.hash} explorerUrl={payment.transaction.explorerUrl} />
         </>
       )}
@@ -180,9 +170,7 @@ function PayableCard({ invoice, refresh }: { readonly invoice: PayableSummary; r
       )}
 
       <p className="address-sub">
-        {invoice.partnerName === null
-          ? 'You pay here (the address typed when the invoice was created)'
-          : 'You pay them here (their payout address, copied when the invoice was created)'}
+        {invoice.partnerName === null ? 'External address (You pay here)' : 'Partner external address (You pay them here)'}
       </p>
       <AddressLine address={invoice.destination.address} explorerUrl={invoice.destination.explorerUrl} />
 
@@ -220,7 +208,7 @@ function PayDialog({
       <section className="modal" role="dialog" aria-modal="true" aria-label="Pay invoice">
         <h2 className="card-title">Pay invoice</h2>
         <p className="panel-lead">
-          Paying reserves <strong>{invoice.amount} USDC</strong> now: the amount moves from Available to Reserved, so
+          Paying reserves <strong>{formatUsdc(invoice.amount)} USDC</strong> now: the amount moves from Available to Reserved, so
           no other payment can spend it. Then the payment's workflow has it signed and sends it, and this row follows
           it until it is paid.
         </p>
@@ -326,11 +314,7 @@ function CreatePayable({
           {busy ? 'creating…' : 'Create'}
         </button>
       </form>
-      {error === undefined ? (
-        <p className="card-note">The partner's payout address is copied onto the invoice as its destination.</p>
-      ) : (
-        <p className="card-value is-bad">{error}</p>
-      )}
+      {error !== undefined && <p className="card-value is-bad">{error}</p>}
     </section>
   )
 }

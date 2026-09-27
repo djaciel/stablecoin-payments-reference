@@ -88,15 +88,15 @@ Until the money is in, three things do not work yet:
 ## Your first payout
 
 The examples below assume the faucet gave the treasury 20 USDC. The figures are the ones the
-Books show, with six decimals.
+Books show, with four decimals.
 
 1. On `/partner`, press **Fund partner wallet**, then **Send**. It sends 2 USDC and 0.005 ETH from
    the treasury to the wallet the partners pay you from, which your first deposit needs. It is not
    a payment, so the USDC leaves the books as `demo:partner-funding` and the gas is not posted.
-2. On **Payables**, under **New invoice**, pick Northwind Logistics, type `0.10` and a description,
+2. On **Invoices to pay**, under **New invoice**, pick Northwind Logistics, type `0.10` and a description,
    and press **Create**.
 3. On the invoice's card, press **Pay**, then **Pay** again in the dialog. The card now shows
-   **Payment** (its state) and **Reference** (`PAY-` and four digits).
+   **Payment status** and **Reference** (`PAY-` and four digits).
 4. Click the reference. The payment's story shows each step as it happens: **Created**,
    **Reserved**, **Signed**, **Sent**, **Paid**, **Settled**. The payment's state moves
    `CREATED → RESERVED → SENT → SETTLED` (the other two ends, FAILED and REVIEW, are what
@@ -110,20 +110,20 @@ What the Books say along the way:
 
 | Moment | Available | Reserved | Partner debt |
 |---|---|---|---|
-| After Fund partner wallet | 18.000000 | 0.000000 | 0.000000 |
-| After Create | 18.000000 | 0.000000 | 0.100000 |
-| After Pay | 17.900000 | 0.100000 | 0.100000 |
-| After Settled | 17.900000 | 0.000000 | 0.000000 |
+| After Fund partner wallet | 18.0000 | 0.0000 | 0.0000 |
+| After Create | 18.0000 | 0.0000 | 0.1000 |
+| After Pay | 17.9000 | 0.1000 | 0.1000 |
+| After Settled | 17.9000 | 0.0000 | 0.0000 |
 
 ## Your first deposit
 
-1. On **Receivables**, under **New invoice**, pick Northwind Logistics, keep `0.05`, type a
+1. On **Invoices to collect**, under **New invoice**, pick Northwind Logistics, keep `0.05`, type a
    description and press **Create**. Partner receivables goes up by 0.05.
 2. Open `/partner`. Under **You are**, pick Northwind Logistics. In **What you owe**, press
    **Pay** on the invoice, then **Pay** in the dialog. The invoice turns PAYING.
 3. On **Transfers**, under **Money that arrived, newest first**, the deposit shows as DETECTED
    within seconds: seen, not credited. Once its block is final it turns SETTLED and the invoice
-   turns PAID. On **Receivables**, Deposits goes up by 0.05 and Partner receivables goes down by
+   turns PAID. On **Invoices to collect**, Deposits goes up by 0.05 and Partner receivables goes down by
    0.05.
 
 The company knows this money is Northwind's because it arrived at the deposit address only

@@ -2,6 +2,7 @@ import type { Treasury } from '@payments/domain'
 import { getTreasury } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine } from '../app/AddressLine'
+import { formatUsdc } from '../app/usdc'
 
 /**
  * The two halves can disagree, and the screen says so rather than hiding it: money on chain is
@@ -110,7 +111,7 @@ function TreasuryCard({ treasury, error }: CardProps) {
           <p className="card-note">Everything else on this page comes from the api and its database, and is unaffected.</p>
         </>
       ) : (
-        <Figures rows={[['USDC', treasury.onchain.usdc], ['ETH', treasury.onchain.eth]]} />
+        <Figures rows={[['USDC', formatUsdc(treasury.onchain.usdc)], ['ETH', treasury.onchain.eth]]} />
       )}
       <p className="card-note">Derived from the company seed by the signer. This is the address the faucets fund.</p>
     </Card>
@@ -125,11 +126,13 @@ function BooksCard({ treasury, error }: CardProps) {
   return (
     <Card title="Books">
       <Figures
-        rows={[
-          ['Available', treasury.ledger.available],
-          ['Reserved', treasury.ledger.reserved],
-          ['Partner debt', treasury.ledger.partnerDebt],
-        ]}
+        rows={(
+          [
+            ['Available', treasury.ledger.available],
+            ['Reserved', treasury.ledger.reserved],
+            ['Partner debt', treasury.ledger.partnerDebt],
+          ] as const
+        ).map(([label, amount]) => [label, formatUsdc(amount)] as const)}
       />
       <p className="card-note">What the ledger says, in USDC.</p>
     </Card>

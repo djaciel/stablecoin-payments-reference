@@ -4,6 +4,7 @@ import type { PartnerPaymentReceipt, PartnerView, ReceivableSummary } from '@pay
 import { getPartnerView, payReceivable } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine } from '../app/AddressLine'
+import { formatUsdc } from '../app/usdc'
 import { PartnerWalletCard } from './PartnerWalletCard'
 
 /** The selection lives in the address bar, so a reload (or a shared link) keeps the same partner. */
@@ -129,7 +130,7 @@ function Owed({
   return (
     <section className="card">
       <h2 className="card-title">What you owe</h2>
-      <p className="card-note">Invoices the company issued to you on its Receivables screen (admin). Pay them here.</p>
+      <p className="card-note">Invoices the company issued to you on its Invoices to collect screen (admin). Pay them here.</p>
       {view.receivables.length === 0 ? (
         <p className="card-note">Nothing invoiced to you yet.</p>
       ) : (
@@ -147,7 +148,7 @@ function Owed({
               {view.receivables.map((invoice) => (
                 <tr key={invoice.id}>
                   <td>{invoice.description}</td>
-                  <td className="is-number">{invoice.amount} USDC</td>
+                  <td className="is-number">{formatUsdc(invoice.amount)} USDC</td>
                   <td>{invoice.status}</td>
                   <td>
                     {invoice.status === 'OPEN' && (
@@ -175,9 +176,7 @@ function Owed({
       {sent.map((invoice) =>
         invoice.transaction === null ? null : (
           <div key={invoice.id}>
-            <p className="address-sub">
-              “{invoice.description}”, sent (its hash was stored before anything was broadcast)
-            </p>
+            <p className="address-sub">“{invoice.description}”, transaction hash</p>
             <AddressLine address={invoice.transaction.hash} explorerUrl={invoice.transaction.explorerUrl} />
           </div>
         ),
@@ -234,7 +233,7 @@ function PayDialog({
       <section className="modal" role="dialog" aria-modal="true" aria-label="Pay invoice">
         <h2 className="card-title">Pay invoice</h2>
         <p className="panel-lead">
-          This sends <strong>{invoice.amount} USDC</strong> from the shared partner wallet to your own deposit
+          This sends <strong>{formatUsdc(invoice.amount)} USDC</strong> from the shared partner wallet to your own deposit
           address, in one transaction. In a real system you would sign this in your own wallet; this demo signs it
           for you with a second seed it keeps for the partners.
         </p>
@@ -270,7 +269,7 @@ function PaymentReceipt({ receipt }: { readonly receipt: PartnerPaymentReceipt }
   return (
     <div className="result">
       <p className="card-note">
-        {receipt.amount} USDC, block {receipt.transaction.blockNumber}
+        {formatUsdc(receipt.amount)} USDC, block {receipt.transaction.blockNumber}
       </p>
       <p className="card-value is-address">{receipt.transaction.hash}</p>
       <p className="card-actions">
@@ -285,7 +284,7 @@ function PaymentReceipt({ receipt }: { readonly receipt: PartnerPaymentReceipt }
         Sending it cost {receipt.gasEth} ETH, paid in the network's own currency and never in stablecoin (
         {receipt.gasBasis}).
         {receipt.partnerWallet !== null &&
-          ` The wallet now holds ${receipt.partnerWallet.usdc} USDC and ${receipt.partnerWallet.eth} ETH.`}
+          ` The wallet now holds ${formatUsdc(receipt.partnerWallet.usdc)} USDC and ${receipt.partnerWallet.eth} ETH.`}
       </p>
     </div>
   )

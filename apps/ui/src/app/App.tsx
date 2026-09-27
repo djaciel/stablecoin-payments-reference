@@ -51,7 +51,7 @@ export function App() {
             <Route path="reconciliation" element={<ReconciliationScreen />} />
             <Route path="break-it" element={<BreakItScreen />} />
           </Route>
-          <Route path="/partner" element={<PartnerSide />} />
+          <Route path="/partner" element={<PartnerHome />} />
           {/* No landing page: `/` and anything unknown go to the company's side, where the demo starts. */}
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
@@ -94,10 +94,10 @@ function AdminScreens() {
           Partners
         </NavLink>
         <NavLink to="/admin/payables" className={navClass}>
-          Payables
+          Invoices to pay
         </NavLink>
         <NavLink to="/admin/receivables" className={navClass}>
-          Receivables
+          Invoices to collect
         </NavLink>
         <NavLink to="/admin/pay-to-address" className={navClass}>
           Pay to an address
@@ -127,22 +127,6 @@ function AdminScreens() {
         </p>
       )}
       <Outlet context={context} />
-    </>
-  )
-}
-
-/**
- * The partner's side, with the one line that says what it stands for. Its own banner because the
- * screen below it shows a wallet whose keys this demo holds, which a real partner's never would be.
- */
-function PartnerSide() {
-  return (
-    <>
-      <p className="app-banner">
-        This side stands in for the partner's own system: its wallet's keys live in this demo, so one machine can play
-        both parts.
-      </p>
-      <PartnerHome />
     </>
   )
 }

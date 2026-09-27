@@ -3,6 +3,7 @@ import type { AddressBalance, PartnerSummary, Partners } from '@payments/domain'
 import { createPartner, getPartners } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine } from '../app/AddressLine'
+import { formatUsdc } from '../app/usdc'
 
 /**
  * Two addresses per partner, from two different seeds, side by side — which is the whole
@@ -41,16 +42,13 @@ export function PartnersScreen() {
                 <Figures partner={partner} />
 
                 <AddressBlock
-                  heading="They pay you here"
-                  sub="deposit address, derived from the company seed"
+                  heading="Internal partner address (They pay you here)"
                   address={partner.deposit}
                   emptyNote="Nothing paid in yet."
-                  fundedNote="Compare it with what has arrived above: the two agree once every deposit here has been credited."
                 />
 
                 <AddressBlock
-                  heading="You pay them here"
-                  sub="their wallet, on the allowlist"
+                  heading="Partner external address (You pay them here)"
                   address={partner.payout}
                   secondary
                   emptyNote="Nothing paid out yet."
@@ -74,24 +72,20 @@ export function PartnersScreen() {
 }
 
 /**
- * The three figures that make this screen the per-partner view of the books. They come from the
+ * The two figures that make this screen the per-partner view of the books. They come from the
  * invoice tables, not from an account per partner: the ledger keeps one total each (Partner debt,
- * Partner receivables, Deposits) and these are that total cut by partner.
+ * Partner receivables) and these are that total cut by partner.
  */
 function Figures({ partner }: { readonly partner: PartnerSummary }) {
   return (
     <dl className="figures">
       <div className="figure">
         <dt>They owe you</dt>
-        <dd>{partner.owes} USDC</dd>
+        <dd>{formatUsdc(partner.owes)} USDC</dd>
       </div>
       <div className="figure">
         <dt>You owe them</dt>
-        <dd>{partner.owed} USDC</dd>
-      </div>
-      <div className="figure">
-        <dt>Arrived at their address</dt>
-        <dd>{partner.arrived} USDC</dd>
+        <dd>{formatUsdc(partner.owed)} USDC</dd>
       </div>
     </dl>
   )
@@ -99,15 +93,15 @@ function Figures({ partner }: { readonly partner: PartnerSummary }) {
 
 interface AddressBlockProps {
   readonly heading: string
-  readonly sub: string
   readonly address: AddressBalance
   /** The payout address: still shown, but it is not the one this screen is teaching. */
   readonly secondary?: boolean
   readonly emptyNote: string
-  readonly fundedNote: string
+  /** Said only once money is there; nothing when absent. */
+  readonly fundedNote?: string
 }
 
-function AddressBlock({ heading, sub, address, secondary = false, emptyNote, fundedNote }: AddressBlockProps) {
+function AddressBlock({ heading, address, secondary = false, emptyNote, fundedNote }: AddressBlockProps) {
   // Three states, not two: unknown is not zero. When the RPC is down the note has to say the
   // balance could not be read, or the screen quietly claims nobody has paid.
   const note = address.usdc === null ? 'Balance unknown: the chain could not be read.' : Number(address.usdc) === 0 ? emptyNote : fundedNote
@@ -115,15 +109,14 @@ function AddressBlock({ heading, sub, address, secondary = false, emptyNote, fun
   return (
     <div className={secondary ? 'address-block is-secondary' : 'address-block'}>
       <h3 className="address-heading">{heading}</h3>
-      <p className="address-sub">{sub}</p>
       <AddressLine address={address.address} explorerUrl={address.explorerUrl} />
       <dl className="figures">
         <div className="figure">
-          <dt>USDC</dt>
-          <dd>{address.usdc ?? '—'}</dd>
+          <dt>USDC balance</dt>
+          <dd>{address.usdc === null ? 'unknown' : formatUsdc(address.usdc)}</dd>
         </div>
       </dl>
-      <p className="card-note">{note}</p>
+      {note !== undefined && <p className="card-note">{note}</p>}
     </div>
   )
 }
@@ -172,10 +165,7 @@ function CreatePartner({ onCreated }: { readonly onCreated: (partners: Partners)
         </button>
       </form>
       {error === undefined ? (
-        <p className="card-note">
-          Creating one takes the next index, asks the signer for the deposit address at that index, derives the
-          payout address from the partner seed, and starts watching the deposit address — all at once, or not at all.
-        </p>
+        <p className="card-note">Creating a partner gives it two addresses: one where it pays you, and one where you pay it.</p>
       ) : (
         <p className="card-value is-bad">{error}</p>
       )}

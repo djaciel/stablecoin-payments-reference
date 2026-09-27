@@ -3,6 +3,7 @@ import { Link, useOutletContext } from 'react-router-dom'
 import { failedAfterReserving, type AuditStep, type BlackholeStep, type Experiments, type PaymentSummary, type PaymentView, type RaceResult } from '@payments/domain'
 import { createPayable, doubleClick, getPayables, getPayments, getPaymentTimeline, payPayable, resumePayment, runRace, setExperiments, type PaymentAnswer } from '../api/client'
 import { AddressLine } from '../app/AddressLine'
+import { formatUsdc } from '../app/usdc'
 import { REASONS } from './PayablesScreen'
 
 /**
@@ -261,14 +262,14 @@ function RaceEvidence({ result }: { readonly result: RaceResult }) {
         {result.attempts.map((attempt) => (
           <li key={attempt.reference}>
             <code>{attempt.code}</code> {attempt.reference} {attempt.status}{' '}
-            {attempt.reason !== undefined && <code>{attempt.reason}</code>} {attempt.amount}
+            {attempt.reason !== undefined && <code>{attempt.reason}</code>} {formatUsdc(attempt.amount)}
           </li>
         ))}
       </ol>
       <dl className="figures">
         <div className="figure">
           <dt>Available before</dt>
-          <dd>{result.availableBefore}</dd>
+          <dd>{formatUsdc(result.availableBefore)}</dd>
         </div>
         <div className="figure">
           <dt>Payments reserved</dt>
@@ -276,11 +277,11 @@ function RaceEvidence({ result }: { readonly result: RaceResult }) {
         </div>
         <div className="figure">
           <dt>Available after</dt>
-          <dd>{result.availableAfter}</dd>
+          <dd>{formatUsdc(result.availableAfter)}</dd>
         </div>
         <div className="figure">
           <dt>Reserved after</dt>
-          <dd>{result.reservedAfter}</dd>
+          <dd>{formatUsdc(result.reservedAfter)}</dd>
         </div>
         <div className="figure">
           <dt>Ran against</dt>
@@ -303,12 +304,12 @@ function raceVerdict(result: RaceResult): string {
   if (reserved === undefined || refused === undefined || result.attempts.length !== 2 || result.reserves !== 1 || negative) {
     return (
       `Not what this card claims: ${count(result.attempts.length, 'payment')} with ` +
-      `${count(result.reserves, 'reserve')} in the books, and Available at ${result.availableAfter}.`
+      `${count(result.reserves, 'reserve')} in the books, and Available at ${formatUsdc(result.availableAfter)}.`
     )
   }
   return (
-    `${reserved.reference} reserved its ${reserved.amount} and ${refused.reference} was refused for insufficient ` +
-    `funds. Available went from ${result.availableBefore} to ${result.availableAfter}, and never below zero.`
+    `${reserved.reference} reserved its ${formatUsdc(reserved.amount)} and ${refused.reference} was refused for insufficient ` +
+    `funds. Available went from ${formatUsdc(result.availableBefore)} to ${formatUsdc(result.availableAfter)}, and never below zero.`
   )
 }
 
@@ -337,7 +338,7 @@ function doubleClickVerdict(steps: readonly AuditStep[], answers: readonly Payme
   const references = new Set(answers.map((answer) => answer.payment.reference))
   const oneReference = answers.length === 2 && references.size === 1
   if (created === 1 && reserved === 1 && oneReference) {
-    return [`One payment, one reserve: both answers name ${[...references].join('')}, and ${RUN_AMOUNT} USDC left Available once.`]
+    return [`One payment, one reserve: both answers name ${[...references].join('')}, and ${formatUsdc(RUN_AMOUNT)} USDC left Available once.`]
   }
   return [
     `Not what this card claims: the answers named ${oneReference ? 'one payment' : `${String(references.size)} payments`}, ` +
@@ -375,7 +376,7 @@ function shortened(hash: string | undefined): string {
 function RunIt({ run }: { readonly run: Run }) {
   const { done, doing, failure, payment } = run.state
   // Once a run has started, the stages under the button say all this better than a hint could.
-  const hint = run.blocked ? 'The other run has to finish first.' : done.length > 0 ? undefined : `It writes its own ${RUN_AMOUNT} USDC invoice and pays it.`
+  const hint = run.blocked ? 'The other run has to finish first.' : done.length > 0 ? undefined : `It writes its own ${formatUsdc(RUN_AMOUNT)} USDC invoice and pays it.`
 
   return (
     <>
@@ -414,7 +415,7 @@ function Evidence({ payment, run }: { readonly payment: PaymentSummary; readonly
         </div>
         <div className="figure">
           <dt>Amount</dt>
-          <dd>{payment.amount} USDC</dd>
+          <dd>{formatUsdc(payment.amount)} USDC</dd>
         </div>
         <div className="figure">
           <dt>State</dt>
@@ -610,7 +611,7 @@ function useRun(card: string, { show, running, setRunning }: CardProps, plan: Ru
 
   const start = async (): Promise<void> => {
     setRunning(card)
-    setState({ done: [], doing: `Writing an invoice for ${RUN_AMOUNT} USDC` })
+    setState({ done: [], doing: `Writing an invoice for ${formatUsdc(RUN_AMOUNT)} USDC` })
     try {
       await nothingElseInFlight()
       const partner = (await getPayables()).partners[0]
@@ -622,7 +623,7 @@ function useRun(card: string, { show, running, setRunning }: CardProps, plan: Ru
       if (invoice === undefined) {
         throw new Error('the api did not answer with the invoice it had just written.')
       }
-      did(`Invoice for ${RUN_AMOUNT} USDC to ${partner.name}.`)
+      did(`Invoice for ${formatUsdc(RUN_AMOUNT)} USDC to ${partner.name}.`)
 
       if (plan.arm !== undefined) {
         doing('Arming the switch')
@@ -707,7 +708,7 @@ function payStage(payment: PaymentView): ReactNode {
   if (payment.status !== 'FAILED') {
     return (
       <>
-        Paid as {reference}: {RUN_AMOUNT} USDC moved from Available to Reserved.
+        Paid as {reference}: {formatUsdc(RUN_AMOUNT)} USDC moved from Available to Reserved.
       </>
     )
   }

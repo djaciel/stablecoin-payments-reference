@@ -3,6 +3,7 @@ import type { PartnerView, PartnerWalletFunding, Treasury } from '@payments/doma
 import { fundPartnerWallet, getTreasury } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { AddressLine } from '../app/AddressLine'
+import { formatUsdc } from '../app/usdc'
 
 /**
  * The shared wallet the partners pay from, and the button that funds it from the treasury: the
@@ -26,7 +27,7 @@ export function PartnerWalletCard({ wallet }: { readonly wallet: PartnerView['pa
       <dl className="figures">
         <div className="figure">
           <dt>USDC</dt>
-          <dd>{wallet.usdc ?? 'unknown'}</dd>
+          <dd>{wallet.usdc === null ? 'unknown' : formatUsdc(wallet.usdc)}</dd>
         </div>
         <div className="figure">
           <dt>ETH</dt>
@@ -53,7 +54,7 @@ export function PartnerWalletCard({ wallet }: { readonly wallet: PartnerView['pa
             : `Cannot read the treasury: ${treasury.error}`
           : canFund
             ? 'Fund it from the treasury with one click.'
-            : `The treasury has to hold ${funding.requires.usdc} USDC and ${funding.requires.eth} ETH on chain, and the USDC in the books, before it can send any.`}
+            : `The treasury has to hold ${formatUsdc(funding.requires.usdc)} USDC and ${funding.requires.eth} ETH on chain, and the USDC in the books, before it can send any.`}
       </p>
 
       {asking && funding !== undefined && (
@@ -130,7 +131,7 @@ function FundingModal({
       <section className="modal" role="dialog" aria-modal="true" aria-label="Fund partner wallet">
         <h2 className="card-title">Fund partner wallet</h2>
         <p className="panel-lead">
-          This sends <strong>{funding.usdc} USDC</strong> and <strong>{funding.eth} ETH</strong> from the treasury to
+          This sends <strong>{formatUsdc(funding.usdc)} USDC</strong> and <strong>{funding.eth} ETH</strong> from the treasury to
           the partner wallet: two transactions, signed by the signer and broadcast by the api. It is not a payment,
           so the USDC leaves the books as <code>demo:partner-funding</code> and the gas is not posted at all.
         </p>
@@ -164,7 +165,7 @@ function FundingResult({ result }: { readonly result: PartnerWalletFunding }) {
   return (
     <div className="result">
       <p className="card-note">
-        {result.usdc.amount} USDC, block {result.usdc.blockNumber}
+        {formatUsdc(result.usdc.amount)} USDC, block {result.usdc.blockNumber}
       </p>
       <p className="card-value is-address">{result.usdc.hash}</p>
       <p className="card-actions">
@@ -192,8 +193,8 @@ function FundingResult({ result }: { readonly result: PartnerWalletFunding }) {
 
       {result.balances !== null && (
         <p className="card-note">
-          At block {result.balances.blockNumber}: treasury {result.balances.treasury.usdc} USDC /{' '}
-          {result.balances.treasury.eth} ETH · partner wallet {result.balances.partnerWallet.usdc} USDC /{' '}
+          At block {result.balances.blockNumber}: treasury {formatUsdc(result.balances.treasury.usdc)} USDC /{' '}
+          {result.balances.treasury.eth} ETH · partner wallet {formatUsdc(result.balances.partnerWallet.usdc)} USDC /{' '}
           {result.balances.partnerWallet.eth} ETH.
         </p>
       )}

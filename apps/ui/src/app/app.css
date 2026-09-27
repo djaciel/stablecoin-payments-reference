@@ -64,9 +64,19 @@ body {
 }
 
 .cards {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+}
+
+/* A few figures side by side, one small card each: one row of numbers, not a grid of items. */
+.figure-cards {
+  display: flex;
+  gap: 1rem;
+}
+
+.figure-cards > .card {
+  flex: 1 1 0;
 }
 
 .card {
@@ -197,6 +207,23 @@ a {
   color: var(--bad);
 }
 
+/* An address or a hash with its copy button and explorer link to its right. The string wraps
+   inside its own column, so the links stay on the same row. */
+.address-line {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.address-line .card-value.is-address {
+  min-width: 0;
+}
+
+.address-line .card-actions {
+  flex-shrink: 0;
+  margin: 0;
+}
+
 /* One of the two addresses on a partner card. The rule separates them without a box. */
 .address-block + .address-block {
   margin-top: 1rem;
@@ -210,7 +237,7 @@ a {
   font-weight: 600;
 }
 
-/* What the address technically is, under the line that says which way the money goes. */
+/* A small label over an address, a hash or a balance. */
 .address-sub {
   margin: 0.1rem 0 0.4rem;
   color: var(--muted);

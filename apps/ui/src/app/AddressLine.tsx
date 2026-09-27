@@ -1,13 +1,13 @@
 import { useState } from 'react'
 
 /**
- * An address the way every screen shows one: the full string, a copy button and an explorer
- * link. Full and never shortened — a truncated address is one you cannot paste into a
- * faucet, and pasting it into a faucet is the first thing this demo asks of anyone.
+ * An address the way every screen shows one: the full string, with a copy button and an explorer
+ * link on the same row. Full and never shortened: a truncated address is one you cannot paste into
+ * a faucet, and pasting it into a faucet is the first thing this demo asks of anyone.
  */
 export function AddressLine({ address, explorerUrl }: { readonly address: string; readonly explorerUrl: string }) {
   return (
-    <>
+    <div className="address-line">
       <p className="card-value is-address">{address}</p>
       <p className="card-actions">
         <CopyButton text={address} />
@@ -15,7 +15,7 @@ export function AddressLine({ address, explorerUrl }: { readonly address: string
           explorer
         </a>
       </p>
-    </>
+    </div>
   )
 }
 

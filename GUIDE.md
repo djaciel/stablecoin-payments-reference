@@ -351,8 +351,8 @@ if it does not know them, so a retry or a crash (§9) can never pay twice.
   invoice's payment.
 - `packages/domain/src/api.ts` — `PaymentView.transaction`: the hash and its explorer link,
   present once signed.
-- `apps/ui/src/admin/PayablesScreen.tsx` — the invoice row shows the hash with its explorer
-  link, and where the payment stands: "Signed, not sent yet." or "Sent, waiting for the network."
+- `apps/ui/src/admin/PayablesScreen.tsx`: the invoice row shows the hash with its explorer
+  link, and the payment's status.
 
 See it (this sends real testnet USDC from the treasury): press Pay on a small invoice on
 `/admin/payables`; its workflow runs on to SETTLED ("Paid" below). While it waits for finality,
@@ -389,7 +389,7 @@ payment and the invoice move in one transaction, which posts once however often 
 - `tests/db/settlement.db.test.ts` — §7's figures on a real payment row, settled twice: Available
   9,000, Reserved 0, Partner debt 0, one `settle` in the ledger. Indexed in `tests/db/README.md`.
 - `docs/dev/restart-survival.md` — the same wait, with the worker stopped in the middle of it.
-- `apps/ui/src/admin/PayablesScreen.tsx` — a settled payment's row says it is paid, with its hash.
+- `apps/ui/src/admin/PayablesScreen.tsx`: a settled payment's row shows SETTLED, with its hash.
 
 See it (this sends real testnet USDC): press Pay on a small invoice on `/admin/payables`, then
 
@@ -498,7 +498,7 @@ See it (real testnet gas, no USDC moves): press **Run it** on "Revert the next p
 then "Sent, waiting for the network". Minutes later, when the revert's block is final, it ends with the
 evidence: FAILED `reverted`, the transaction on the explorer (out of gas, no Transfer), and the money
 back in Available with the invoice payable again. The next entry is what the api did in between; the
-switch under the card is the long way, for paying an invoice of your own in Payables.
+switch under the card is the long way, for paying an invoice of your own in Invoices to pay.
 
 ## When it fails: FAILED with proof, and the invoice payable again (§6)
 
@@ -519,7 +519,7 @@ company still owes the invoice.
   tells a failure after the reserve from a refusal at the door, for the api and the screen alike.
 - `apps/api/src/payments/payments.controller.ts` — a replay answers the code of the request's first
   outcome with the payment as it is now: a payment that reverted later replays 200 with FAILED `reverted`.
-- `apps/ui/src/admin/PayablesScreen.tsx` — a reverted payment's row says the money is back in Available;
+- `apps/ui/src/admin/PayablesScreen.tsx`: a reverted payment's row shows FAILED and why;
   the idempotency key ends with any answer, so Pay on the reopened invoice sends a new one.
 - `apps/ui/src/admin/TransfersScreen.tsx` — the story's Failed line (the block, and that it is final),
   the Released line (Reserved back to Available, with the proof), and the invoice OPEN again.
@@ -577,9 +577,9 @@ money moves, because nothing proves the transfer can no longer land.
 - `apps/ui/src/app/App.tsx` — the banner names whichever flag is armed.
 - `packages/ledger/src/audit.ts` — the payment's new `escalated` event.
 - `apps/ui/src/admin/TransfersScreen.tsx` — the story's Escalated line (which step gave up and why);
-  REVIEW in the list says the money stays reserved.
-- `apps/ui/src/admin/PayablesScreen.tsx` — the invoice row of a payment in REVIEW says why the money
-  is still held, signed or not.
+  the REVIEW queue says the money stays reserved.
+- `apps/ui/src/admin/PayablesScreen.tsx`: the invoice row of a payment in REVIEW shows REVIEW,
+  signed or not.
 - `tests/db/failure.db.test.ts` — §6's REVIEW next to its FAILED: escalated twice, Available 9,000,
   Reserved 1,000, the invoice PAYING, nothing posted but the reserve. Indexed in `tests/db/README.md`.
 
@@ -662,8 +662,8 @@ address: until then it is a row on a screen, not money in the books.
 - `apps/ui/src/admin/TransfersScreen.tsx` — the "Money that arrived" panel under the payments
   table, and the sentence about what a deposit address costs: sweeping it into the treasury is a
   transaction of its own, paid in the network's own currency.
-- `apps/ui/src/admin/PartnersScreen.tsx` — those three figures next to each partner's two
-  addresses, so what arrived and what the chain holds can be compared by eye.
+- `apps/ui/src/admin/PartnersScreen.tsx`: two of those figures (they owe you, you owe them) next
+  to each partner's two addresses, each with its USDC balance.
 - `apps/ui/src/api/client.ts` — `readTransfers`, which asks for payments and deposits together so
   the screen keeps one "reading…" and one "unavailable".
 - `packages/domain/src/api.ts` — `DepositSummary`; a receivable now carries the deposit that paid
@@ -674,8 +674,8 @@ address: until then it is a row on a screen, not money in the books.
 
 See it: have a partner pay an invoice on `/partner`, then watch `/admin/transfers`. Within a tick
 the deposit is DETECTED and the books have not moved; a few minutes later it is SETTLED, the
-invoice is PAID, and Deposits went up. `/admin/partners` shows what arrived next to what the chain
-holds at the same address.
+invoice is PAID, and Deposits went up. `/admin/partners` shows the USDC balance at that deposit
+address.
 
 ```
 docker compose logs -f worker                      # detected ... credited, matched by hash
@@ -803,8 +803,8 @@ presses. The demo's books do not move, and nothing is signed or sent.
   names the database it used.
 
 See it (it costs nothing and takes seconds): press **Run it** on "The race" at `/admin/break-it`.
-The card shows `201 PAY-XXXX RESERVED 1,000.000000` and `422 PAY-YYYY FAILED insufficient_funds
-1,000.000000`, one reserve, and Available 1,500 → 500. Then open `/admin` and see that the demo's
+The card shows `201 PAY-XXXX RESERVED 1,000.0000` and `422 PAY-YYYY FAILED insufficient_funds
+1,000.0000`, one reserve, and Available 1,500 → 500. Then open `/admin` and see that the demo's
 own Available is exactly what it was.
 
 ```
@@ -877,7 +877,7 @@ invoice can be written to an address somebody typed: same invoice, same debt, sa
 See it: open `/admin/pay-to-address`, paste the partner wallet's address from `/partner`, 0.02 and a
 note, and press **Create and pay**. The invoice is written (Partner debt goes up by the amount) and
 the payment is refused: `destination_not_allowlisted`, nothing reserved, and the invoice sits OPEN
-on Payables reading "Pay to an address". Add the address with a label and press **Pay again**: the
+on Invoices to pay reading "Pay to" and the short address. Add the address with a label and press **Pay again**: the
 same invoice, a new key, and this time the money is reserved and sent.
 
 ```
@@ -964,7 +964,7 @@ the repo that shows no transaction.
   refused with a hash on the payment, allowed without one. `tests/db/README.md` indexes both.
 
 See it: on `/admin/pay-to-address` schedule 0.02 for ten minutes ahead, then press **Cancel** on
-`/admin/transfers`. Reserved goes back to Available at once, the invoice is OPEN on Payables and
+`/admin/transfers`. Reserved goes back to Available at once, the invoice is OPEN on Invoices to pay and
 payable with a new key, and the payment's story ends with Failed and Released — no Signed line, no
 explorer link, no run in Temporal. Then try it on a payment that was signed:
 
@@ -1072,8 +1072,8 @@ curl -s localhost:3000/reconciliation/runs/<id> | jq '.identity'
   `/partner` is the partner's side.
 - `apps/ui/src/admin/StartScreen.tsx` — where the demo starts: the treasury address, the
   faucet links, and what the chain holds next to what the books say.
-- `apps/ui/src/admin/PartnersScreen.tsx` — the partners, each with its two addresses and the
-  three figures that go with them: they owe you, you owe them, and what has arrived.
+- `apps/ui/src/admin/PartnersScreen.tsx`: the partners, each with its two addresses and the
+  figures that go with them: they owe you, you owe them, and the USDC balance at each address.
 - `apps/ui/src/admin/PayablesScreen.tsx` — the invoices the company owes, the books they move,
   and Pay, with each invoice's payment on its row.
 - `apps/ui/src/admin/ReceivablesScreen.tsx` — the invoices partners owe, the two figures they

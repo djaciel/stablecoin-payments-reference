@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import type { ReconciliationItemView, ReconciliationRunSummary, ReconciliationRunView } from '@payments/domain'
 import { getReconciliationRun, getReconciliationRuns, runReconciliation } from '../api/client'
 import { usePolling } from '../api/usePolling'
+import { formatUsdc } from '../app/usdc'
 import { MOMENT } from './TransfersScreen'
 
 /**
@@ -93,13 +94,14 @@ function Identity({ view }: { readonly view: ReconciliationRunView }) {
     <>
       <dl className="figures is-identity">
         <Line label="Books">
-          Available {books.available} + Reserved {books.reserved} + Deposits {books.deposits} = <strong>{books.total}</strong>
+          Available {formatUsdc(books.available)} + Reserved {formatUsdc(books.reserved)} + Deposits {formatUsdc(books.deposits)} ={' '}
+          <strong>{formatUsdc(books.total)}</strong>
         </Line>
         <Line label={`Chain at block ${view.run.block ?? '—'}`}>
-          {chain.addresses.map((held) => `${held.label} ${held.amount}`).join(' + ')} = <strong>{chain.total}</strong>
+          {chain.addresses.map((held) => `${held.label} ${formatUsdc(held.amount)}`).join(' + ')} = <strong>{formatUsdc(chain.total)}</strong>
         </Line>
         <Line label="Explained by what was in flight">
-          {explained} → {settled ? 'nothing left over' : `${remainder} left over, which nothing explains`}
+          {formatUsdc(explained)} → {settled ? 'nothing left over' : `${formatUsdc(remainder)} left over, which nothing explains`}
         </Line>
       </dl>
       <p className="card-note">
@@ -184,7 +186,7 @@ function Movements({ items }: { readonly items: readonly ReconciliationItemView[
                   <span className="cell-note">{item.subject}</span>
                 </td>
                 <td>{FOUND[item.outcome]}</td>
-                <td className="is-number">{item.delta === undefined ? '—' : `${item.delta} USDC`}</td>
+                <td className="is-number">{item.delta === undefined ? '' : `${formatUsdc(item.delta)} USDC`}</td>
                 <td>{item.detail}</td>
                 <td>
                   {item.explorerUrl === undefined ? null : (

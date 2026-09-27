@@ -4,6 +4,7 @@ import type { AuditStep, DepositSummary, PaymentReview, PaymentSummary, PaymentT
 import { cancelPayment, getPaymentTimeline, readTransfers, resumePayment } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { CopyButton } from '../app/AddressLine'
+import { formatUsdc } from '../app/usdc'
 import { REASONS, TO_AN_ADDRESS } from './PayablesScreen'
 
 /**
@@ -24,7 +25,7 @@ function PaymentList() {
   const { payments } = data.payments
   const { deposits } = data.deposits
   if (payments.length === 0 && deposits.length === 0) {
-    return <p className="card-note">Nothing yet. Press Pay on an invoice in Payables, or have a partner pay one in Receivables.</p>
+    return <p className="card-note">Nothing yet. Press Pay on an invoice in Invoices to pay, or have a partner pay one in Invoices to collect.</p>
   }
   // Oldest first by creation time (the list reversed), not by nonce: each held nonce is on its row.
   const queue = payments.filter((payment) => payment.review !== undefined).reverse()
@@ -71,12 +72,9 @@ function DepositTable({ deposits }: { readonly deposits: readonly DepositSummary
               {deposits.map((money) => (
                 <tr key={money.id}>
                   <td>{money.partnerName}</td>
-                  <td className="is-number">{money.amount} USDC</td>
+                  <td className="is-number">{formatUsdc(money.amount)} USDC</td>
                   <td className="is-mono">{shortAddress(money.depositAddress)}</td>
-                  <td>
-                    {money.status}
-                    <span className="cell-note">{stateOf(money)}</span>
-                  </td>
+                  <td>{money.status}</td>
                   <td>{attributionOf(money)}</td>
                   <td className="is-mono">
                     <a href={money.transaction.explorerUrl} target="_blank" rel="noreferrer">
@@ -97,35 +95,23 @@ function DepositTable({ deposits }: { readonly deposits: readonly DepositSummary
   )
 }
 
-/** DETECTED says what has NOT happened yet, which is the part that is easy to read as done. */
-function stateOf(money: DepositSummary): string {
-  if (money.status === 'DETECTED') {
-    return `Seen in block ${money.blockNumber}. That block can still be replaced, so nothing has been credited.`
-  }
-  return `Block ${money.blockNumber} can no longer be replaced, and the official contract's transfer says the exact amount at this exact address, so the books have it.`
-}
-
 /** Which of the three rules found the invoice, in words rather than in the code stored on the row. */
 function attributionOf(money: DepositSummary): ReactNode {
   if (money.matchedBy === null) {
-    return <span className="cell-note">{money.partnerName}'s, by the address. Which invoice it pays is decided when it is credited.</span>
+    return <>{money.partnerName}'s, by the address</>
   }
   if (money.receivable === null) {
     return (
       <>
         {money.partnerName}'s, by the address
-        <span className="cell-note">No invoice matched: credited anyway, and it shows as owing them until one is written.</span>
+        <span className="cell-note">No invoice matched.</span>
       </>
     )
   }
   return (
     <>
       {money.receivable.description}
-      <span className="cell-note">
-        {money.matchedBy === 'hash'
-          ? 'Matched by the transaction the partner recorded before sending it.'
-          : 'Matched by the exact amount, on their oldest open invoice.'}
-      </span>
+      <span className="cell-note">{money.matchedBy === 'hash' ? 'Matched by its transaction hash.' : 'Matched by the exact amount.'}</span>
     </>
   )
 }
@@ -159,7 +145,7 @@ function ReviewQueue({ payments }: { readonly payments: readonly PaymentSummary[
                   <td>
                     <Link to={`/admin/transfers/${reference}`}>{reference}</Link>
                   </td>
-                  <td className="is-number">{amount} USDC</td>
+                  <td className="is-number">{formatUsdc(amount)} USDC</td>
                   <td>{partnerName ?? TO_AN_ADDRESS}</td>
                   <td>{whereItWas(review)}</td>
                   <td>
@@ -267,7 +253,7 @@ function WaitingForTheirTime({ payments }: { readonly payments: readonly Schedul
                 <td>
                   <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link>
                 </td>
-                <td className="is-number">{payment.amount} USDC</td>
+                <td className="is-number">{formatUsdc(payment.amount)} USDC</td>
                 <td>{payment.partnerName ?? TO_AN_ADDRESS}</td>
                 <td>
                   {MOMENT.format(new Date(payment.executeAt))}
@@ -327,7 +313,7 @@ function CancelDialog({ payment, onClose }: { readonly payment: Scheduled; reado
       <section className="modal" role="dialog" aria-modal="true" aria-label="Cancel payment">
         <h2 className="card-title">Cancel {payment.reference}</h2>
         <p className="panel-lead">
-          Nothing has been signed yet, so there is nothing to take back: <strong>{payment.amount} USDC</strong> goes
+          Nothing has been signed yet, so there is nothing to take back: <strong>{formatUsdc(payment.amount)} USDC</strong> goes
           from Reserved back to Available, no transaction is sent and no fee is paid. The invoice opens again and can
           be paid with a new key.
         </p>
@@ -376,9 +362,8 @@ function PaymentTable({ payments }: { readonly payments: readonly PaymentSummary
                 <td>
                   {payment.status}
                   {payment.reason !== undefined && <span className="cell-note">{REASONS[payment.reason]}</span>}
-                  {payment.status === 'REVIEW' && <span className="cell-note">No proof either way, so the money stays reserved.</span>}
                 </td>
-                <td className="is-number">{payment.amount} USDC</td>
+                <td className="is-number">{formatUsdc(payment.amount)} USDC</td>
                 <td>{payment.partnerName ?? TO_AN_ADDRESS}</td>
                 <td className="is-mono">
                   {payment.transaction !== undefined && (
@@ -437,7 +422,7 @@ function Story({ timeline }: { readonly timeline: PaymentTimeline }) {
         </div>
         <div className="figure">
           <dt>Amount</dt>
-          <dd>{payment.amount} USDC</dd>
+          <dd>{formatUsdc(payment.amount)} USDC</dd>
         </div>
       </dl>
       {payment.review !== undefined && (
@@ -547,7 +532,7 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
         })
         break
       case 'reserved':
-        lines.push({ name: 'Reserved', rows: [step], text: `${payment.amount} USDC moved from Available to Reserved.` })
+        lines.push({ name: 'Reserved', rows: [step], text: `${formatUsdc(payment.amount)} USDC moved from Available to Reserved.` })
         break
       case 'signed':
         lines.push({
@@ -577,7 +562,7 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
             rows: [step],
             text: (
               <>
-                Reserved went down by {payment.amount} USDC and this invoice's debt to {payment.partnerName ?? 'that address'} was
+                Reserved went down by {formatUsdc(payment.amount)} USDC and this invoice's debt to {payment.partnerName ?? 'that address'} was
                 cleared (Dr Partner debt / Cr Reserved), ledger transaction <code>{context.ledgerTransactionId}</code>.
               </>
             ),
@@ -594,7 +579,7 @@ function storyOf({ payment, steps }: PaymentTimeline): Line[] {
           rows: [step],
           text: (
             <>
-              {payment.amount} USDC went from Reserved back to Available (Dr Available / Cr Reserved),{' '}
+              {formatUsdc(payment.amount)} USDC went from Reserved back to Available (Dr Available / Cr Reserved),{' '}
               {proof === undefined ? (
                 'with no chain proof because nothing was ever signed: no node can include what does not exist.'
               ) : (

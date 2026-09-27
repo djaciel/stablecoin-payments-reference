@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type { ReceivableFigures, Receivables } from '@payments/domain'
 import { createReceivable, getReceivables } from '../api/client'
 import { usePolling } from '../api/usePolling'
+import { formatUsdc } from '../app/usdc'
 
 /** Small on purpose: the partner pays these with real testnet USDC from the shared wallet. */
 const DEFAULT_AMOUNT = '0.05'
@@ -45,15 +46,9 @@ function Books({ ledger }: { readonly ledger: ReceivableFigures }) {
     <section className="panel">
       <h2 className="card-title">Books</h2>
       <dl className="figures">
-        <Figure label="Partner receivables">{ledger.receivable} USDC</Figure>
-        <Figure label="Deposits">{ledger.deposits} USDC</Figure>
+        <Figure label="Partner receivables">{formatUsdc(ledger.receivable)} USDC</Figure>
+        <Figure label="Deposits">{formatUsdc(ledger.deposits)} USDC</Figure>
       </dl>
-      <p className="card-note">
-        An invoice here adds to Partner receivables (Dr <code>partner:receivable</code> / Cr{' '}
-        <code>revenue:services</code>): money a partner owes you, written down the moment you invoice it. It is not a
-        payment, so no money moves. When the money arrives at that partner's deposit address, Deposits goes up and
-        Partner receivables goes down; Available does not move, because the money stays on that address.
-      </p>
     </section>
   )
 }
@@ -82,7 +77,7 @@ function ReceivableTable({ receivables }: { readonly receivables: Receivables['r
               <tr key={invoice.id}>
                 <td>{invoice.partnerName}</td>
                 <td>{invoice.description}</td>
-                <td className="is-number">{invoice.amount} USDC</td>
+                <td className="is-number">{formatUsdc(invoice.amount)} USDC</td>
                 <td>{invoice.status}</td>
                 <td>
                   {/* The hash the partner stored before broadcasting: the company reads it here
@@ -186,11 +181,7 @@ function CreateReceivable({
           {busy ? 'creating…' : 'Create'}
         </button>
       </form>
-      {error === undefined ? (
-        <p className="card-note">The partner sees it on its own screen, next to the deposit address it pays at.</p>
-      ) : (
-        <p className="card-value is-bad">{error}</p>
-      )}
+      {error !== undefined && <p className="card-value is-bad">{error}</p>}
     </section>
   )
 }

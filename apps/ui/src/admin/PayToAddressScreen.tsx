@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import type { Allowlist, PayableSummary, PaymentView } from '@payments/domain'
 import { addToAllowlist, createPayable, getAllowlist, payPayable } from '../api/client'
 import { usePolling } from '../api/usePolling'
+import { formatUsdc } from '../app/usdc'
 import { REASONS, TO_AN_ADDRESS } from './PayablesScreen'
 import { MOMENT } from './TransfersScreen'
 
@@ -222,7 +223,7 @@ function Attempt({
       {/* The invoice's own status is not repeated here: it is read once, when it is written, and
           where it stands afterwards is what the payment below says. */}
       <p className="card-value">
-        {invoice.amount} USDC for “{invoice.description}”
+        {formatUsdc(invoice.amount)} USDC for “{invoice.description}”
       </p>
       <p className="card-value is-address">{invoice.destination.address}</p>
 
@@ -249,7 +250,7 @@ function Attempt({
       {payment !== undefined && payment.status !== 'FAILED' && (
         <p className="card-value">
           Payment <Link to={`/admin/transfers/${payment.reference}`}>{payment.reference}</Link> is {payment.status}:{' '}
-          {payment.amount} USDC moved from Available to Reserved
+          {formatUsdc(payment.amount)} USDC moved from Available to Reserved
           {payment.executeAt === undefined
             ? ', and only then is it signed and sent.'
             : ` now, and it runs at ${MOMENT.format(new Date(payment.executeAt))}. Nothing is signed until then.`}
@@ -376,7 +377,7 @@ function justCreated(payables: readonly PayableSummary[], typed: Typed): Payable
     newest.destination.address.toLowerCase() === typed.destination.trim().toLowerCase() &&
     sameAmount(newest.amount, typed.amount)
   if (!isTheOne) {
-    throw new Error('the invoice was written, but it is not the newest one on Payables. Open that screen and pay it there.')
+    throw new Error('the invoice was written, but it is not the newest one on Invoices to pay. Open that screen and pay it there.')
   }
   return newest
 }
