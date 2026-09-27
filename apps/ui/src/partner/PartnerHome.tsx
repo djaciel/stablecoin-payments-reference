@@ -73,11 +73,10 @@ export function PartnerHome() {
         <p className="card-value is-bad">unavailable — {polled.error}. What follows is the api's last answer.</p>
       )}
 
-      <div className="cards">
+      <div className="figure-cards">
         <PartnerWalletCard wallet={view.partnerWallet} />
+        <PartnerSelector view={view} onSelect={select} />
       </div>
-
-      <PartnerSelector view={view} onSelect={select} />
       {view.chainError !== undefined && <p className="card-value is-bad">{view.chainError}</p>}
 
       {view.partner === null ? (
@@ -292,7 +291,7 @@ function PaymentReceipt({ receipt }: { readonly receipt: PartnerPaymentReceipt }
 
 function PartnerSelector({ view, onSelect }: { readonly view: PartnerView; readonly onSelect: (id: string) => void }) {
   return (
-    <section className="panel">
+    <section className="card">
       <h2 className="card-title">You are</h2>
       <form className="form-row">
         <select

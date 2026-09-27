@@ -90,6 +90,10 @@ body {
   min-width: 16rem;
 }
 
+.figure-cards + .cards {
+  margin-top: 1rem;
+}
+
 /* Inside a full-width card: what it is on the left, its addresses on the right. Stacks when
    the screen is narrow. */
 .card-columns {
