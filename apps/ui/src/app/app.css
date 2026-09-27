@@ -16,6 +16,13 @@
   box-sizing: border-box;
 }
 
+/* Header, banner and content share one centered column, so a wide monitor adds margin, not
+   longer lines. Change the width here. */
+:root {
+  --page-width: 1100px;
+  --page-gutter: max(1.5rem, calc((100% - var(--page-width)) / 2));
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -27,7 +34,7 @@ body {
   display: flex;
   align-items: baseline;
   gap: 1.5rem;
-  padding: 0.9rem 1.5rem;
+  padding: 0.9rem var(--page-gutter);
   border-bottom: 1px solid var(--line);
 }
 
@@ -52,7 +59,7 @@ body {
 
 .app-banner {
   margin: 0;
-  padding: 0.5rem 1.5rem;
+  padding: 0.5rem var(--page-gutter);
   background: #2a2417;
   border-bottom: 1px solid var(--line);
   color: #e8cf8f;
@@ -60,7 +67,7 @@ body {
 }
 
 .app-main {
-  padding: 1.5rem;
+  padding: 1.5rem var(--page-gutter);
 }
 
 .cards {
