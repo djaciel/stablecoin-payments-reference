@@ -21,13 +21,13 @@ export function ReceivablesScreen() {
   }, [polled.data])
 
   if (receivables === undefined) {
-    return <p className="card-note">{polled.error === undefined ? 'reading…' : `unavailable — ${polled.error}`}</p>
+    return <p className="card-note">{polled.error === undefined ? 'reading…' : `unavailable: ${polled.error}`}</p>
   }
 
   return (
     <>
       {polled.error !== undefined && (
-        <p className="card-value is-bad">unavailable — {polled.error}. What follows is the api's last answer.</p>
+        <p className="card-value is-bad">unavailable: {polled.error}. What follows is the api's last answer.</p>
       )}
 
       <Books ledger={receivables.ledger} />
@@ -80,7 +80,7 @@ function ReceivableTable({ receivables }: { readonly receivables: Receivables['r
                       before its own watcher has seen a thing. Shortened because it shares a row
                       with four other columns; /partner prints it in full, to paste. */}
                   {invoice.transaction === null ? (
-                    '—'
+                    ''
                   ) : (
                     <a href={invoice.transaction.explorerUrl} target="_blank" rel="noreferrer">
                       {shortHash(invoice.transaction.hash)}

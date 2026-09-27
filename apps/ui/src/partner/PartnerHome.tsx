@@ -56,7 +56,7 @@ export function PartnerHome() {
   const view = kept !== undefined && (partnerId === null || kept.partner?.id === partnerId) ? kept : undefined
 
   if (view === undefined) {
-    return <p className="card-note">{polled.error === undefined ? 'reading…' : `unavailable — ${polled.error}`}</p>
+    return <p className="card-note">{polled.error === undefined ? 'reading…' : `unavailable: ${polled.error}`}</p>
   }
 
   const select = (id: string): void => {
@@ -70,7 +70,7 @@ export function PartnerHome() {
   return (
     <>
       {polled.error !== undefined && (
-        <p className="card-value is-bad">unavailable — {polled.error}. What follows is the api's last answer.</p>
+        <p className="card-value is-bad">unavailable: {polled.error}. What follows is the api's last answer.</p>
       )}
 
       <div className="figure-cards">

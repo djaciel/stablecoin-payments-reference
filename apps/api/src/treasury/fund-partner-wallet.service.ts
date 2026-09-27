@@ -216,7 +216,7 @@ export class FundPartnerWalletService {
         `which needs it to hold at least ${formatMinor(REQUIRED_USDC)} USDC and ${formatEther(REQUIRED_ETH)} ETH (the extra ether runs the two transactions).`,
         `It holds ${formatMinor(held.usdcBalance)} USDC and ${formatEther(held.ethBalance)} ETH on chain, and the books show ${formatMinor(held.available)} USDC available.`,
         shortOfBooks && !shortOfUsdc
-          ? 'The money is on chain but not in the books yet — the watcher posts it within a few seconds of the block becoming final.'
+          ? 'The money is on chain but not in the books yet: the watcher posts it a few seconds after the block becomes final.'
           : `Fund it from a faucet first: ${FAUCET_DOC}.`,
         'Nothing was signed and nothing was posted.',
       ].join(' '),

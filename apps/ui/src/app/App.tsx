@@ -117,7 +117,7 @@ function AdminScreens() {
       </nav>
       {polled.error !== undefined && (
         <p className="card-value is-bad flags-unavailable">
-          The Break it switches are unavailable — {polled.error}.
+          The Break it switches are unavailable: {polled.error}.
           {experiments === undefined ? '' : " The banner and Break it show the api's last answer."}
         </p>
       )}

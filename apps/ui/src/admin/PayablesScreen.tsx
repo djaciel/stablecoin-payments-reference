@@ -42,13 +42,13 @@ export function PayablesScreen() {
   const refresh = (): Promise<void> => getPayables().then(setPayables, () => undefined)
 
   if (payables === undefined) {
-    return <p className="card-note">{polled.error === undefined ? 'reading…' : `unavailable — ${polled.error}`}</p>
+    return <p className="card-note">{polled.error === undefined ? 'reading…' : `unavailable: ${polled.error}`}</p>
   }
 
   return (
     <>
       {polled.error !== undefined && (
-        <p className="card-value is-bad">unavailable — {polled.error}. What follows is the api's last answer.</p>
+        <p className="card-value is-bad">unavailable: {polled.error}. What follows is the api's last answer.</p>
       )}
 
       <Books ledger={payables.ledger} />

@@ -20,7 +20,7 @@ function PaymentList() {
   const { data, error } = usePolling(readTransfers)
 
   if (data === undefined) {
-    return <p className="card-note">{error === undefined ? 'reading…' : `unavailable — ${error}`}</p>
+    return <p className="card-note">{error === undefined ? 'reading…' : `unavailable: ${error}`}</p>
   }
   const { payments } = data.payments
   const { deposits } = data.deposits
@@ -390,7 +390,7 @@ function PaymentStory({ reference }: { readonly reference: string }) {
         <Link to="/admin/transfers">All payments</Link>
       </p>
       {data === undefined ? (
-        <p className="card-note">{error === undefined ? 'reading…' : `unavailable — ${error}`}</p>
+        <p className="card-note">{error === undefined ? 'reading…' : `unavailable: ${error}`}</p>
       ) : (
         <Story timeline={data} />
       )}

@@ -99,7 +99,7 @@ export function PayToAddressScreen() {
   return (
     <>
       {polled.error !== undefined && (
-        <p className="card-value is-bad">unavailable — {polled.error}. What follows is the api's last answer.</p>
+        <p className="card-value is-bad">unavailable: {polled.error}. What follows is the api's last answer.</p>
       )}
 
       <section className="panel">

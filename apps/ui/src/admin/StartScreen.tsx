@@ -57,14 +57,14 @@ function FaucetPanel() {
         <li>
           <a href={USDC_FAUCET_URL} target="_blank" rel="noreferrer">
             Circle faucet
-          </a>{' '}
-          — testnet USDC. Pick Base Sepolia and paste the treasury address.
+          </a>
+          : testnet USDC. Pick Base Sepolia and paste the treasury address.
         </li>
         <li>
           <a href={GAS_FAUCET_URL} target="_blank" rel="noreferrer">
             Coinbase Developer Platform faucet
-          </a>{' '}
-          — Base Sepolia ETH for gas.
+          </a>
+          : Base Sepolia ETH for gas.
         </li>
       </ul>
       <p className="card-note">
@@ -86,7 +86,7 @@ function FaucetNote() {
       <a href={GAS_FAUCET_URL} target="_blank" rel="noreferrer">
         CDP faucet
       </a>{' '}
-      (gas) — see <code>{FAUCET_DOC}</code>
+      (gas). More in <code>{FAUCET_DOC}</code>
     </p>
   )
 }
@@ -167,6 +167,6 @@ function placeholder(error: string | undefined) {
   return error === undefined ? (
     <p className="card-value">reading…</p>
   ) : (
-    <p className="card-value is-bad">unavailable — {error}</p>
+    <p className="card-value is-bad">unavailable: {error}</p>
   )
 }

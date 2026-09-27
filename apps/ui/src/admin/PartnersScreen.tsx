@@ -28,7 +28,7 @@ export function PartnersScreen() {
       <CreatePartner onCreated={setPartners} />
 
       {partners === undefined ? (
-        <p className="card-note">{polled.error === undefined ? 'reading…' : `unavailable — ${polled.error}`}</p>
+        <p className="card-note">{polled.error === undefined ? 'reading…' : `unavailable: ${polled.error}`}</p>
       ) : (
         <>
           {partners.chainError !== undefined && <p className="card-value is-bad">{partners.chainError}</p>}
