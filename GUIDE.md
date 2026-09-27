@@ -1038,8 +1038,8 @@ at that block is subtracted rather than argued about, and what is left over must
 - `apps/api/src/reconciliation/read-reconciliation.ts` — where those figures come from: the global
   item's own evidence, so the screen shows what that block was compared against and never a fresh
   read of today's books next to an old block.
-- `apps/ui/src/admin/ReconciliationScreen.tsx` — the screen: the three lines, every movement with
-  its sentence and its onchain evidence, the runs before this one, and **Run now**.
+- `apps/ui/src/admin/ReconciliationScreen.tsx`: the screen: three cards (Books, Chain, In flight),
+  the movements that need a look (all of them behind **Show all**), the runs before, and **Run now**.
 - `apps/ui/src/app/App.tsx` — the **Reconciliation** tab, after Transfers.
 - `apps/ui/src/api/client.ts` — `getReconciliationRuns`, `getReconciliationRun`,
   `runReconciliation` (which answers 202: the screen's next poll is what shows the run).
@@ -1088,9 +1088,9 @@ curl -s localhost:3000/reconciliation/runs/<id> | jq '.identity'
 - `apps/ui/src/admin/TransfersScreen.tsx` — every payment, newest first, the REVIEW queue with
   Resume, the payments waiting for their time with Cancel next to each one, each payment's story
   step by step, and below them the money that arrived.
-- `apps/ui/src/admin/ReconciliationScreen.tsx` — the books against the chain at one fixed block,
-  in three lines a person can read out loud, then every payment and every deposit with the sentence
-  that explains it, then the runs before this one. **Run now** asks for another.
+- `apps/ui/src/admin/ReconciliationScreen.tsx`: the books against the chain at one fixed block, in
+  three cards, then the payments and deposits that need a look, then the runs before this one.
+  **Run now** asks for another.
 - `apps/ui/src/admin/BreakItScreen.tsx` — the failures you can cause on purpose, five cards with
   one Run it each, in the article's order: the double click, the race, the crash after signing and
   the node that does not answer (§9's four), then the revert (§6). The three that inject a fault

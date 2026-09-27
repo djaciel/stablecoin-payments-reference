@@ -1,6 +1,6 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import type { ReconciliationItemView, ReconciliationRunSummary, ReconciliationRunView } from '@payments/domain'
+import type { ReconciliationIdentity, ReconciliationItemView, ReconciliationRunSummary, ReconciliationRunView } from '@payments/domain'
 import { getReconciliationRun, getReconciliationRuns, runReconciliation } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { formatUsdc } from '../app/usdc'
@@ -22,6 +22,17 @@ const OUTCOME: Record<ReconciliationRunSummary['outcome'], string> = {
 /** Unexplained first, then what the chain could not answer for, then the differences, then the rest. */
 const ORDER: Record<ReconciliationItemView['outcome'], number> = { mismatch: 0, unchecked: 1, explained: 2, ok: 3 }
 
+/** The four outcomes, said plainly: the stored word is for the database, not for a reader. */
+const FOUND: Record<ReconciliationItemView['outcome'], string> = {
+  ok: 'agrees',
+  explained: 'explained',
+  mismatch: 'unexplained',
+  unchecked: 'not checked',
+}
+
+/** The run's time on the meta line: to the minute, because the block is the precise part. */
+const RAN = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
 export function ReconciliationScreen() {
   // The run on show: the latest one, until somebody picks another out of the history.
   const [chosen, setChosen] = useState<string | undefined>(undefined)
@@ -33,7 +44,7 @@ export function ReconciliationScreen() {
   const { data, error } = usePolling(read)
 
   if (data === undefined) {
-    return <p className="card-note">{error === undefined ? 'reading…' : `unavailable — ${error}`}</p>
+    return <p className="card-note">{error === undefined ? 'reading…' : `unavailable: ${error}`}</p>
   }
 
   return (
@@ -45,79 +56,105 @@ export function ReconciliationScreen() {
   )
 }
 
-/** The run at the top: what it found, the identity in three lines, and the button that asks for another. */
+/** The run at the top: its outcome, one line saying which block and when, and the three figures. */
 function LatestRun({ view, latestId, onLatest }: { readonly view?: ReconciliationRunView; readonly latestId?: string; readonly onLatest: () => void }) {
-  return (
-    <section className="panel">
-      <h2 className="card-title">{view === undefined ? 'No run yet' : OUTCOME[view.run.outcome]}</h2>
-      <p className="panel-lead">
-        What is compared is the stablecoin the company holds: Available and Reserved in the books, plus what has arrived
-        at the partners' deposit addresses, against the same money on chain. Invoices nobody has paid yet are not on the
-        chain at all, and gas is never posted to the books, so neither can show up here as a difference.
-      </p>
-      <p className="card-note">
-        The block is fixed, never the latest one: at a moving target the payments in flight look like differences that
-        fix themselves in seconds, and in two weeks nobody reads the alert.
-      </p>
-
-      {view === undefined ? (
-        <p className="card-note">Press Run now, or wait: the check runs by itself every ten minutes.</p>
-      ) : (
-        <>
-          <Identity view={view} />
-          <p className="card-note">
-            Ran {MOMENT.format(new Date(view.run.startedAt))}, {view.run.checked} checks
-            {view.run.mismatched === 0 ? '' : `, ${view.run.mismatched} unexplained`}.
-          </p>
-        </>
-      )}
-
-      <p className="card-actions">
-        <RunNowButton latestId={latestId} onStarted={onLatest} />
-      </p>
-    </section>
-  )
-}
-
-/** The three lines this whole phase exists to print. Every figure comes out of the run's own record. */
-function Identity({ view }: { readonly view: ReconciliationRunView }) {
-  const global = view.items.find((item) => item.subject === 'global')
-  if (view.identity === undefined) {
-    // A run older than this check has no identity to show, and it was not wrong when it ran: the
-    // figures are missing, which is a plain fact rather than something in red.
-    return <p className="card-note">{global?.detail ?? 'This run was recorded before the books were compared with the chain, so it has no figures.'}</p>
-  }
-  const { books, chain, explained, remainder } = view.identity
-  const settled = global?.outcome === 'ok'
-
+  const outcome = view?.run.outcome
   return (
     <>
-      <dl className="figures is-identity">
-        <Line label="Books">
-          Available {formatUsdc(books.available)} + Reserved {formatUsdc(books.reserved)} + Deposits {formatUsdc(books.deposits)} ={' '}
-          <strong>{formatUsdc(books.total)}</strong>
-        </Line>
-        <Line label={`Chain at block ${view.run.block ?? '—'}`}>
-          {chain.addresses.map((held) => `${held.label} ${formatUsdc(held.amount)}`).join(' + ')} = <strong>{formatUsdc(chain.total)}</strong>
-        </Line>
-        <Line label="Explained by what was in flight">
-          {formatUsdc(explained)} → {settled ? 'nothing left over' : `${formatUsdc(remainder)} left over, which nothing explains`}
-        </Line>
-      </dl>
-      <p className="card-note">
-        {chain.addresses.map((held) => `${held.label}: ${held.address}`).join(' · ')}
-      </p>
+      <section className="panel">
+        <div className="panel-head">
+          <h2 className={`recon-title${outcome === undefined || outcome === 'clean' ? '' : ' is-warning'}`}>
+            {outcome !== undefined && <span className="recon-mark">{outcome === 'clean' ? '✓' : '!'}</span>}
+            {outcome === undefined ? 'No run yet' : OUTCOME[outcome]}
+          </h2>
+          <div className="panel-head-actions">
+            <RunNowButton latestId={latestId} onStarted={onLatest} />
+          </div>
+        </div>
+        <p className="card-note">
+          {view === undefined
+            ? 'Press Run now, or wait: it runs every ten minutes.'
+            : `${view.run.block === null ? 'No block' : `Block ${view.run.block}`} · ${RAN.format(new Date(view.run.startedAt))} · ${String(view.run.checked)} checks`}
+        </p>
+      </section>
+      {view !== undefined && <Figures view={view} />}
     </>
   )
 }
 
-function Line({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+/** Books, chain and what was in flight, one card each. Every figure comes out of the run's own record. */
+function Figures({ view }: { readonly view: ReconciliationRunView }) {
+  if (view.identity === undefined) {
+    const global = view.items.find((item) => item.subject === 'global')
+    // A run older than this check has no figures, and it was not wrong when it ran: a plain fact,
+    // not something in red. A chain that did not answer keeps its full sentence in the tooltip.
+    return (
+      <p className="card-note" title={global?.detail}>
+        {view.run.outcome === 'incomplete'
+          ? 'The chain did not answer at this block, so there are no figures.'
+          : 'This run was recorded before the books were compared with the chain, so it has no figures.'}
+      </p>
+    )
+  }
+  const { books, chain, explained, remainder } = view.identity
+
   return (
-    <div className="figure">
-      <dt>{label}</dt>
-      <dd>{children}</dd>
+    <div className="figure-cards">
+      <FigureCard label="Books" total={books.total}>
+        <Line label="Available" amount={books.available} />
+        <Line label="Reserved" amount={books.reserved} />
+        <Line label="Deposits" amount={books.deposits} />
+      </FigureCard>
+      <FigureCard label="Chain" total={chain.total}>
+        {chain.addresses
+          .filter((held) => held.label === TREASURY)
+          .map((held) => (
+            <Line key={held.address} label="Treasury" amount={held.amount} />
+          ))}
+        <Line label="Partner addresses" amount={partnerTotal(chain)} />
+      </FigureCard>
+      <FigureCard label="In flight" total={explained}>
+        {/[1-9]/.test(remainder) && <Line label="Unexplained" amount={remainder} bad />}
+      </FigureCard>
     </div>
   )
+}
+
+/** The label the worker gives the treasury; every other address it watches is a partner's deposit address. */
+const TREASURY = 'treasury'
+
+function FigureCard({ label, total, children }: { readonly label: string; readonly total: string; readonly children: ReactNode }) {
+  return (
+    <section className="card">
+      <h2 className="card-title">{label}</h2>
+      <p className="card-value">{formatUsdc(total)} USDC</p>
+      <dl className="figures">{children}</dl>
+    </section>
+  )
+}
+
+function Line({ label, amount, bad = false }: { readonly label: string; readonly amount: string; readonly bad?: boolean }) {
+  return (
+    <div className={`figure${bad ? ' is-bad' : ''}`}>
+      <dt>{label}</dt>
+      <dd>{formatUsdc(amount)}</dd>
+    </div>
+  )
+}
+
+/**
+ * Every partner deposit address added up, in whole USDC with six decimals like the api sends.
+ * Summed in micro units as a bigint, so no amount goes through a float.
+ */
+function partnerTotal(chain: ReconciliationIdentity['chain']): string {
+  const micro = chain.addresses
+    .filter((held) => held.label !== TREASURY)
+    .reduce((total, held) => {
+      const [whole = '0', fraction = ''] = held.amount.replaceAll(',', '').split('.')
+      return total + BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, '0').slice(0, 6))
+    }, 0n)
+  const fraction = (micro % 1_000_000n).toString().padStart(6, '0')
+  return `${(micro / 1_000_000n).toString()}.${fraction}`
 }
 
 /**
@@ -156,60 +193,123 @@ function RunNowButton({ latestId, onStarted }: { readonly latestId?: string; rea
   )
 }
 
-/** Every movement the run checked, unexplained ones first. One sentence each, with its evidence. */
+/** Every movement the run checked, unexplained ones first. Only what needs a look, unless asked for all. */
 function Movements({ items }: { readonly items: readonly ReconciliationItemView[] }) {
+  const [showAll, setShowAll] = useState(false)
   const sorted = [...items].sort((one, other) => ORDER[one.outcome] - ORDER[other.outcome])
+  const needLook = sorted.filter((item) => item.outcome !== 'ok')
+  const shown = showAll ? sorted : needLook
 
   return (
     <section className="panel">
-      <h2 className="card-title">Every movement, and what explains it</h2>
-      <p className="panel-lead">
-        One line per payment and per deposit, plus the identity above. A difference carries a number: what the books
-        hold and the chain has already moved, or the other way round.
-      </p>
-      <div className="table-scroll">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>What</th>
-              <th>Found</th>
-              <th className="is-number">Difference</th>
-              <th>What it is</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((item) => (
-              <tr key={`${item.subject}-${item.subjectId}`}>
-                <td>
-                  {item.subject === 'payment' ? <Link to={`/admin/transfers/${item.subjectId}`}>{item.subjectId}</Link> : item.subjectId}
-                  <span className="cell-note">{item.subject}</span>
-                </td>
-                <td>{FOUND[item.outcome]}</td>
-                <td className="is-number">{item.delta === undefined ? '' : `${formatUsdc(item.delta)} USDC`}</td>
-                <td>{item.detail}</td>
-                <td>
-                  {item.explorerUrl === undefined ? null : (
-                    <a href={item.explorerUrl} target="_blank" rel="noreferrer">
-                      onchain
-                    </a>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="panel-head">
+        <h2 className="card-title">Every payment and deposit</h2>
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => {
+            setShowAll(!showAll)
+          }}
+        >
+          {showAll ? 'Show only what needs a look' : `Show all ${String(sorted.length)}`}
+        </button>
       </div>
+      {shown.length === 0 ? (
+        <p className="card-note">Everything agrees.</p>
+      ) : (
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Reference</th>
+                <th>Result</th>
+                <th className="is-number">Difference</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((item) => (
+                <tr key={`${item.subject}-${item.subjectId}`}>
+                  <td>
+                    <Reference item={item} />
+                  </td>
+                  <td className={`result is-${item.outcome}`}>{FOUND[item.outcome]}</td>
+                  <td className="is-number">{item.delta === undefined ? '' : `${formatUsdc(item.delta)} USDC`}</td>
+                  <td>
+                    <span className="cell-detail" title={item.detail}>
+                      {shortDetail(item.detail)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   )
 }
 
-/** The four outcomes, said plainly: the stored word is for the database, not for a reader. */
-const FOUND: Record<ReconciliationItemView['outcome'], string> = {
-  ok: 'agrees',
-  explained: 'explained',
-  mismatch: 'unexplained',
-  unchecked: 'not checked',
+/** A payment links to its story; a deposit id is a uuid, so it shows its first part and the rest on hover. */
+function Reference({ item }: { readonly item: ReconciliationItemView }) {
+  if (item.subject === 'payment') {
+    return (
+      <>
+        <Link to={`/admin/transfers/${item.subjectId}`}>{item.subjectId}</Link>
+        <span className="kind-tag">payment</span>
+      </>
+    )
+  }
+  if (item.subject === 'deposit') {
+    return (
+      <>
+        <span className="is-mono" title={item.subjectId}>
+          {item.subjectId.slice(0, 8)}
+        </span>
+        <span className="kind-tag">deposit</span>
+      </>
+    )
+  }
+  return <>{item.subjectId}</>
+}
+
+/**
+ * The worker's sentence cut to a few words for the table; the full one stays in the tooltip. Each
+ * pattern is the start of a sentence `apps/worker/src/reconcile-items.ts` writes. Anything else is
+ * cut at its first colon or comma, which is where those sentences turn from what into why.
+ */
+const SHORT: readonly (readonly [RegExp, (block: string) => string])[] = [
+  [/^paid in block (\d+)/, (block) => `Paid in block ${block}`],
+  [/^refused at the door: no money moved/, () => 'Refused, nothing moved'],
+  [/^cancelled before anything was signed/, () => 'Cancelled before signing'],
+  [/^the transaction its proof names really reverted in block (\d+)/, (block) => `Reverted in block ${block}, nothing moved`],
+  [/^waiting for its time/, () => 'Waiting for its time'],
+  [/^[\d,.]+ arrived at \S+ in block (\d+) and is credited, with no invoice/, (block) => `Credited in block ${block}, no invoice`],
+  [/^[\d,.]+ arrived at \S+ in block (\d+) and is credited/, (block) => `Credited in block ${block}`],
+  [/^signed and broadcast, and not in a block yet/, () => 'In flight'],
+  [/^the transfer landed in block \d+; the books still hold/, () => 'In flight'],
+  [/^its transfer landed in block \d+, after the block this run pinned/, () => 'In flight'],
+  [/^settled in the books; its transfer landed in block (\d+), after the block/, (block) => `Paid in block ${block}, after this run's block`],
+  [/^its transaction reverted in block (\d+): the books release/, (block) => `Reverted in block ${block}, not released yet`],
+  [/^seen at block (\d+) and not credited:/, (block) => `Seen in block ${block}, not credited yet`],
+  [/^seen at block (\d+), which this run's block has not reached/, (block) => `Seen in block ${block}, after this run's block`],
+  [/^credited from block (\d+), after the block this run pinned/, (block) => `Credited in block ${block}, after this run's block`],
+  [/^the books hold [\d,.]+, the chain held [\d,.]+ at block \d+, and what was in flight explains [\d,.]+: nothing is left over/, () => 'Nothing left over'],
+  [/^the books hold [\d,.]+, the chain held [\d,.]+ at block \d+, and what was in flight explains [\d,.]+, and/, () => 'Left over, nothing explains it'],
+  [/^what the company holds on chain could not be read at block (\d+)/, (block) => `Chain not read at block ${block}`],
+  [/^what is left over cannot be told/, () => 'Left over unknown, the chain did not answer'],
+  [/^this run pinned no block/, () => 'No block to compare at'],
+]
+
+function shortDetail(detail: string): string {
+  for (const [pattern, phrase] of SHORT) {
+    const match = pattern.exec(detail)
+    if (match !== null) {
+      return phrase(match[1] ?? '')
+    }
+  }
+  const cut = detail.split(/[:,]/, 1)[0] ?? detail
+  return cut.charAt(0).toUpperCase() + cut.slice(1)
 }
 
 /** The runs before this one. Clicking one shows it above, figures and all. */
@@ -229,10 +329,6 @@ function History({
   return (
     <section className="panel">
       <h2 className="card-title">The runs before this one</h2>
-      <p className="panel-lead">
-        A run happens by itself every ten minutes here, so a reader can watch one appear; the article's rhythm is daily.
-        Nothing a run writes is ever changed afterwards: a check that came out wrong stays on the record.
-      </p>
       <div className="table-scroll">
         <table className="table">
           <thead>
@@ -263,7 +359,7 @@ function History({
                     </button>
                   )}
                 </td>
-                <td className="is-number">{run.block ?? '—'}</td>
+                <td className="is-number">{run.block ?? 'none'}</td>
                 <td>{OUTCOME[run.outcome]}</td>
                 <td className="is-number">{run.checked}</td>
                 <td className="is-number">{run.explained}</td>

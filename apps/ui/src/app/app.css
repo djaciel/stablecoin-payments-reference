@@ -9,6 +9,7 @@
   --muted: #8b98a8;
   --accent: #5ac8a8;
   --bad: #e5776b;
+  --warn: #e0b45c;
   color-scheme: dark;
 }
 
@@ -535,21 +536,90 @@ a {
   color: var(--bad);
 }
 
-/* Section 10's three lines, meant to be read out loud: the label on the left, the arithmetic on
-   the right. Wider than a card's figures, because each line is a sum and then its total. */
-.panel .figures.is-identity {
-  max-width: none;
-  margin-top: 0.9rem;
+/* Section 10's heading row: the outcome on the left, its one action on the right. */
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.is-identity .figure {
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  gap: 0.4rem 1.5rem;
+.panel-head .card-title {
+  margin: 0;
 }
 
-.is-identity dt {
-  min-width: 15rem;
+.panel-head + .table-scroll,
+.panel-head + .card-note {
+  margin-top: 0.6rem;
+}
+
+.panel-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.recon-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.recon-title.is-warning {
+  color: var(--warn);
+}
+
+.recon-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+.is-warning .recon-mark {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.figure.is-bad dt,
+.figure.is-bad dd {
+  color: var(--bad);
+}
+
+/* A reconciliation row's outcome: quiet when it agrees, loud when nothing explains it. */
+.result.is-ok {
+  color: var(--muted);
+}
+
+.result.is-mismatch {
+  color: var(--bad);
+}
+
+.result.is-unchecked {
+  color: var(--warn);
+}
+
+/* What a reference is, next to it: small and quiet. */
+.kind-tag {
+  margin-left: 0.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* One short phrase; a sentence that is still too long ends in an ellipsis, whole in the tooltip. */
+.cell-detail {
+  display: block;
+  max-width: 32rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* A payment still moving: a small spinner next to what it is doing right now. */

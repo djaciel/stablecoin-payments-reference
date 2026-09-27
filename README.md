@@ -135,14 +135,14 @@ partners), and **Pay to an address** pays an address on the allowlist, now or at
 ## It checks itself
 
 On **Reconciliation**, press **Run now**. A new run appears at the top, headed **Books and chain
-agree**, with three lines:
+agree**, with three cards:
 
 - **Books**: Available + Reserved + Deposits.
-- **Chain at block N**: the treasury plus each deposit address, read at that one fixed block.
-- **Explained by what was in flight**: payments the chain has already moved and the books have
-  not settled yet, or the other way round.
+- **Chain**: the treasury plus the partner addresses, read at one fixed block.
+- **In flight**: payments the chain has already moved and the books have not settled yet, or the
+  other way round.
 
-Below it, one line per payment and per deposit says what explains it. If the heading reads
+Below it, the payments and deposits that need a look (**Show all** lists every one). If the heading reads
 **Something is not explained**, the books and the chain differ by money nothing in flight accounts
 for, and that is what a person has to look at. The check also runs by itself every ten minutes:
 in the Temporal UI (`http://localhost:8080`) three workflows keep running, `watcher`,
