@@ -485,7 +485,7 @@ that revert is final, the payment waits SENT with its money reserved.
   transaction, too little for the USDC contract to finish, so it is included and reverts.
 - `packages/chain/src/usdc.test.ts` — a real reverted receipt: `reverted` once its block is final, not
   final one block before. A revert that is not final proves nothing yet.
-- `apps/ui/src/admin/BreakItScreen.tsx` — each card's **Run it**: its own 0.02 USDC invoice, armed,
+- `apps/ui/src/admin/BreakItScreen.tsx` — each card's **Run it**: its own 0.01 USDC invoice, armed,
   paid, followed to the end, the flag off again, and the evidence on the card. The switch is the long way.
 - `apps/ui/src/app/App.tsx` — the Break it tab, the one poll of the flags, and the red banner every admin
   screen shows while one is armed.
@@ -835,7 +835,7 @@ artefacts — and none of them ever prints an RPC URL or a key.
   Resume.
 
 See it: run them one at a time, with nothing else in flight (each one checks). Three of them send
-real testnet USDC, 0.02 each, and take four to five minutes; the race takes seconds.
+real testnet USDC, 0.01 each, and take four to five minutes; the race takes seconds.
 
 ```
 pnpm experiment:race                  # seconds, no money

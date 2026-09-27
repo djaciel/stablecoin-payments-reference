@@ -14,10 +14,10 @@ matter is in the article (§6, §9). Each card on the Break it screen explains i
 
 | Card | Article | Command | Arms | Spends | Takes |
 |---|---|---|---|---|---|
-| Double click | §9 | `pnpm experiment:double-click` | nothing | its own 0.02 USDC invoice, plus gas | a few minutes |
+| Double click | §9 | `pnpm experiment:double-click` | nothing | its own 0.01 USDC invoice, plus gas | a few minutes |
 | The race | §9 | `pnpm experiment:race` | nothing | nothing: it runs in the `payments_experiment` sandbox | seconds |
-| Crash after signing | §9 | `pnpm experiment:crash` | `experiment.crash_after_signing` (one-shot) | its own 0.02 USDC invoice, plus gas | a few minutes |
-| Node not responding | §9 | `pnpm experiment:stuck` | `experiment.blackhole_rpc` (`{ enabled, step }`) | its own 0.02 USDC invoice, plus gas | about five minutes |
+| Crash after signing | §9 | `pnpm experiment:crash` | `experiment.crash_after_signing` (one-shot) | its own 0.01 USDC invoice, plus gas | a few minutes |
+| Node not responding | §9 | `pnpm experiment:stuck` | `experiment.blackhole_rpc` (`{ enabled, step }`) | its own 0.01 USDC invoice, plus gas | about five minutes |
 | Revert the next payment | §6 | none: the card, or its switch | `experiment.revert_next_payment` (one-shot) | gas only: the transfer reverts | a few minutes |
 
 The commands press the same api doors the cards press (`scripts/experiments/`). They need Node 22

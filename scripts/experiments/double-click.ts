@@ -15,7 +15,7 @@ import { books, died, field, heading, nothingElseInFlight, postAnswering, sectio
 const NAME = 'experiment:double-click'
 
 /** The invoice the run writes for itself, small on purpose. */
-const AMOUNT = '0.02'
+const AMOUNT = '0.01'
 const DESCRIPTION = 'Double-click run (script)'
 
 async function main(): Promise<void> {

@@ -140,7 +140,7 @@ Arm **Crash after signing** on `/admin/break-it` and press **Run it**, or run th
 the command line:
 
 ```
-pnpm experiment:crash                # writes its own 0.02 USDC invoice, pays it, follows it
+pnpm experiment:crash                # writes its own 0.01 USDC invoice, pays it, follows it
 docker compose logs -f worker        # the loud line, then "worker: started at …" seconds later
 ```
 

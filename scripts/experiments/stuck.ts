@@ -17,7 +17,7 @@ import { books, died, field, heading, nothingElseInFlight, post, put, section, s
 const NAME = 'experiment:stuck'
 
 /** The invoice the run writes for itself, small on purpose. */
-const AMOUNT = '0.02'
+const AMOUNT = '0.01'
 const DESCRIPTION = 'Stuck run (script)'
 
 /** After the broadcast: the transfer lands while the workflow cannot see it, which is §9's stuck one. */

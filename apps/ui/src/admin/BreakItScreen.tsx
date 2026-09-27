@@ -22,7 +22,7 @@ export const BLACKHOLE_WHERE: Record<BlackholeStep, string> = {
 }
 
 /** Every run writes its own invoice for this much: the author's amount, so a run costs as little as possible. */
-const RUN_AMOUNT = '0.02'
+const RUN_AMOUNT = '0.01'
 
 /** How often a run asks for its payment's story. Its own loop: the screen's poll pauses in a hidden tab, a run must not. */
 const RUN_POLL_MS = 2000
@@ -131,7 +131,7 @@ function BlackholeCard({ blackhole, ...card }: { readonly blackhole: Experiments
       <Brief
         what="The node stops answering while the payment runs."
         expect="REVIEW with the money still reserved, until you press Resume."
-        cost="0.02 USDC · about 5 minutes"
+        cost="0.01 USDC · about 5 minutes"
       />
       <p className="form-row">
         {(Object.keys(BLACKHOLE_WHERE) as BlackholeStep[]).map((option) => (
@@ -169,7 +169,7 @@ function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) 
       <Brief
         what="The worker dies right after signing, before sending."
         expect="It comes back and sends the same signed bytes: one transfer on chain."
-        cost="0.02 USDC · a few minutes · run it alone"
+        cost="0.01 USDC · a few minutes · run it alone"
       />
       <RunIt run={run} />
       <Switch armed={armed} run={run} show={card.show} flag={{ crashAfterSigning: !armed }} />
@@ -199,7 +199,7 @@ function DoubleClickCard(card: CardProps) {
       <Brief
         what="Pays the same invoice twice at the same instant, with the same key."
         expect="One payment, one reference, the money leaves Available once."
-        cost="0.02 USDC · a few minutes"
+        cost="0.01 USDC · a few minutes"
       />
       <RunIt run={run} />
     </section>

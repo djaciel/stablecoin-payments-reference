@@ -20,7 +20,7 @@ import { died, field, heading, nothingElseInFlight, post, put, section, step, wa
 const NAME = 'experiment:crash'
 
 /** The invoice the run writes for itself, small on purpose. */
-const AMOUNT = '0.02'
+const AMOUNT = '0.01'
 const DESCRIPTION = 'Crash run (script)'
 
 /** Compose's name for the worker, which is what `docker inspect` is asked about. */

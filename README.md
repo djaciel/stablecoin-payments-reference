@@ -151,7 +151,7 @@ in the Temporal UI (`http://localhost:8080`) three workflows keep running, `watc
 ## Break it
 
 **Break it**, the last tab, has five cards. **Run it** on a card does the whole experiment and
-leaves the evidence on the card. Each one writes and pays its own 0.02 USDC invoice, except the
+leaves the evidence on the card. Each one writes and pays its own 0.01 USDC invoice, except the
 race, and most of them take a few minutes because they wait for a final block. Run them one at a time.
 
 - **Double click**: the same invoice is paid twice at the same instant, with the same key, and
