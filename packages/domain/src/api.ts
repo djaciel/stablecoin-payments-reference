@@ -43,8 +43,8 @@ export interface Treasury {
   readonly chainError?: string
   readonly ledger: LedgerFigures
   /**
-   * The shared wallet the partners pay from — demo scaffolding, funded from the treasury by
-   * the button on the same screen, and read at the same block as the treasury's own balances.
+   * The shared wallet the partners pay from: demo scaffolding, funded from the treasury by the
+   * button on /partner, and read at the same block as the treasury's own balances.
    */
   readonly partnerWallet: {
     readonly address: string
