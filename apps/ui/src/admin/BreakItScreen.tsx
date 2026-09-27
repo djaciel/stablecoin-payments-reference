@@ -102,13 +102,19 @@ function RevertCard({ armed, ...card }: { readonly armed: boolean } & CardProps)
   return (
     <section className="card">
       <CardHead title="Revert the next payment" badge={<Badge armed={armed} />} />
-      <Brief
-        what="The next payment runs out of gas on chain."
-        expect="FAILED with proof, and the money back in Available."
-        cost="Gas only · a few minutes"
-      />
-      <RunIt run={run} />
-      <Switch armed={armed} run={run} show={card.show} flag={{ revertNextPayment: !armed }} />
+      <div className="card-columns">
+        <div>
+          <Brief
+            what="The next payment runs out of gas on chain."
+            expect="FAILED with proof, and the money back in Available."
+            cost="Gas only · a few minutes"
+          />
+        </div>
+        <div>
+          <RunIt run={run} />
+          <Switch armed={armed} run={run} show={card.show} flag={{ revertNextPayment: !armed }} />
+        </div>
+      </div>
     </section>
   )
 }
@@ -125,30 +131,36 @@ function BlackholeCard({ blackhole, ...card }: { readonly blackhole: Experiments
   return (
     <section className="card">
       <CardHead title="Node not responding" badge={<Badge armed={blackhole.enabled} />} />
-      <Brief
-        what="The node stops answering while the payment runs."
-        expect="REVIEW with the money still reserved, until you press Resume."
-        cost="0.01 USDC · about 5 minutes"
-      />
-      <p className="form-row">
-        {(Object.keys(BLACKHOLE_WHERE) as BlackholeStep[]).map((option) => (
-          <label key={option} className="field-unit">
-            <input
-              type="radio"
-              name="blackhole-step"
-              checked={step === option}
-              disabled={blackhole.enabled || run.busy || run.blocked}
-              onChange={() => {
-                setPicked(option)
-              }}
-            />
-            {BLACKHOLE_WHERE[option]} <code>{option}</code>
-          </label>
-        ))}
-      </p>
-      <p className="card-note">Before the broadcast, later payouts wait until you press Resume.</p>
-      <RunIt run={run} />
-      <Switch armed={blackhole.enabled} run={run} show={card.show} flag={{ blackholeRpc: { enabled: !blackhole.enabled, step } }} />
+      <div className="card-columns">
+        <div>
+          <Brief
+            what="The node stops answering while the payment runs."
+            expect="REVIEW with the money still reserved, until you press Resume."
+            cost="0.01 USDC · about 5 minutes"
+          />
+          <p className="form-row">
+            {(Object.keys(BLACKHOLE_WHERE) as BlackholeStep[]).map((option) => (
+              <label key={option} className="field-unit">
+                <input
+                  type="radio"
+                  name="blackhole-step"
+                  checked={step === option}
+                  disabled={blackhole.enabled || run.busy || run.blocked}
+                  onChange={() => {
+                    setPicked(option)
+                  }}
+                />
+                {BLACKHOLE_WHERE[option]} <code>{option}</code>
+              </label>
+            ))}
+          </p>
+          <p className="card-note">Before the broadcast, later payouts wait until you press Resume.</p>
+        </div>
+        <div>
+          <RunIt run={run} />
+          <Switch armed={blackhole.enabled} run={run} show={card.show} flag={{ blackholeRpc: { enabled: !blackhole.enabled, step } }} />
+        </div>
+      </div>
     </section>
   )
 }
@@ -163,13 +175,19 @@ function CrashCard({ armed, ...card }: { readonly armed: boolean } & CardProps) 
   return (
     <section className="card">
       <CardHead title="Crash after signing" badge={<Badge armed={armed} />} />
-      <Brief
-        what="The worker dies right after signing, before sending."
-        expect="It comes back and sends the same signed bytes: one transfer on chain."
-        cost="0.01 USDC · a few minutes · run it alone"
-      />
-      <RunIt run={run} />
-      <Switch armed={armed} run={run} show={card.show} flag={{ crashAfterSigning: !armed }} />
+      <div className="card-columns">
+        <div>
+          <Brief
+            what="The worker dies right after signing, before sending."
+            expect="It comes back and sends the same signed bytes: one transfer on chain."
+            cost="0.01 USDC · a few minutes · run it alone"
+          />
+        </div>
+        <div>
+          <RunIt run={run} />
+          <Switch armed={armed} run={run} show={card.show} flag={{ crashAfterSigning: !armed }} />
+        </div>
+      </div>
     </section>
   )
 }
@@ -193,12 +211,18 @@ function DoubleClickCard(card: CardProps) {
   return (
     <section className="card">
       <CardHead title="Double click" />
-      <Brief
-        what="Pays the same invoice twice at the same instant, with the same key."
-        expect="One payment, one reference, the money leaves Available once."
-        cost="0.01 USDC · a few minutes"
-      />
-      <RunIt run={run} />
+      <div className="card-columns">
+        <div>
+          <Brief
+            what="Pays the same invoice twice at the same instant, with the same key."
+            expect="One payment, one reference, the money leaves Available once."
+            cost="0.01 USDC · a few minutes"
+          />
+        </div>
+        <div>
+          <RunIt run={run} />
+        </div>
+      </div>
     </section>
   )
 }
@@ -231,19 +255,25 @@ function RaceCard({ running, setRunning }: CardProps) {
   return (
     <section className="card">
       <CardHead title="The race" />
-      <Brief
-        what="Two payments of 1,000 hit 1,500 available at the same instant."
-        expect="One reserved, one refused, Available never below zero."
-        cost="Free (sandbox database) · seconds"
-      />
-      <p className="card-actions">
-        <button type="button" className="button" disabled={busy || blocked} onClick={start}>
-          {busy ? 'running…' : 'Run it'}
-        </button>
-        {blocked && <span className="card-note">The other run has to finish first.</span>}
-      </p>
-      {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
-      {result !== undefined && <RaceEvidence result={result} />}
+      <div className="card-columns">
+        <div>
+          <Brief
+            what="Two payments of 1,000 hit 1,500 available at the same instant."
+            expect="One reserved, one refused, Available never below zero."
+            cost="Free (sandbox database) · seconds"
+          />
+        </div>
+        <div>
+          <p className="card-actions">
+            <button type="button" className="button" disabled={busy || blocked} onClick={start}>
+              {busy ? 'running…' : 'Run it'}
+            </button>
+            {blocked && <span className="card-note">The other run has to finish first.</span>}
+          </p>
+          {failure !== undefined && <p className="card-value is-bad">{failure}</p>}
+          {result !== undefined && <RaceEvidence result={result} />}
+        </div>
+      </div>
     </section>
   )
 }
