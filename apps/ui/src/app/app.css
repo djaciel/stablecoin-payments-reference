@@ -366,6 +366,11 @@ a {
   border-radius: 6px;
 }
 
+/* In every dialog the buttons sit apart from the message above them. */
+.modal .card-actions {
+  margin-top: 1.25rem;
+}
+
 /* What the api is about to do, in the order it does it, and what a Break it run has done so far.
    A list, not a progress bar. */
 .steps {
