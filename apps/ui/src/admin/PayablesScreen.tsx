@@ -6,9 +6,6 @@ import { usePolling } from '../api/usePolling'
 import { AddressLine, CopyButton } from '../app/AddressLine'
 import { formatUsdc } from '../app/usdc'
 
-/** Small on purpose: every invoice paid here spends real testnet USDC from the treasury. */
-const DEFAULT_AMOUNT = '0.50'
-
 /** What an invoice or a payment with no partner reads, wherever one shows: it is a destination, not a gap. */
 export const TO_AN_ADDRESS = 'Pay to an address'
 
@@ -269,7 +266,7 @@ function CreatePayable({
 }) {
   // Empty until someone picks one: the select then shows the first partner.
   const [partnerId, setPartnerId] = useState('')
-  const [amount, setAmount] = useState(DEFAULT_AMOUNT)
+  const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
@@ -319,7 +316,7 @@ function CreatePayable({
               setAmount(event.target.value)
             }}
             inputMode="decimal"
-            placeholder="0.50"
+            placeholder="0.01"
             aria-label="Amount in USDC"
           />
           USDC

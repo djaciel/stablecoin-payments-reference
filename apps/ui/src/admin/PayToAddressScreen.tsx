@@ -7,9 +7,6 @@ import { formatUsdc } from '../app/usdc'
 import { REASONS, TO_AN_ADDRESS } from './PayablesScreen'
 import { MOMENT } from './TransfersScreen'
 
-/** Small on purpose: every payment from here spends real testnet USDC from the treasury. */
-const DEFAULT_AMOUNT = '0.02'
-
 /** Far enough ahead to watch the money sit in Reserved, near enough to not have to come back. */
 const DEFAULT_MINUTES_AHEAD = 2
 
@@ -30,7 +27,7 @@ export function PayToAddressScreen() {
   // The poll and a new address both write here, so what they change shows at once.
   const [allowlist, setAllowlist] = useState<Allowlist | undefined>(undefined)
   const [destination, setDestination] = useState('')
-  const [amount, setAmount] = useState(DEFAULT_AMOUNT)
+  const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
   const [runsNow, setRunsNow] = useState(true)
   const [runAt, setRunAt] = useState(minutesAhead(DEFAULT_MINUTES_AHEAD))
@@ -118,7 +115,7 @@ export function PayToAddressScreen() {
                 setAmount(event.target.value)
               }}
               inputMode="decimal"
-              placeholder={DEFAULT_AMOUNT}
+              placeholder="0.01"
               aria-label="Amount in USDC"
             />
             USDC

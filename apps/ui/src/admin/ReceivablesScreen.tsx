@@ -4,9 +4,6 @@ import { createReceivable, getReceivables } from '../api/client'
 import { usePolling } from '../api/usePolling'
 import { formatUsdc } from '../app/usdc'
 
-/** Small on purpose: the partner pays these with real testnet USDC from the shared wallet. */
-const DEFAULT_AMOUNT = '0.05'
-
 /**
  * The money partners owe the company. Writing one puts it on the books right away; nothing has
  * moved yet, and nothing moves here: these invoices are paid from the partner's side.
@@ -113,7 +110,7 @@ function CreateReceivable({
 }) {
   // Empty until someone picks one: the select then shows the first partner.
   const [partnerId, setPartnerId] = useState('')
-  const [amount, setAmount] = useState(DEFAULT_AMOUNT)
+  const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
@@ -163,7 +160,7 @@ function CreateReceivable({
               setAmount(event.target.value)
             }}
             inputMode="decimal"
-            placeholder="0.05"
+            placeholder="0.01"
             aria-label="Amount in USDC"
           />
           USDC
